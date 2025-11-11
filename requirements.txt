@@ -1,0 +1,21 @@
+# requirements.txt (sugerido para LangChain 0.2)
+google-api-python-client
+google-auth
+google-auth-httplib2
+google-auth-oauthlib
+PyPDF2
+faiss-cpu
+tiktoken
+python-dotenv
+streamlit
+dropbox
+
+# LangChain 0.2 (paquetes separados)
+langchain-core>=0.2,<0.3
+langchain-community>=0.2,<0.3
+langchain-openai>=0.1,<0.2
+langchain-text-splitters>=0.2,<0.3
+
+# One drive
+msal
+requests

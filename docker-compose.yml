@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    image: mi-streamlit:latest
+    container_name: mi-streamlit
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - ./faiss_index:/app/faiss_index:rw
+      - ./secrets/client_secret.json:/app/client_secret.json:ro
+      - ./secrets/client_secret_website.json:/app/client_secret_website.json:ro
+      - ./img:/app/img:rw
+      - ./app.py:/app/app.py:rw
+    user: "${UID}:${GID}"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:8501/_stcore/health || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
