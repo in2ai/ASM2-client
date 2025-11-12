@@ -13,6 +13,7 @@ services:
       - ./secrets/client_secret.json:/app/client_secret.json:ro
       - ./secrets/client_secret_website.json:/app/client_secret_website.json:ro
       - ./img:/app/img:rw
+      - ./src:/app/src:rw
       - ./app.py:/app/app.py:rw
     user: "${UID}:${GID}"
     dns:
