@@ -28,3 +28,38 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  questdb:
+    image: questdb/questdb:latest
+    container_name: questdb
+    restart: unless-stopped
+    # Ports:
+    # 9000 - QuestDB web console / REST API (HTTP)
+    # 8812 - Postgres wire protocol (useable with psql / Postgres clients / SQL interfaces)
+    # 9009 - InfluxDB Line Protocol (ILP)
+    ports:
+      - "9000:9000"
+      - "8812:8812"
+      - "9009:9009"
+    volumes:
+      - ./questdb:/root/.questdb:rw
+    environment:
+      - TZ=Europe/Madrid
+      
+  questdb-init:
+    image: postgres:15-alpine
+    container_name: questdb-init
+    restart: "no"
+    depends_on:
+      - questdb
+    volumes:
+      - ./sql/init.sql:/init/init.sql:ro
+      - ./sql/init.sh:/init/init.sh:ro
+    environment:
+      QUESTDB_HOST: questdb
+      QUESTDB_PORT: "8812"   # PGWire port
+      QUESTDB_USER: admin
+      QUESTDB_PASSWORD: quest
+      QUESTDB_DB: qdb
+    working_dir: /init
+    entrypoint: ["sh", "/init/init.sh"]
