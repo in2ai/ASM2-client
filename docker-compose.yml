@@ -43,8 +43,8 @@ services:
       - "9009:9009"
     volumes:
       - ./questdb:/root/.questdb:rw
-    environment:
-      - TZ=Europe/Madrid
+    env_file:
+      - .env
       
   questdb-init:
     image: postgres:15-alpine
@@ -55,11 +55,7 @@ services:
     volumes:
       - ./sql/init.sql:/init/init.sql:ro
       - ./sql/init.sh:/init/init.sh:ro
-    environment:
-      QUESTDB_HOST: questdb
-      QUESTDB_PORT: "8812"   # PGWire port
-      QUESTDB_USER: admin
-      QUESTDB_PASSWORD: quest
-      QUESTDB_DB: qdb
+    env_file:
+      - .env
     working_dir: /init
     entrypoint: ["sh", "/init/init.sh"]
