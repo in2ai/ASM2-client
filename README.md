@@ -5,8 +5,8 @@ docker build -t mi-streamlit .
 docker run --rm -p 8501:8501 \
   --env-file .env \
   -v "$PWD/faiss_index:/app/faiss_index" \
-  -v "$PWD/client_secret.json:/app/client_secret.json:ro" \
-  -v "$PWD/client_secret_website.json:/app/client_secret_website.json:ro" \
+  -v "$PWD/secrets/client_secret.json:/app/client_secret.json:ro" \
+  -v "$PWD/secrets/client_secret_website.json:/app/client_secret_website.json:ro" \
   mi-streamlit
 
 # 2b) Con docker-compose (recomendado)
