@@ -18,7 +18,7 @@ from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 
 from src.config.config import *
-from src.utility.helpers import safe_execute
+from src.utils.helpers import safe_execute
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GOOGLE DRIVE

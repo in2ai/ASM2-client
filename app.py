@@ -23,7 +23,7 @@ from src.config.config import *
 from src.connectors.drive import drive_can_read, get_current_user_drive, oauth_login_drive, construir_vectorstore_drive
 from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_vectorstore_dropbox
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
-from src.utility.helpers import cosine_dist
+from src.utils.helpers import cosine_dist
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISOS UNIFICADOS
