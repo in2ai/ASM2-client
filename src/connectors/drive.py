@@ -230,7 +230,7 @@ def construir_vectorstore_drive_cached(files_serializable, creds_dict, batch_siz
                     return json.load(f)
             except Exception:
                 pass
-        return {"processed_ids": [], "total_chunks": 0, "completed": False, "started_at": datetime.now().isoformat()}
+        return {"processed_ids": [], "total_chunks": 0, "completed": False, "started_at": datetime.datetime.now().isoformat()}
 
     def save_manifest(path, state):
         tmp = path + ".tmp"
