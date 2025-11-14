@@ -76,7 +76,7 @@ class TimedMetric:
     Example usage:
 
         ```python
-        with TimedMetric(Metrics.REQ_RESPONSE_TIME):
+        with TimedMetric(Metrics.REQ_RESPONSE_TIME.value):
             response = make_request()
         ```
 
