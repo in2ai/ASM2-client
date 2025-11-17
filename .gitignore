@@ -209,3 +209,4 @@ __marimo__/
 # Ours
 secrets/
 faiss_index/
+questdb/
