@@ -16,5 +16,6 @@ docker run --rm -p 8501:8501 \
 
 # 2c) Con `run.sh` (recomendado)
 > Requiere Linux o una consola compatible
+
 `./run.sh`
 

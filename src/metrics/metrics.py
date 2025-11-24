@@ -35,13 +35,25 @@ def insert_metric(tag: str, value: float):
     execute_query(query, (USER_ID, USER_ROLE, tag, value))
 
 
-def register_word(word: str):
-    query = """
-    INSERT INTO word_counts (ts, user_id, user_role, word)
-    VALUES (NOW(), %s, %s, %s)
+def register_words(words: set[str]):
+    if not words:
+        return
+
+    # Generate query with all value insertions
+    value_insertions = ", ".join(["(NOW(), %s, %s, %s)"] * len(words))
+
+    query = f"""
+        INSERT INTO word_counts (ts, user_id, user_role, word)
+        VALUES {value_insertions}
     """
 
-    execute_query(query, (USER_ID, USER_ROLE, word))
+    # Flatten parameters (3 for each word)
+    params = []
+    
+    for w in words:
+        params.extend([USER_ID, USER_ROLE, w])
+
+    execute_query(query, tuple(params))
 
 
 def register_topic(topic: str):

@@ -26,7 +26,10 @@ from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, co
 from src.utils.helpers import cosine_dist
 
 # Metrics
-from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words
+
+# Utils
+from src.utils.nlp import extract_search_terms
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISOS UNIFICADOS
@@ -77,6 +80,10 @@ def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars
     """
     # Register that the user is still active
     register_user_activity()
+
+    # Register search terms
+    search_terms = extract_search_terms(query)
+    register_words(search_terms)
 
     emb = OpenAIEmbeddings(model="text-embedding-3-small")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
