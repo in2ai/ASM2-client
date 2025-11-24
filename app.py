@@ -25,6 +25,9 @@ from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_ve
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
 from src.utils.helpers import cosine_dist
 
+# Metrics
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISOS UNIFICADOS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -72,28 +75,36 @@ def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars
     vectordbs: lista de tuplas (source, vectordb) con source en {"drive","dropbox"}.
     services: dict {'drive': service_drive, 'dropbox': dbx}
     """
+    # Register that the user is still active
+    register_user_activity()
+
     emb = OpenAIEmbeddings(model="text-embedding-3-small")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
     allowed_chunks = []
 
     # 1) Recuperar candidatos de cada origen y filtrar por permisos
-    for source, vdb in vectordbs:
-        cands = vdb.similarity_search(query, k=256)
-        if source == "drive":
-            user_ctx = get_current_user_drive(services["drive"])
-            allowed = [d for d in cands if has_access(services["drive"], d.metadata, user_ctx)]
-        elif source == "onedrive":
-            allowed = [d for d in cands if has_access(services["onedrive_token"], d.metadata)]
-        elif source == "dropbox":
-            allowed = [d for d in cands if has_access(services["dropbox"], d.metadata)]
-        else:
-            allowed = []
-        allowed_chunks.extend(allowed)
-        print(f"🔎 {source}: cands={len(cands)} allowed={len(allowed)}")
+    insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(query))
+
+    with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
+        for source, vdb in vectordbs:
+            cands = vdb.similarity_search(query, k=256)
+            if source == "drive":
+                user_ctx = get_current_user_drive(services["drive"])
+                allowed = [d for d in cands if has_access(services["drive"], d.metadata, user_ctx)]
+            elif source == "onedrive":
+                allowed = [d for d in cands if has_access(services["onedrive_token"], d.metadata)]
+            elif source == "dropbox":
+                allowed = [d for d in cands if has_access(services["dropbox"], d.metadata)]
+            else:
+                allowed = []
+            allowed_chunks.extend(allowed)
+            print(f"🔎 {source}: cands={len(cands)} allowed={len(allowed)}")
 
     if not allowed_chunks:
         return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
+
+    insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
     # 2) Re-ranking por similitud semántica
     q_vec = emb.embed_query(query)
@@ -104,6 +115,9 @@ def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars
 
     picked = [d for d, s in paired if s >= float(threshold)][:k] or [d for d, s in paired[:k]]
 
+    insert_metric(Metrics.NUM_DOCS_LLM.value, len(picked))
+    insert_metric(Metrics.RELEVANT_DOC_RATE.value, len(picked) / len(allowed_chunks))
+
     # 3) Contexto
     def cite(d):
         src = d.metadata.get("source","drive")
@@ -112,11 +126,20 @@ def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars
         return f"[{tag}:{t}] {(d.page_content or '')[:chunk_chars]}"
     contexto = "\n\n".join(cite(d) for d in picked)
 
+    insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
+
     # 4) LLM
     system = ("Eres un asistente RAG en ESPAÑOL. Responde SOLO con el CONTEXTO. "
               "Redacta en lenguaje natural, claro y directo. Cita los títulos entre corchetes.")
     user = f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"
-    ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
+
+    insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user))
+
+    with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
+        ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
+
+    insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, llm.get_num_tokens(ans))
+
     if not ans or not ans.strip():
         t = picked[0].metadata.get("title", "(sin título)")
         ans = f"Según [{t}]: {(picked[0].page_content or '')[:chunk_chars]}"

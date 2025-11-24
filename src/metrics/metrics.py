@@ -1,6 +1,7 @@
 import time
 from enum import Enum
 
+from src.config.auth import USER_ID, USER_ROLE
 from src.metrics.connection import execute_query
 
 # ---------------------------------
@@ -8,7 +9,6 @@ from src.metrics.connection import execute_query
 # ---------------------------------
 
 class Metrics(Enum):
-    REQ_RESPONSE_TIME='REQ_RESPONSE_TIME'       # Request latency
     LLM_RESPONSE_TIME='LLM_RESPONSE_TIME'       # LLM response time
     DOC_RESPONSE_TIME='DOC_RESPONSE_TIME'       # RAG latency
     
@@ -16,10 +16,11 @@ class Metrics(Enum):
 
     NUM_DOCS_RAG='NUM_DOCS_RAG'                 # Number of docs returned by the RAG
     NUM_DOCS_LLM='NUM_DOCS_LLM'                 # Number of relevant documents after filtering
-    NUM_TOKENS_IN='NUM_TOKENS_IN'               # Number of LLM input tokens
-    NUM_TOKENS_OUT='NUM_TOKENS_OUT'             # Number of LLM output tokens
 
-    ESTIMATED_COST_REQ='ESTIMATED_COST_REQ'     # Estimated cost of the LLM requests
+    NUM_LLM_TOKENS_IN='NUM_LLM_TOKENS_IN'       # Number of LLM input tokens
+    NUM_LLM_TOKENS_OUT='NUM_LLM_TOKENS_OUT'     # Number of LLM output tokens
+    NUM_RAG_TOKENS_IN='NUM_RAG_TOKENS_IN'       # Number of RAG input tokens
+    NUM_RAG_TOKENS_OUT='NUM_RAG_TOKENS_OUT'     # Number of RAG output tokens
 
 # ---------------------------------
 # Metric storage
@@ -27,43 +28,47 @@ class Metrics(Enum):
 
 def insert_metric(tag: str, value: float):
     query = """
-    INSERT INTO metrics (ts, tag, value)
-    VALUES (NOW(), %s, %s)
+    INSERT INTO metrics (ts, user_id, user_role, tag, value)
+    VALUES (NOW(), %s, %s, %s, %s)
     """
 
-    execute_query(query, (tag, value))
+    execute_query(query, (USER_ID, USER_ROLE, tag, value))
+
 
 def register_word(word: str):
     query = """
-    INSERT INTO word_counts (ts, word)
-    VALUES (NOW(), %s)
+    INSERT INTO word_counts (ts, user_id, user_role, word)
+    VALUES (NOW(), %s, %s, %s)
     """
 
-    execute_query(query, (word,))
+    execute_query(query, (USER_ID, USER_ROLE, word))
+
 
 def register_topic(topic: str):
     query = """
-    INSERT INTO topic_counts (ts, topic)
-    VALUES (NOW(), %s)
+    INSERT INTO topic_counts (ts, user_id, user_role, word)
+    VALUES (NOW(), %s, %s, %s)
     """
 
-    execute_query(query, (topic,))
+    execute_query(query, (USER_ID, USER_ROLE, topic))
 
-def register_user_activity(user_id: str):
+
+def register_user_activity():
     query = """
-    INSERT INTO user_activity (ts, user_id)
-    VALUES (NOW(), %s)
+    INSERT INTO user_activity (ts, user_id, user_role)
+    VALUES (NOW(), %s, %s)
     """
 
-    execute_query(query, (user_id,))
+    execute_query(query, (USER_ID, USER_ROLE))
 
-def log_request(user_id: str, endpoint: str, method: str, status: int, latency: float):
+
+def log_request(endpoint: str, method: str, status: int, latency: float):
     query = """
-    INSERT INTO requests (ts, user_id, endpoint, method, status, latency)
-    VALUES (NOW(), %s, %s, %s, %s, %s)
+    INSERT INTO requests (ts, user_id, user_role, endpoint, method, status, latency)
+    VALUES (NOW(), %s, %s, %s, %s, %s, %s)
     """
 
-    execute_query(query, (user_id, endpoint, method, status, latency))
+    execute_query(query, (USER_ID, USER_ROLE, endpoint, method, status, latency))
 
 # ---------------------------------
 # Helpers
@@ -101,7 +106,3 @@ class TimedMetric:
             insert_metric(self.metric, elapsed)
 
         return False
-
-# ---------------------------------
-# Metric Queries (TODO)
-# ---------------------------------
