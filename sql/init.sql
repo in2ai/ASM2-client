@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS topic_counts (
 
 CREATE TABLE IF NOT EXISTS user_activity (
     ts TIMESTAMP,        -- event timestamp
-    user_id SYMBOL       -- user identifier
-    user_role SYMBOL,
+    user_id SYMBOL,       -- user identifier
+    user_role SYMBOL
 ) TIMESTAMP(ts) PARTITION BY DAY;
 
 CREATE TABLE IF NOT EXISTS requests (
