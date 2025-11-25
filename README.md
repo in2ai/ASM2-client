@@ -1,21 +1,21 @@
-# 1) Construir
-`docker build -t mi-streamlit .`
+# ASM Client
 
-# 2a) Ejecutar sin compose
+## Sobre el proyecto
+
+Este repositorio contiene el código para los clientes de ASM. Esto incluye los siguientes módulos:
+
+- Una interfaz de **Streamlit** que permite interactuar con un modelo de lenguaje (_LLM_) con acceso a un RAG protegido con credenciales.
+- Una base de datos vectorial que permite hacer búsquedas semánticas para dar contexto al modelo de lenguaje desde diferentes fuentes (Dropbox, Google Drive y Onedrive).
+- Una base de datos **QuestDB** que almacena métricas de uso y permite encontrar puntos de mejora en el sistema.
+
+## Usar el cliente
+
+La manera más sencilla de usar el cliente es usando _docker-compose_:
+
 ```
-docker run --rm -p 8501:8501 \
-  --env-file .env \
-  -v "$PWD/faiss_index:/app/faiss_index" \
-  -v "$PWD/secrets/client_secret.json:/app/client_secret.json:ro" \
-  -v "$PWD/secrets/client_secret_website.json:/app/client_secret_website.json:ro" \
-  mi-streamlit
+docker compose up --build
+
+// Alternativamente, si se dispone de una consola compatible
+./run.sh
 ```
-
-# 2b) Con docker-compose
-`docker compose up --build`
-
-# 2c) Con `run.sh` (recomendado)
-> Requiere Linux o una consola compatible
-
-`./run.sh`
 
