@@ -59,3 +59,18 @@ services:
       - .env
     working_dir: /init
     entrypoint: ["sh", "/init/init.sh"]
+
+  metrics_service:
+    build: metrics_service
+    image: metrics_service:latest
+    container_name: metrics_service
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./metrics_service/metrics_service.py:/app/app.py:rw
+      - ./metrics_service/src:/app/src:rw
+    restart: unless-stopped
+    working_dir: /app
+    entrypoint: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
