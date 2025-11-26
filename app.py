@@ -10,6 +10,8 @@
 
 # Main imports
 import os
+import threading
+import time
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -30,6 +32,28 @@ from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_us
 
 # Utils
 from src.utils.nlp import extract_search_terms
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Hardware usage metrics
+# ─────────────────────────────────────────────────────────────────────────────
+
+def extract_usage_metrics():
+    import psutil
+
+    while True:
+        # CPU
+        cpu_usage = psutil.cpu_percent(interval=1)
+        insert_metric(Metrics.CPU_USAGE.value, cpu_usage)
+
+        # RAM
+        mem = psutil.virtual_memory()
+        insert_metric(Metrics.RAM_USAGE.value, mem.percent)
+
+        # Wait a little bit before pooling again
+        time.sleep(30)
+
+thread = threading.Thread(target=extract_usage_metrics, daemon=True)
+thread.start()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISOS UNIFICADOS
