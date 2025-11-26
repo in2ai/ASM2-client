@@ -1,21 +1,35 @@
-# ASM Client
+# ASM2-Client 📊
 
-## Sobre el proyecto
+<div align="center">
+    <img src="img/in2ai slogan.png" width="300">
+</div>
 
-Este repositorio contiene el código para los clientes de ASM. Esto incluye los siguientes módulos:
+## Descripción
+`ASM2-Client` corresponde a la parte cliente del sistema distribuido desarrollado por In2AI para gestión documental, RAG (Retrieval-Augmented Generation) y métricas de uso.
+El objetivo es ofrecer un cliente robusto y modular capaz de:
+- Extraer métricas de uso (uso de modelos, consultas, autenticaciones, etc.).
+- Almacenarlas localmente usando una base de datos de series temporales.
+- Enviar agregados al servidor central bajo demanda.
+- Compatibilizar con el resto de servicios del nodo (UI, almacenamiento documental, RAG, LLM).
+Este componente es clave dentro de la arquitectura distribuida del sistema, pues permite monitorizar su uso, rendimiento y adopción, facilitando analíticas y mantenimiento en entornos productivos.
+## Requisitos
+- Python 3.9+
+- Docker + Docker Compose (opcional, para despliegue en contenedores)
+- Acceso a los servicios externos (repositorios de almacenamiento, nodo central, etc.) si se desea test completo de integración
 
-- Una interfaz de **Streamlit** que permite interactuar con un modelo de lenguaje (_LLM_) con acceso a un RAG protegido con credenciales.
-- Una base de datos vectorial que permite hacer búsquedas semánticas para dar contexto al modelo de lenguaje desde diferentes fuentes (Dropbox, Google Drive y Onedrive).
-- Una base de datos **QuestDB** que almacena métricas de uso y permite encontrar puntos de mejora en el sistema.
+## Instalación
+```bash
+git clone https://github.com/in2ai/ASM2-client.git
+cd ASM2-client
 
-## Usar el cliente
+# Si usas virtualenv
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
-La manera más sencilla de usar el cliente es usando _docker-compose_:
+# Si prefieres usar Docker (recomendado para entornos consistentes)
+docker-compose up --build
 
-```
-docker compose up --build
-
-// Alternativamente, si se dispone de una consola compatible
+# O alternativamente
 ./run.sh
 ```
-
