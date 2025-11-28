@@ -38,8 +38,8 @@ from src.utils.nlp import extract_search_terms
 # ─────────────────────────────────────────────────────────────────────────────
 
 def extract_usage_metrics():
-    import psutil
-
+    import psutil, GPUtil
+    
     while True:
         # CPU
         cpu_usage = psutil.cpu_percent(interval=1)
@@ -48,6 +48,12 @@ def extract_usage_metrics():
         # RAM
         mem = psutil.virtual_memory()
         insert_metric(Metrics.RAM_USAGE.value, mem.percent)
+
+        # GPU (if available)
+        gpus = GPUtil.getGPUs()
+    
+        if len(gpus) > 0:
+            insert_metric(Metrics.GPU_USAGE.value, gpus[0].load * 100)
 
         # Wait a little bit before pooling again
         time.sleep(30)

@@ -11,6 +11,7 @@ from src.metrics.connection import execute_query
 class Metrics(Enum):
     CPU_USAGE='CPU_USAGE'                       # Percentage of CPU used
     RAM_USAGE='RAM_USAGE'                       # Percentage of RAM used
+    GPU_USAGE='GPU_USAGE'                       # Percentage of GPU used
     
     LLM_RESPONSE_TIME='LLM_RESPONSE_TIME'       # LLM response time
     DOC_RESPONSE_TIME='DOC_RESPONSE_TIME'       # RAG latency
