@@ -7,14 +7,17 @@ from src.connection import execute_query
 # Queries
 # ---------------------------------
 
-def mean_metric(tag, user_id=None, user_role=None, days=None):
+def mean_metric(tag, user_id=None, user_role=None, start_date=None, end_date=None):
     params = [tag]
     query = "SELECT AVG(value) FROM metrics WHERE tag = %s"
 
-    if days is not None:
-        cutoff = datetime.now() - timedelta(days=days)
+    if start_date is not None:
         query += " AND ts >= %s"
-        params.append(cutoff)
+        params.append(start_date)
+
+    if end_date is not None:
+        query += " AND ts <= %s"
+        params.append(end_date)
 
     if user_id is not None:
         query += " AND user_id = %s"
@@ -28,18 +31,21 @@ def mean_metric(tag, user_id=None, user_role=None, days=None):
 
     if not rows:
         return None
-    
+
     return rows[0][0]
 
 
-def top_k_search_terms(k=10, days=None, user_id=None, user_role=None):
+def top_k_search_terms(k=10, start_date=None, end_date=None, user_id=None, user_role=None):
     params = []
     query = "SELECT word, COUNT(*) AS cnt FROM word_counts WHERE 1=1"
 
-    if days is not None:
-        cutoff = datetime.utcnow() - timedelta(days=days)
+    if start_date is not None:
         query += " AND ts >= %s"
-        params.append(cutoff)
+        params.append(start_date)
+
+    if end_date is not None:
+        query += " AND ts <= %s"
+        params.append(end_date)
 
     if user_id is not None:
         query += " AND user_id = %s"
@@ -56,7 +62,7 @@ def top_k_search_terms(k=10, days=None, user_id=None, user_role=None):
     return rows or []
 
 
-def mean_session_length(session_gap_minutes, days=None, user_role=None, user_id=None):
+def mean_session_length(session_gap_minutes, start_date=None, end_date=None, user_role=None, user_id=None):
     if session_gap_minutes is None or session_gap_minutes <= 0:
         raise ValueError("session_gap_minutes must be > 0")
 
@@ -65,10 +71,13 @@ def mean_session_length(session_gap_minutes, days=None, user_role=None, user_id=
     params = []
     where_clauses = []
 
-    if days is not None:
-        cutoff = datetime.now() - timedelta(days=int(days))
+    if start_date is not None:
         where_clauses.append("ts >= %s")
-        params.append(cutoff)
+        params.append(start_date)
+
+    if end_date is not None:
+        where_clauses.append("ts <= %s")
+        params.append(end_date)
 
     if user_id is not None:
         where_clauses.append("user_id = %s")
@@ -116,5 +125,5 @@ def mean_session_length(session_gap_minutes, days=None, user_role=None, user_id=
 
     if not rows or rows[0][0] is None:
         return None
-    
+
     return float(rows[0][0])
