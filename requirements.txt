@@ -32,6 +32,7 @@ google-auth==2.41.1
 google-auth-httplib2==0.2.1
 google-auth-oauthlib==1.2.3
 googleapis-common-protos==1.72.0
+GPUtil==1.4.0
 greenlet==3.2.4
 h11==0.16.0
 httpcore==1.0.9
@@ -69,6 +70,7 @@ preshed==3.0.12
 propcache==0.4.1
 proto-plus==1.26.1
 protobuf==6.33.0
+psutil==7.1.3
 psycopg2-binary==2.9.11
 pyarrow==21.0.0
 pyasn1==0.6.1
