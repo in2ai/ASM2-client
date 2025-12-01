@@ -14,5 +14,4 @@ export { AuthErrorBoundary } from "./auth-error-boundary";
 
 // Other components
 export { DateRangeSelector } from "./date-range-selector";
-export { NodeSelector } from "./node-selector";
 export { ChartVisibilityControls } from "./chart-visibility-controls";

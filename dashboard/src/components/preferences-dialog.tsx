@@ -24,13 +24,8 @@ import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { Loader2, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 
-interface WorkOSUser {
-  role?: string | null;
-}
-
 export function PreferencesDialog() {
-  const { user: authUser } = useAuth();
-  const user = authUser as WorkOSUser | null;
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
   // Fetch current preferences
@@ -57,30 +52,23 @@ export function PreferencesDialog() {
 
   // Form state
   const [defaultDateRange, setDefaultDateRange] = useState<number>(30);
-  const [defaultNodeId, setDefaultNodeId] = useState<string>("");
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
-
-  // Fetch nodes for admin users
-  const { data: nodes } = api.metrics.listNodes.useQuery(
-    { includeInactive: false },
-    {
-      enabled: open && user?.role === "admin",
-    },
-  );
 
   // Load preferences into form when they're fetched
   useEffect(() => {
     if (preferences) {
-      setDefaultDateRange(preferences.defaultDateRange);
-      setDefaultNodeId(preferences.defaultNodeId ?? "");
-      setTheme(preferences.theme);
+      if (preferences.defaultDateRange !== undefined) {
+        setDefaultDateRange(preferences.defaultDateRange);
+      }
+      if (preferences.theme !== undefined) {
+        setTheme(preferences.theme);
+      }
     }
   }, [preferences]);
 
   const handleSave = () => {
     updateMutation.mutate({
       defaultDateRange,
-      defaultNodeId: defaultNodeId || undefined,
       theme,
     });
   };
@@ -141,30 +129,6 @@ export function PreferencesDialog() {
                 días por defecto
               </p>
             </div>
-
-            {/* Default Node (Admin only) */}
-            {user?.role === "admin" && (
-              <div className="space-y-2">
-                <Label htmlFor="defaultNode">Nodo predeterminado</Label>
-                <Select value={defaultNodeId} onValueChange={setDefaultNodeId}>
-                  <SelectTrigger id="defaultNode">
-                    <SelectValue placeholder="Todos los nodos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Todos los nodos</SelectItem>
-                    {nodes?.map((node) => (
-                      <SelectItem key={node.nodeId} value={node.nodeId}>
-                        {node.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-muted-foreground text-xs">
-                  El nodo que se seleccionará automáticamente al abrir el
-                  dashboard
-                </p>
-              </div>
-            )}
 
             {/* Theme */}
             <div className="space-y-2">

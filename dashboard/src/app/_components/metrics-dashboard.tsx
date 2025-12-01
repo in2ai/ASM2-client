@@ -24,8 +24,7 @@ import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { api, type RouterOutputs } from "@/trpc/react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { type DateRange } from "react-day-picker";
 import {
   Area,
@@ -277,13 +276,13 @@ interface PersistentHeaderProps {
   stats: StatsResponse | undefined;
   isFetching: boolean;
   onRefresh: () => void;
-  nodeId: string | undefined;
   userRole: string | undefined;
 }
 
 /**
  * PersistentHeader component that displays date controls, metadata, and action buttons
  * This component remains visible across all states (loading, empty, error, data)
+ * Requirement 3.4: Removed nodeId parameter handling
  */
 function PersistentHeader({
   dateRange,
@@ -292,7 +291,6 @@ function PersistentHeader({
   stats,
   isFetching,
   onRefresh,
-  nodeId,
   userRole,
 }: Readonly<PersistentHeaderProps>) {
   return (
@@ -314,23 +312,18 @@ function PersistentHeader({
                 </div>
               )}
             </div>
-            {/* Display current context info */}
+            {/* Display current context info - removed node-specific messaging per Requirement 3.4 */}
             {stats && (
               <p className="text-muted-foreground text-xs">
                 {stats.documentCount} registro
                 {stats.documentCount !== 1 ? "s" : ""} de métricas
-                {nodeId && userRole === "admin"
-                  ? ` para el nodo seleccionado`
-                  : userRole === "admin"
-                    ? " de todos los nodos"
-                    : ""}
               </p>
             )}
           </div>
         </div>
         {/* Action buttons: Export and Refresh */}
         <div className="flex items-center gap-2">
-          <ExportButton nodeId={nodeId} dateRange={dateRange} />
+          <ExportButton dateRange={dateRange} />
           <Button
             onClick={onRefresh}
             disabled={isFetching}
@@ -367,39 +360,15 @@ function humanizeKey(value: string) {
 }
 
 export function MetricsDashboard() {
-  const { user: authUser, organizationId } = useAuth();
+  const { user: authUser } = useAuth();
   const user = authUser as WorkOSUser | null;
-  const searchParams = useSearchParams();
-
-  // Fetch user preferences to get default date range
-  const { data: preferences } = api.preferences.get.useQuery(undefined, {
-    enabled: !!user,
-    staleTime: 5 * 60_000, // 5 minutes
-  });
 
   // Set default date range - undefined means fetch all data without date filtering
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  // Extract nodeId from URL search params for admins
-  // Use user's organizationId for end users automatically
-  const nodeId = useMemo(() => {
-    if (!organizationId) return undefined;
-
-    // Admin can select node via URL, users always use their org
-    if (user?.role === "admin") {
-      // Priority: URL param > user preference > undefined (all nodes)
-      return (
-        searchParams.get("nodeId") ?? preferences?.defaultNodeId ?? undefined
-      );
-    }
-
-    // End users automatically use their organization ID
-    return organizationId;
-  }, [user, searchParams, preferences, organizationId]);
-
+  // Requirement 3.4: Removed nodeId parameter handling - single-node architecture
   const metricsQuery = api.metrics.get.useQuery(
     {
-      nodeId,
       startDate: dateRange?.from,
       endDate: dateRange?.to,
     },
@@ -415,10 +384,9 @@ export function MetricsDashboard() {
     metricsQuery;
   const refetch = metricsQuery.refetch as () => Promise<unknown>;
 
-  // Update stats query with same nodeId logic and date range
+  // Requirement 3.4: Removed nodeId parameter - single-node architecture
   const { data: stats } = api.metrics.getStats.useQuery(
     {
-      nodeId,
       startDate: dateRange?.from,
       endDate: dateRange?.to,
     },
@@ -452,7 +420,6 @@ export function MetricsDashboard() {
               onRefresh={() => {
                 void refetch();
               }}
-              nodeId={nodeId}
               userRole={user.role ?? undefined}
             />
           )}

@@ -1,7 +1,6 @@
 "use client";
 
 import { ChartVisibilityControls } from "@/components/chart-visibility-controls";
-import { NodeSelector } from "@/components/node-selector";
 import { PreferencesDialog } from "@/components/preferences-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +30,6 @@ import {
   User,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { useState, type ElementType, type ReactNode } from "react";
 
 type View = "usage" | "rag-quality" | "performance" | "insights";
@@ -250,26 +248,18 @@ interface WorkOSUser {
 /**
  * CompanyDisplay Component
  *
- * Conditionally renders NodeSelector for administrators or static company name for end users.
- * This implements role-aware navigation as per requirements 9.1, 9.2, 9.3.
+ * Displays user information in the header.
  */
 function CompanyDisplay({ user }: Readonly<{ user: WorkOSUser | null }>) {
   if (!user) {
     return null;
   }
 
-  const isAdmin = user.role === "admin";
-
-  if (isAdmin) {
-    // Administrators see the NodeSelector dropdown
-    return <NodeSelector />;
-  }
-
-  // End users see their static company name
+  // Simply display user info, no node selection
   return (
     <div className="text-muted-foreground hidden items-center gap-2 text-sm md:flex">
-      <Building2 className="h-4 w-4" />
-      <span className="font-medium">{user.organizationId ?? "Mi Empresa"}</span>
+      <User className="h-4 w-4" />
+      <span className="font-medium">{user.email}</span>
     </div>
   );
 }
@@ -351,18 +341,6 @@ function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {/* Admin-only menu items */}
-        {user?.role === "admin" && (
-          <>
-            <Link href="/admin/nodes">
-              <DropdownMenuItem>
-                <Building2 className="mr-2 h-4 w-4" />
-                <span>Gestión de Nodos</span>
-              </DropdownMenuItem>
-            </Link>
-            <DropdownMenuSeparator />
-          </>
-        )}
         <div className="px-2 py-1.5">
           <PreferencesDialog />
         </div>

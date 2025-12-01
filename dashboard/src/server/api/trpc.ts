@@ -12,7 +12,7 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 
 /**
- * User context interface with role and organization mapping
+ * User context interface for authentication and tracking
  */
 export interface UserContext {
   userId: string;
@@ -20,7 +20,6 @@ export interface UserContext {
   firstName?: string | null;
   lastName?: string | null;
   role: "admin" | "user";
-  organizationId: string;
 }
 
 /**
@@ -37,11 +36,7 @@ export interface UserContext {
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   // Extract WorkOS user session
-  const {
-    user,
-    organizationId: userOrganizationId,
-    role: userRole,
-  } = await withAuth();
+  const { user, role: userRole } = await withAuth();
 
   // If no user, return context without user information
   if (!user) {
@@ -57,17 +52,13 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   // End User role: all other authenticated users
   const role = userRole === "admin" ? "admin" : "user";
 
-  // Map WorkOS organization ID to nodeId
-  const organizationId = userOrganizationId ?? "";
-
-  // Create UserContext with role and organization mapping
+  // Create UserContext for authentication and tracking
   const userContext: UserContext = {
     userId: user.id,
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
     role,
-    organizationId,
   };
 
   return {

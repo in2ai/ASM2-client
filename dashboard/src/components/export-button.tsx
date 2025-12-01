@@ -6,24 +6,22 @@ import { Download, Loader2 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 
 interface ExportButtonProps {
-  readonly nodeId?: string;
   readonly dateRange?: DateRange;
 }
 
 type ExportMetricsOutput = RouterOutputs["metrics"]["exportMetrics"];
-type MetricData = ExportMetricsOutput["metrics"][number];
 
 /**
  * ExportButton Component
  *
  * Provides CSV export functionality for metrics data.
- * Respects authorization rules and limits exports to 10,000 rows.
+ * Requirement 3.4: Removed nodeId parameter - single-node architecture
  */
-export function ExportButton({ nodeId, dateRange }: ExportButtonProps) {
+export function ExportButton({ dateRange }: ExportButtonProps) {
   // Use TRPC query with manual trigger
+  // Requirement 3.4: Removed nodeId parameter
   const exportQuery = api.metrics.exportMetrics.useQuery(
     {
-      nodeId,
       startDate: dateRange?.from,
       endDate: dateRange?.to,
     },
@@ -91,67 +89,26 @@ export function ExportButton({ nodeId, dateRange }: ExportButtonProps) {
 
 /**
  * Generate CSV content from metrics data
+ * Updated for new metrics_service data structure
  */
-function generateCSV(metrics: MetricData[]): string {
+function generateCSV(metrics: ExportMetricsOutput["metrics"]): string {
   if (metrics.length === 0) {
     return "";
   }
 
-  // Define CSV headers
+  // Define CSV headers - simplified for new data structure
   const headers = [
-    "Timestamp",
-    "Node ID",
-    "Daily Users",
-    "Weekly Users",
-    "Monthly Users",
-    "Daily Sessions",
-    "Weekly Sessions",
-    "Monthly Sessions",
-    "Avg Session Duration (min)",
-    "Total Queries",
-    "Successful Retrieval Rate (%)",
-    "Retrieval Latency (ms)",
-    "Avg Context Tokens",
-    "Avg Response Time (ms)",
-    "Avg Prompt Tokens",
-    "Avg Completion Tokens",
-    "Avg Total Tokens",
-    "CPU Usage (%)",
-    "Memory Usage (MB)",
-    "Cost Per Query ($)",
-    "Timeout Errors",
-    "Retrieval Failure Errors",
-    "Model Call Failure Errors",
-    "Other Errors",
+    "Metric Type",
+    "Value",
+    "Unit",
   ];
 
-  // Generate CSV rows
+  // Generate CSV rows from the new flat structure
   const rows = metrics.map((metric) => {
     return [
-      new Date(metric.timestamp).toISOString(),
-      metric.nodeId,
-      metric.usage_metrics.unique_users.daily,
-      metric.usage_metrics.unique_users.weekly,
-      metric.usage_metrics.unique_users.monthly,
-      metric.usage_metrics.active_sessions.daily,
-      metric.usage_metrics.active_sessions.weekly,
-      metric.usage_metrics.active_sessions.monthly,
-      metric.usage_metrics.session_duration.average_minutes.toFixed(2),
-      metric.usage_metrics.processed_queries.total,
-      metric.rag_quality_metrics.successful_retrieval_rate.toFixed(2),
-      metric.rag_quality_metrics.retrieval_latency_ms.toFixed(2),
-      metric.rag_quality_metrics.average_context_tokens.toFixed(0),
-      metric.performance_metrics.average_response_time_ms.toFixed(2),
-      metric.performance_metrics.token_usage.average_prompt.toFixed(0),
-      metric.performance_metrics.token_usage.average_completion.toFixed(0),
-      metric.performance_metrics.token_usage.average_total.toFixed(0),
-      metric.performance_metrics.resource_consumption.cpu_percent.toFixed(2),
-      metric.performance_metrics.resource_consumption.memory_mb.toFixed(0),
-      metric.performance_metrics.cost_per_query.toFixed(4),
-      metric.performance_metrics.errors.timeout,
-      metric.performance_metrics.errors.retrieval_failure,
-      metric.performance_metrics.errors.model_call_failure,
-      metric.performance_metrics.errors.other,
+      metric.metric_type,
+      metric.value,
+      metric.unit,
     ];
   });
 
@@ -181,15 +138,15 @@ function escapeCSVCell(
 }
 
 /**
- * Generate filename with node name, date range, and timestamp
+ * Generate filename with date range and timestamp
+ * Requirement 3.4: Removed nodeName - single-node architecture
  */
 function generateFilename(metadata: {
-  nodeName: string;
   startDate?: string;
   endDate?: string;
   exportTimestamp: string;
 }): string {
-  const parts = ["metrics", metadata.nodeName];
+  const parts = ["metrics"];
 
   // Add date range if available
   if (metadata.startDate && metadata.endDate) {

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { type DateRange } from "react-day-picker";
 
 interface UsePaginatedMetricsOptions {
-  nodeId?: string;
   dateRange?: DateRange;
   pageSize?: number;
   enabled?: boolean;
@@ -14,11 +13,11 @@ interface UsePaginatedMetricsOptions {
 /**
  * Custom hook for paginated metrics queries
  *
- * Implements pagination support for large datasets as per Requirement 13.4
+ * Implements pagination support for large datasets
  * Allows fetching metrics in chunks to improve performance
+ * Requirement 3.4: Removed nodeId parameter - single-node architecture
  */
 export function usePaginatedMetrics({
-  nodeId,
   dateRange,
   pageSize = 100,
   enabled = true,
@@ -27,7 +26,6 @@ export function usePaginatedMetrics({
 
   const query = api.metrics.get.useQuery(
     {
-      nodeId,
       startDate: dateRange?.from,
       endDate: dateRange?.to,
       limit: pageSize,
@@ -51,9 +49,8 @@ export function usePaginatedMetrics({
     nextPage,
     prevPage,
     resetPage,
-    hasNextPage: query.data?.metadata.totalRecords
-      ? (page + 1) * pageSize < query.data.metadata.totalRecords
-      : false,
+    // Note: totalRecords not yet available from metrics_service
+    hasNextPage: false,
     hasPrevPage: page > 0,
   };
 }

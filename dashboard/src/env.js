@@ -8,7 +8,7 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
-    MONGODB_URI: z.url(),
+    METRICS_SERVICE_URL: z.string().url(),
     WORKOS_API_KEY: z.string(),
     WORKOS_CLIENT_ID: z.string(),
     WORKOS_COOKIE_PASSWORD: z.string(),
@@ -30,7 +30,7 @@ export const env = createEnv({
    */
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
-    MONGODB_URI: process.env.MONGODB_URI,
+    METRICS_SERVICE_URL: process.env.METRICS_SERVICE_URL,
     WORKOS_API_KEY: process.env.WORKOS_API_KEY,
     WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID,
     WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD,
