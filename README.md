@@ -1,35 +1,13 @@
-# ASM2-Client 📊
+# 1) Construir
+docker build -t mi-streamlit .
 
-<div align="center">
-    <img src="img/in2ai slogan.png" width="300">
-</div>
+# 2a) Ejecutar sin compose
+docker run --rm -p 8501:8501 \
+  --env-file .env \
+  -v "$PWD/faiss_index:/app/faiss_index" \
+  -v "$PWD/client_secret.json:/app/client_secret.json:ro" \
+  -v "$PWD/client_secret_website.json:/app/client_secret_website.json:ro" \
+  mi-streamlit
 
-## Descripción
-`ASM2-Client` corresponde a la parte cliente del sistema distribuido desarrollado por In2AI para gestión documental, RAG (Retrieval-Augmented Generation) y métricas de uso.
-El objetivo es ofrecer un cliente robusto y modular capaz de:
-- Extraer métricas de uso (uso de modelos, consultas, autenticaciones, etc.).
-- Almacenarlas localmente usando una base de datos de series temporales.
-- Enviar agregados al servidor central bajo demanda.
-- Compatibilizar con el resto de servicios del nodo (UI, almacenamiento documental, RAG, LLM).
-Este componente es clave dentro de la arquitectura distribuida del sistema, pues permite monitorizar su uso, rendimiento y adopción, facilitando analíticas y mantenimiento en entornos productivos.
-## Requisitos
-- Python 3.9+
-- Docker + Docker Compose (opcional, para despliegue en contenedores)
-- Acceso a los servicios externos (repositorios de almacenamiento, nodo central, etc.) si se desea test completo de integración
-
-## Instalación
-```bash
-git clone https://github.com/in2ai/ASM2-client.git
-cd ASM2-client
-
-# Si usas virtualenv
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Si prefieres usar Docker (recomendado para entornos consistentes)
-docker-compose up --build
-
-# O alternativamente
-./run.sh
-```
+# 2b) Con docker-compose (recomendado)
+docker compose up --build

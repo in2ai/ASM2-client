@@ -6,11 +6,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     locales \
     curl \
- && rm -rf /var/lib/apt/lists/*
+    wget \
+    iputils-ping \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # Generar locales (es_ES.UTF-8)
 RUN sed -i 's/^# *\(es_ES.UTF-8 UTF-8\)/\1/' /etc/locale.gen \
- && locale-gen es_ES.UTF-8
+    && locale-gen es_ES.UTF-8
 ENV LANG=es_ES.UTF-8 \
     LANGUAGE=es_ES:es \
     LC_ALL=es_ES.UTF-8 \
@@ -39,9 +42,6 @@ RUN if ! grep -qi '^streamlit' requirements.txt; then echo 'streamlit' >> requir
 
 # Instalar deps Python
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Descargar modelo de spacy
-RUN python -m spacy download es_core_news_md
 
 # Copiamos el resto del proyecto
 COPY . /app

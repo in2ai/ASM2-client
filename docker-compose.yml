@@ -10,11 +10,9 @@ services:
       - .env
     volumes:
       - ./faiss_index:/app/faiss_index:rw
-      - ./secrets/client_secret.json:/app/client_secret.json:ro
-      - ./secrets/client_secret_website.json:/app/client_secret_website.json:ro
-      - ./img:/app/img:rw
-      - ./src:/app/src:rw
-      - ./app.py:/app/app.py:rw
+      - ./client_secret.json:/app/client_secret.json:ro
+      - ./client_secret_website.json:/app/client_secret_website.json:ro
+      - ./:/app:rw
     user: "${UID}:${GID}"
     dns:
       - 8.8.8.8
@@ -28,34 +26,3 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-
-  questdb:
-    image: questdb/questdb:latest
-    container_name: questdb
-    restart: unless-stopped
-    # Ports:
-    # 9000 - QuestDB web console / REST API (HTTP)
-    # 8812 - Postgres wire protocol (useable with psql / Postgres clients / SQL interfaces)
-    # 9009 - InfluxDB Line Protocol (ILP)
-    ports:
-      - "9000:9000"
-      - "8812:8812"
-      - "9009:9009"
-    volumes:
-      - ./questdb:/root/.questdb:rw
-    env_file:
-      - .env
-      
-  questdb-init:
-    image: postgres:15-alpine
-    container_name: questdb-init
-    restart: "no"
-    depends_on:
-      - questdb
-    volumes:
-      - ./sql/init.sql:/init/init.sql:ro
-      - ./sql/init.sh:/init/init.sh:ro
-    env_file:
-      - .env
-    working_dir: /init
-    entrypoint: ["sh", "/init/init.sh"]
