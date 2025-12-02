@@ -58,8 +58,14 @@ def extract_usage_metrics():
         # Wait a little bit before pooling again
         time.sleep(30)
 
-thread = threading.Thread(target=extract_usage_metrics, daemon=True)
-thread.start()
+
+@st.cache_resource
+def start_usage_metrics_thread():
+    thread = threading.Thread(target=extract_usage_metrics, daemon=True)
+    thread.start()
+
+
+start_usage_metrics_thread()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISOS UNIFICADOS
@@ -104,27 +110,8 @@ def has_access(service_or_token, doc_metadata, user_ctx=None):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def reindex_all_sources():
-    """Reconstruye/actualiza los índices de las fuentes conectadas."""
-    # Google Drive
-    if "service" in st.session_state:
-        with st.spinner("🔄 Reindexando Google Drive…"):
-            st.session_state.vectordb = construir_vectorstore_drive(st.session_state.service)
-        st.success("✅ Índice de Drive actualizado.")
-
-    # Dropbox
-    if st.session_state.get("dbx"):
-        with st.spinner(f"🔄 Reindexando Dropbox ({DROPBOX_ROOT or '/'})…"):
-            st.session_state.vectordb_dropbox = construir_vectorstore_dropbox(st.session_state.dbx)
-        st.success("✅ Índice de Dropbox actualizado.")
-
-    # OneDrive
-    if st.session_state.get("onedrive_token"):
-        try:
-            with st.spinner(f"🔄 Reindexando OneDrive ({ONEDRIVE_ROOT or '/'})…"):
-                st.session_state.vectordb_onedrive = construir_vectorstore_onedrive(st.session_state.onedrive_token)
-            st.success("✅ Índice de OneDrive actualizado.")
-        except Exception as e:
-            st.error(f"❌ No se pudo reindexar OneDrive: {e}")
+    get_vectordb.clear()
+    get_vectordb()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RESPONDER (multi-origen)
@@ -157,13 +144,13 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
         for f in vectordb.similarity_search(query, k=256):    
             source = f.metadata['source']
 
-            if source == "Drive" and has_access(services["drive"], f.metadata, drive_user):
+            if source == "Drive" and "drive" in services and has_access(services["drive"], f.metadata, drive_user):
                 allowed_chunks.append(f)
 
-            elif source == "Dropbox" and has_access(services["dropbox"], f.metadata):
+            elif source == "Dropbox" and "dropbox" in services and has_access(services["dropbox"], f.metadata):
                 allowed_chunks.append(f)
 
-            elif source == "Onedrive" and has_access(services["onedrive_token"], f.metadata):
+            elif source == "Onedrive" and "onedrive_token" in services and has_access(services["onedrive_token"], f.metadata):
                 allowed_chunks.append(f)
 
     if not allowed_chunks:
@@ -237,6 +224,33 @@ section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px;
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CARGA / CONSTRUCCIÓN ÍNDICES
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_resource
+def get_vectordb():
+    vectordb = None
+
+    if "service" in st.session_state:
+        with st.spinner("Construyendo / Cargando índice de Drive…"):
+            vectordb = construir_vectorstore_drive()
+
+    if "dbx" in st.session_state:
+        with st.spinner(f"Construyendo / Cargando índice de Dropbox ({DROPBOX_ROOT or '/'})…"):
+            vectordb = construir_vectorstore_dropbox()
+
+    if "onedrive_token" in st.session_state:
+        try:
+            with st.spinner(f"Construyendo / Cargando índice de OneDrive ({ONEDRIVE_ROOT or '/'})…"):
+                vectordb = construir_vectorstore_onedrive()
+        except Exception as e:
+            pass
+
+    return vectordb
+
+get_vectordb()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR (sesiones y fuentes)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -257,7 +271,9 @@ with st.sidebar:
             service = oauth_login_drive()
             if service:
                 st.session_state.service = service
+                get_vectordb.clear()
                 st.rerun()
+
         else:
             if st.button("Conectar con Google Drive", use_container_width=True):
                 # Llamada inicial que muestra la URL de autorización y hace st.stop()
@@ -271,7 +287,7 @@ with st.sidebar:
             except Exception: pass
             st.success("Sesión Drive cerrada.")
             st.rerun()
- 
+
     st.markdown("### 🔐 OneDrive")
     if ONEDRIVE_CLIENT_ID:
         if "onedrive_token" not in st.session_state:
@@ -286,6 +302,7 @@ with st.sidebar:
                 if tok:
                     st.session_state.onedrive_token = tok
                     st.session_state.pop("odc_auth_mode", None)
+                    get_vectordb.clear()
                     st.rerun()
         else:
             if st.button("Desconectar OneDrive", use_container_width=True):
@@ -311,6 +328,8 @@ with st.sidebar:
         if dbx_client:
             st.session_state.dbx = dbx_client
             st.session_state.pop("dbx_auth_mode", None)
+            get_vectordb.clear()
+
             try:
                 acc = st.session_state.dbx.users_get_current_account()
                 root_effective = (DROPBOX_ROOT or "").strip() or "(raíz de la app)"
@@ -325,7 +344,6 @@ with st.sidebar:
                 st.session_state.pop(k, None)
             st.success("Dropbox desconectado.")
             st.rerun()
-
 
     st.markdown("### ⚙️ Fuentes a consultar")
 
@@ -354,28 +372,6 @@ with st.sidebar:
 
     if st.button("Reindexar ahora", use_container_width=True):
         reindex_all_sources()
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CARGA / CONSTRUCCIÓN ÍNDICES
-# ─────────────────────────────────────────────────────────────────────────────
-
-if "service" in st.session_state and "vectordb" not in st.session_state:
-    with st.spinner("Construyendo / Cargando índice de Drive…"):
-        st.session_state.vectordb = construir_vectorstore_drive(st.session_state.service)
-    st.success("✅ Índice de Drive listo.")
-
-if st.session_state.get("dbx") and "vectordb_dropbox" not in st.session_state:
-    with st.spinner(f"Construyendo / Cargando índice de Dropbox ({DROPBOX_ROOT or '/'})…"):
-        st.session_state.vectordb = construir_vectorstore_dropbox(st.session_state.dbx)
-    st.success("✅ Índice de Dropbox listo.")
-
-if st.session_state.get("onedrive_token") and "vectordb_onedrive" not in st.session_state:
-    try:
-        with st.spinner(f"Construyendo / Cargando índice de OneDrive ({ONEDRIVE_ROOT or '/'})…"):
-            st.session_state.vectordb = construir_vectorstore_onedrive(st.session_state.onedrive_token)
-        st.success("✅ Índice de OneDrive listo.")
-    except Exception as e:
-        st.error(f"❌ No se pudo construir el índice de OneDrive: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # UI PRINCIPAL (chat)
@@ -412,13 +408,15 @@ if prompt:
             if "OneDrive" in sel and "onedrive_token" in st.session_state:
                 services["onedrive_token"] = st.session_state.onedrive_token
 
+            vectordb = get_vectordb()
+
             # Check the vector DB
-            if "vectordb" not in st.session_state:
+            if vectordb is None:
                 ans = "Conecta al menos una fuente (Drive/Dropbox) en la barra lateral."
 
             else:
                 ans = responder_multi(
-                    prompt, st.session_state.vectordb, services,
+                    prompt, vectordb, services,
                     threshold=st.session_state.get("threshold", 0.55), k=6
                 )
 

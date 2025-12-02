@@ -221,7 +221,9 @@ def onedrive_can_read(token_dict, item_id: str) -> bool:
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-def construir_vectorstore_onedrive(token_dict):
+def construir_vectorstore_onedrive():
+    token_dict = st.session_state.onedrive_token
+
     # Create file list
     files = onedrive_list_files(token_dict, ONEDRIVE_ROOT or "")
 

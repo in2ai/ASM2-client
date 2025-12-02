@@ -1,4 +1,4 @@
-import os, io, time, json, datetime
+import os, io, time
 
 import streamlit as st
 
@@ -216,7 +216,9 @@ def drive_can_read(service, file_id: str) -> bool:
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-def construir_vectorstore_drive(service):
+def construir_vectorstore_drive():
+    service = st.session_state.service
+
     # Generate credentials
     creds = service._http.credentials
     creds_dict = {

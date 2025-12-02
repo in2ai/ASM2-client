@@ -138,7 +138,9 @@ def dropbox_can_read(dbx, file_id: str) -> bool:
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-def construir_vectorstore_dropbox(dbx):
+def construir_vectorstore_dropbox():
+    dbx = st.session_state.dbx
+
     # Create file list
     files = dropbox_list_files(dbx, DROPBOX_ROOT or "")
     
@@ -147,7 +149,7 @@ def construir_vectorstore_dropbox(dbx):
             "id": f.id, 
             "name": f.name, 
             "path_lower": f.path_lower, 
-            "modifiedTime": f.client_modified,
+            "modifiedTime": f.client_modified.isoformat(),
             "mimeType": guess_mime_from_name(f.name)
         } 
         for f in files
