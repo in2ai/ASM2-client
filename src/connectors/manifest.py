@@ -31,16 +31,32 @@ class FaissManifest:
             json.dump(self.manifest, f, ensure_ascii=False, indent=2)
 
 
+    def get_processed_ids(self, source):
+        self.manifest['processed_ids'].setdefault(source, {})
+
+        return self.manifest['processed_ids'][source]
+
+
+    def remove_processed_ids(self, source, processed_ids):
+        self.manifest['processed_ids'].setdefault(source, {})
+
+        for id in processed_ids:
+            self.manifest['processed_ids'][source].pop(id, '')
+
+
     def add_processed_ids(self, source, processed_ids):
         self.manifest['processed_ids'].setdefault(source, {})
 
         for id, time in processed_ids:
-            print(self.manifest['processed_ids'][source])
             self.manifest['processed_ids'][source][id] = time
 
 
     def add_chunks(self, chunks):
         self.manifest['total_chunks'] += chunks
+
+
+    def remove_chunks(self, chunks):
+        self.manifest['total_chunks'] -= chunks
 
 
     def add_completed_source(self, source):

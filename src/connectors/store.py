@@ -31,17 +31,42 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
         vectorstore = FAISS.load_local(FAISS_PATH, EMBEDDINGS, allow_dangerous_deserialization=True)
 
         print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
-
-        if manifest.is_source_completed(source):
-            print("✅ Índice ya completo. Usando caché.")
-            return vectorstore
         
     except Exception:
         pass
 
-    # construct a new DB if needed
+    # Construct a new DB if needed
     if vectorstore is None:
         vectorstore = FAISS(embedding_function=EMBEDDINGS, index=INDEX, docstore=InMemoryDocstore({}), index_to_docstore_id={})
+
+    # Check files to update
+    current = manifest.get_processed_ids(source)
+    new = {f.metadata['id']: f.metadata['modifiedTime'] for f in files}
+
+    files_to_delete = set()
+    files_to_add = {id for id in new.keys() if id not in current}
+
+    for id in current.keys():
+        if id not in new:
+            pass
+            # files_to_delete.add(id)
+        
+        elif id in new and new[id] != current[id]:
+            files_to_add.add(id)
+            files_to_delete.add(id)
+
+    # Delete chunks
+    ids_to_delete = [
+        doc_id for doc_id, doc in vectorstore.docstore._dict.items()
+        if doc.metadata['id'] in files_to_delete
+    ]
+
+    if len(ids_to_delete) > 0:
+        manifest.remove_processed_ids(source, files_to_delete)
+        manifest.remove_chunks(len(ids_to_delete))
+        
+        vectorstore.delete(ids_to_delete)
+        vectorstore.save_local(FAISS_PATH)
 
     # Read file chunks in batches
     docs_batch, pending_ids = [], []
@@ -61,6 +86,9 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
         docs_batch, pending_ids = [], []
 
     for f in files:
+        if f.metadata['id'] not in files_to_add:
+            continue
+
         f.metadata['source'] = source
 
         if manifest.contains_file(f): 
