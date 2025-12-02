@@ -8,6 +8,7 @@
     "geist",
     "healthcheck",
     "IRAG",
+    "libc",
     "Milisegundos",
     "mongodb",
     "mongosh",

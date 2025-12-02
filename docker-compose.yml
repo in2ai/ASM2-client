@@ -83,14 +83,11 @@ services:
     container_name: dashboard
     ports:
       - "3001:3001"
+    env_file:
+      - ./dashboard/.env
     environment:
       - NODE_ENV=production
       - METRICS_SERVICE_URL=http://metrics_service:8080
-      - WORKOS_API_KEY=${WORKOS_API_KEY}
-      - WORKOS_CLIENT_ID=${WORKOS_CLIENT_ID}
-      - WORKOS_COOKIE_PASSWORD=${WORKOS_COOKIE_PASSWORD}
-      - NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI:-http://localhost:3001/api/auth/callback}
-      - SKIP_ENV_VALIDATION=false
     depends_on:
       - metrics_service
     restart: unless-stopped

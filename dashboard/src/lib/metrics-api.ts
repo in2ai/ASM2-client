@@ -116,12 +116,14 @@ export function createMetricsApiClient(): MetricsApiClient {
       params: MetricsApiParams & { k?: number },
     ): Promise<TopSearchTermsResponse> {
       const { k, userId, userRole, startDate, endDate } = params;
+      // The API only accepts user_id OR user_role, not both
+      // Prioritize user_id as it's more specific
       return fetchFromMetricsService<TopSearchTermsResponse>(
         "/top_search_terms",
         {
           k,
           user_id: userId,
-          user_role: userRole,
+          user_role: userId ? undefined : userRole,
           start_date: startDate,
           end_date: endDate,
         },
