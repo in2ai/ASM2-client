@@ -8,7 +8,7 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
-    METRICS_SERVICE_URL: z.string().url(),
+    METRICS_SERVICE_URL: z.url(),
     WORKOS_API_KEY: z.string(),
     WORKOS_CLIENT_ID: z.string(),
     WORKOS_COOKIE_PASSWORD: z.string(),
