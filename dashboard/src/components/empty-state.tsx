@@ -92,7 +92,7 @@ export function EmptyState({
       </CardHeader>
       <CardContent className="space-y-4 sm:space-y-6">
         {/* Action buttons */}
-        {(onAction || onSecondaryAction) && (
+        {(onAction != null || onSecondaryAction != null) && (
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
             {onAction && actionLabel && (
               <Button

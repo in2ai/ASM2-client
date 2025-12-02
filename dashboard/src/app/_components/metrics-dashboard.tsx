@@ -276,7 +276,7 @@ interface PersistentHeaderProps {
   stats: StatsResponse | undefined;
   isFetching: boolean;
   onRefresh: () => void;
-  userRole: string | undefined;
+  _userRole: string | undefined;
 }
 
 /**
@@ -291,7 +291,7 @@ function PersistentHeader({
   stats,
   isFetching,
   onRefresh,
-  userRole,
+  _userRole,
 }: Readonly<PersistentHeaderProps>) {
   return (
     <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:gap-4">
@@ -420,7 +420,7 @@ export function MetricsDashboard() {
               onRefresh={() => {
                 void refetch();
               }}
-              userRole={user.role ?? undefined}
+              _userRole={user.role ?? undefined}
             />
           )}
 

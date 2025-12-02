@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChartVisibilityProvider } from "@/contexts/chart-visibility-context";
 import { cn } from "@/lib/utils";
-import { signOut } from "@workos-inc/authkit-nextjs";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import {
   Activity,
@@ -266,6 +265,7 @@ function CompanyDisplay({ user }: Readonly<{ user: WorkOSUser | null }>) {
 
 function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const { signOut } = useAuth();
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
