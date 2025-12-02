@@ -103,7 +103,7 @@ def has_access(service_or_token, doc_metadata, user_ctx=None):
 # RESPONDER (multi-origen)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars=1600):
+def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=1600):
     """
     vectordbs: lista de tuplas (source, vectordb) con source en {"drive","dropbox"}.
     services: dict {'drive': service_drive, 'dropbox': dbx}
@@ -124,19 +124,20 @@ def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars
     insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(query))
 
     with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
-        for source, vdb in vectordbs:
-            cands = vdb.similarity_search(query, k=256)
-            if source == "drive":
-                user_ctx = get_current_user_drive(services["drive"])
-                allowed = [d for d in cands if has_access(services["drive"], d.metadata, user_ctx)]
-            elif source == "onedrive":
-                allowed = [d for d in cands if has_access(services["onedrive_token"], d.metadata)]
-            elif source == "dropbox":
-                allowed = [d for d in cands if has_access(services["dropbox"], d.metadata)]
-            else:
-                allowed = []
-            allowed_chunks.extend(allowed)
-            print(f"🔎 {source}: cands={len(cands)} allowed={len(allowed)}")
+        if 'drive' in services:
+            drive_user = get_current_user_drive(services["drive"])
+        
+        for f in vectordb.similarity_search(query, k=256):    
+            source = f.metadata['source']
+
+            if source == "Drive" and has_access(services["drive"], f.metadata, drive_user):
+                allowed_chunks.append(f)
+
+            elif source == "Dropbox" and has_access(services["dropbox"], f.metadata):
+                allowed_chunks.append(f)
+
+            elif source == "Onedrive" and has_access(services["onedrive_token"], f.metadata):
+                allowed_chunks.append(f)
 
     if not allowed_chunks:
         return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
@@ -332,12 +333,13 @@ if "service" in st.session_state and "vectordb" not in st.session_state:
 
 if st.session_state.get("dbx") and "vectordb_dropbox" not in st.session_state:
     with st.spinner(f"Construyendo / Cargando índice de Dropbox ({DROPBOX_ROOT or '/'})…"):
-        st.session_state.vectordb_dropbox = construir_vectorstore_dropbox(st.session_state.dbx)
+        st.session_state.vectordb = construir_vectorstore_dropbox(st.session_state.dbx)
     st.success("✅ Índice de Dropbox listo.")
+
 if st.session_state.get("onedrive_token") and "vectordb_onedrive" not in st.session_state:
     try:
         with st.spinner(f"Construyendo / Cargando índice de OneDrive ({ONEDRIVE_ROOT or '/'})…"):
-            st.session_state.vectordb_onedrive = construir_vectorstore_onedrive(st.session_state.onedrive_token)
+            st.session_state.vectordb = construir_vectorstore_onedrive(st.session_state.onedrive_token)
         st.success("✅ Índice de OneDrive listo.")
     except Exception as e:
         st.error(f"❌ No se pudo construir el índice de OneDrive: {e}")
@@ -364,26 +366,31 @@ if prompt:
     st.markdown(f'<div class="chat-row user"><div class="chat-bubble-user">{prompt}</div></div>', unsafe_allow_html=True)
     with st.spinner("Pensando…"):
         try:
-            sel = st.session_state.get("sources_selected") or []
-            vectordbs = []; services = {}
-            if "Drive" in sel and "vectordb" in st.session_state:
-                vectordbs.append(("drive", st.session_state.vectordb))
+            # Add the connectors
+            sel = st.session_state.get("sources_selected") or []                
+            services = {}
+            
+            if "Drive" in sel and "service" in st.session_state:
                 services["drive"] = st.session_state.service
-            if "Dropbox" in sel and "vectordb_dropbox" in st.session_state and "dbx" in st.session_state:
-                vectordbs.append(("dropbox", st.session_state.vectordb_dropbox))
+
+            if "Dropbox" in sel and "dbx" in st.session_state:
                 services["dropbox"] = st.session_state.dbx
-            if "OneDrive" in sel and "vectordb_onedrive" in st.session_state and "onedrive_token" in st.session_state:
-                vectordbs.append(("onedrive", st.session_state.vectordb_onedrive))
+
+            if "OneDrive" in sel and "onedrive_token" in st.session_state:
                 services["onedrive_token"] = st.session_state.onedrive_token
 
-            if not vectordbs:
+            # Check the vector DB
+            if "vectordb" not in st.session_state:
                 ans = "Conecta al menos una fuente (Drive/Dropbox) en la barra lateral."
+
             else:
                 ans = responder_multi(
-                    prompt, vectordbs, services,
+                    prompt, st.session_state.vectordb, services,
                     threshold=st.session_state.get("threshold", 0.55), k=6
                 )
+
         except Exception as e:
             ans = f"Error: {e}"
+
     st.markdown(f'<div class="chat-row bot"><div class="chat-bubble-bot">{ans}</div></div>', unsafe_allow_html=True)
     st.session_state.messages.append({"role": "assistant", "content": ans})

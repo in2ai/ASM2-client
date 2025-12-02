@@ -1,6 +1,5 @@
 import os, io, time, json, datetime
 
-import faiss
 import streamlit as st
 
 from PyPDF2 import PdfReader
@@ -11,13 +10,9 @@ from google_auth_oauthlib.flow import Flow
 
 from google.oauth2.credentials import Credentials
 
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
-
 from src.config.config import *
+from src.connectors.faiss_file import GoogleDriveFile
+from src.connectors.store import build_vectorstore
 from src.utils.helpers import safe_execute
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -221,94 +216,8 @@ def drive_can_read(service, file_id: str) -> bool:
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_resource(show_spinner=False)
-def construir_vectorstore_drive_cached(files_serializable, creds_dict, batch_size=200, persist_path="faiss_index"):
-    def load_manifest(path):
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return {"processed_ids": [], "total_chunks": 0, "completed": False, "started_at": datetime.datetime.now().isoformat()}
-
-    def save_manifest(path, state):
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-
-    os.makedirs(persist_path, exist_ok=True)
-    manifest_path = os.path.join(persist_path, "progress.json")
-    state = load_manifest(manifest_path)
-    processed_ids = set(state.get("processed_ids", []))
-    total_chunks = int(state.get("total_chunks", 0))
-    was_completed = bool(state.get("completed", False))
-
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    vectorstore = None
-    try:
-        vectorstore = FAISS.load_local(persist_path, embeddings, allow_dangerous_deserialization=True)
-        print(f"📂 (Drive) Cargando índice desde {persist_path}")
-        if was_completed:
-            print("✅ Índice ya completo. Usando caché.")
-            return vectorstore
-    except Exception:
-        pass
-
-    if vectorstore is None:
-        index = faiss.IndexFlatL2(1536)
-        vectorstore = FAISS(embedding_function=embeddings, index=index, docstore=InMemoryDocstore({}), index_to_docstore_id={})
-
-    service = build("drive", "v3", credentials=Credentials.from_authorized_user_info(creds_dict))
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-
-    files_serializable = [dict(t) if not isinstance(t, dict) else t for t in files_serializable]
-    remaining_files = [f for f in files_serializable if f["id"] not in processed_ids]
-
-    docs_batch, pending_ids = [], []
-
-    def flush(reason="batch"):
-        nonlocal docs_batch, pending_ids, total_chunks, state
-        if not docs_batch: return
-        vectorstore.add_documents(docs_batch)
-        total_chunks += len(docs_batch)
-        vectorstore.save_local(persist_path)
-        for fid in pending_ids: processed_ids.add(fid)
-        state.update({"processed_ids": list(processed_ids), "total_chunks": total_chunks, "completed": False})
-        save_manifest(manifest_path, state)
-        print(f"🧩 (Drive) Persistidos {len(docs_batch)} chunks [{reason}]")
-        docs_batch, pending_ids = [], []
-
-    for idx, f in enumerate(files_serializable):
-        if f["id"] in processed_ids: continue
-        txt = extraer_texto_drive(service, f["id"], f["mimeType"])
-        if not txt: continue
-        acl = get_acl_drive(service, f["id"])
-        base_doc = Document(
-            page_content=txt,
-            metadata={
-                "source": "drive",
-                "title": f["name"], "id": f["id"], "mimeType": f["mimeType"],
-                "modifiedTime": f.get("modifiedTime"), "acl": acl
-            }
-        )
-        chunks = splitter.split_documents([base_doc])
-        docs_batch.extend(chunks); pending_ids.append(f["id"])
-        if len(docs_batch) >= batch_size: flush("lote")
-
-    if docs_batch: flush("final")
-    if not processed_ids and total_chunks == 0: raise RuntimeError("No se encontraron documentos legibles (Drive).")
-    state["completed"] = True; save_manifest(manifest_path, state)
-    print(f"💾 (Drive) Índice guardado en {persist_path}")
-    return vectorstore
-
 def construir_vectorstore_drive(service):
-    files = [f for f in listar_bfs_drive(service, FOLDER_ID) if f["mimeType"] in (
-        "application/pdf", "application/vnd.google-apps.document", "text/plain", "text/markdown"
-    )]
-    files_small = [{"id": f["id"], "name": f["name"], "mimeType": f["mimeType"], "modifiedTime": f.get("modifiedTime")} for f in files]
-    files_serializable = tuple(tuple(sorted(d.items())) for d in files_small)
+    # Generate credentials
     creds = service._http.credentials
     creds_dict = {
         "token": creds.token,
@@ -318,4 +227,27 @@ def construir_vectorstore_drive(service):
         "client_secret": creds.client_secret,
         "scopes": list(getattr(creds, "scopes", []) or SCOPES),
     }
-    return construir_vectorstore_drive_cached(files_serializable, creds_dict)
+
+    # Create authenticated service
+    auth_service = build("drive", "v3", credentials=Credentials.from_authorized_user_info(creds_dict))
+
+    # Create file list
+    files = [f for f in listar_bfs_drive(service, FOLDER_ID) if f["mimeType"] in (
+        "application/pdf", "application/vnd.google-apps.document", "text/plain", "text/markdown"
+    )]
+
+    files = [
+        {
+            "id": f["id"], 
+            "name": f["name"], 
+            "mimeType": f["mimeType"], 
+            "modifiedTime": f["modifiedTime"],
+            "acl": get_acl_drive(auth_service, f["id"])
+        } 
+        for f in files
+    ]
+
+    files = [GoogleDriveFile(f, auth_service) for f in files]
+
+    # Populate vector DB
+    return build_vectorstore(files, 'Drive')

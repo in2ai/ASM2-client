@@ -2,17 +2,12 @@ import requests
 import msal
 import io
 
-import faiss
 import streamlit as st
 from PyPDF2 import PdfReader
 
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
-
 from src.config.config import *
+from src.connectors.faiss_file import OnedriveFile
+from src.connectors.store import build_vectorstore
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ONEDRIVE (MICROSOFT GRAPH)
@@ -226,77 +221,20 @@ def onedrive_can_read(token_dict, item_id: str) -> bool:
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_resource(show_spinner=False)
-def construir_vectorstore_onedrive_cached(file_tuples, token_dict, batch_size=200, persist_path="faiss_index_onedrive"):
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    os.makedirs(persist_path, exist_ok=True)
-
-    # ⚠️ Normaliza: tuplas -> dicts
-    file_dicts = [dict(t) if not isinstance(t, dict) else t for t in file_tuples]
-
-    try:
-        vectordb = FAISS.load_local(persist_path, embeddings, allow_dangerous_deserialization=True)
-        print(f"📂 (OneDrive) Cargando índice desde {persist_path}")
-        return vectordb
-    except Exception:
-        pass
-
-    index = faiss.IndexFlatL2(1536)
-    vectordb = FAISS(embedding_function=embeddings, index=index, docstore=InMemoryDocstore({}), index_to_docstore_id={})
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-
-    docs_batch = []
-    printed = 0
-
-    def flush():
-        nonlocal docs_batch
-        if not docs_batch:
-            return
-        vectordb.add_documents(docs_batch)
-        vectordb.save_local(persist_path)
-        print(f"🧩 (OneDrive) Persistidos {len(docs_batch)} chunks")
-        docs_batch = []
-
-    for f in file_dicts:
-        fid  = f["id"]
-        name = f["name"]
-        mime = (f.get("mimeType") or "").lower()
-
-        # 👇 Log UI + consola de cada documento (no bloquea si no hay contexto Streamlit)
-        try:
-            st.write(f"• Indexando **{name}** ({mime}) …")
-        except Exception:
-            pass
-        print(f"(OneDrive) Indexando: {name} [{mime}] id={fid}")
-
-        txt  = onedrive_download(token_dict, fid, mime_hint=mime)
-        if not txt:
-            try:
-                st.warning(f"Saltado: {name} (vacío o no legible)")
-            except Exception:
-                pass
-            continue
-
-        base = Document(page_content=txt, metadata={"source":"onedrive","id":fid,"title":name,"mimeType":mime})
-        chunks = splitter.split_documents([base])
-        docs_batch.extend(chunks)
-        printed += 1
-
-        if len(docs_batch) >= batch_size:
-            flush()
-
-    if docs_batch:
-        flush()
-    print(f"💾 (OneDrive) Índice guardado en {persist_path}")
-    try:
-        st.success(f"✅ OneDrive indexado: {printed} archivos.")
-    except Exception:
-        pass
-    return vectordb
-
-
 def construir_vectorstore_onedrive(token_dict):
+    # Create file list
     files = onedrive_list_files(token_dict, ONEDRIVE_ROOT or "")
-    files_small = [{"id": f["id"], "name": f["name"], "mimeType": f.get("mimeType", "")} for f in files]
-    files_serializable = tuple(tuple(sorted(d.items())) for d in files_small)
-    return construir_vectorstore_onedrive_cached(files_serializable, token_dict)
+
+    files = [
+        {
+            "id": f["id"], 
+            "name": f["name"], 
+            "mimeType": f.get("mimeType", "")
+        } 
+        for f in files
+    ]
+
+    files = [OnedriveFile(f, token_dict) for f in files]
+
+    # Populate vector DB
+    return build_vectorstore(files, 'Onedrive')

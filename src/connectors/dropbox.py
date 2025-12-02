@@ -1,18 +1,13 @@
 import io
 
-import faiss
 import dropbox
 from dropbox.exceptions import ApiError
 
 from PyPDF2 import PdfReader
 
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
-
 from src.config.config import *
+from src.connectors.faiss_file import DropboxFile
+from src.connectors.store import build_vectorstore
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DROPBOX
@@ -143,50 +138,21 @@ def dropbox_can_read(dbx, file_id: str) -> bool:
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_resource(show_spinner=False)
-def construir_vectorstore_dropbox_cached(file_tuples, token, batch_size=200, persist_path="faiss_index_dropbox"):
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    os.makedirs(persist_path, exist_ok=True)
-    try:
-        vectordb = FAISS.load_local(persist_path, embeddings, allow_dangerous_deserialization=True)
-        print(f"📂 (Dropbox) Cargando índice desde {persist_path}")
-        return vectordb
-    except Exception:
-        pass
-
-    index = faiss.IndexFlatL2(1536)
-    vectordb = FAISS(embedding_function=embeddings, index=index, docstore=InMemoryDocstore({}), index_to_docstore_id={})
-
-    dbx = dropbox.Dropbox(token)
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-
-    docs_batch = []
-    def flush():
-        nonlocal docs_batch
-        if not docs_batch: return
-        vectordb.add_documents(docs_batch)
-        vectordb.save_local(persist_path)
-        print(f"🧩 (Dropbox) Persistidos {len(docs_batch)} chunks")
-        docs_batch = []
-
-    for f in file_tuples:
-        fid = f["id"]; name = f["name"]; path_lower = f["path_lower"]; mime = f["mimeType"]
-        if mime not in ("application/pdf", "text/plain", "text/markdown"): continue
-        txt = dropbox_read_text(dbx, file_id=fid, path_lower=path_lower, mime=mime)
-        if not txt: continue
-        base = Document(
-            page_content=txt,
-            metadata={"source":"dropbox","id":fid,"path_lower":path_lower,"title":name,"mimeType":mime}
-        )
-        chunks = splitter.split_documents([base])
-        docs_batch.extend(chunks)
-        if len(docs_batch) >= batch_size: flush()
-    if docs_batch: flush()
-    print(f"💾 (Dropbox) Índice guardado en {persist_path}")
-    return vectordb
-
 def construir_vectorstore_dropbox(dbx):
+    # Create file list
     files = dropbox_list_files(dbx, DROPBOX_ROOT or "")
-    files_small = [{"id": f.id, "name": f.name, "path_lower": f.path_lower, "mimeType": guess_mime_from_name(f.name)} for f in files]
-    files_serializable = tuple(tuple(sorted(d.items())) for d in files_small)
-    return construir_vectorstore_dropbox_cached(files_serializable, dbx._oauth2_access_token)
+    
+    files = [
+        {
+            "id": f.id, 
+            "name": f.name, 
+            "path_lower": f.path_lower, 
+            "mimeType": guess_mime_from_name(f.name)
+        } 
+        for f in files
+    ]
+
+    files = [DropboxFile(f, dbx) for f in files]
+
+    # Populate vector DB
+    return build_vectorstore(files, 'Dropbox')
