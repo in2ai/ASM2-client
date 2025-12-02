@@ -229,6 +229,7 @@ def construir_vectorstore_onedrive(token_dict):
         {
             "id": f["id"], 
             "name": f["name"], 
+            "modifiedTime": f["modifiedTime"],
             "mimeType": f.get("mimeType", "")
         } 
         for f in files

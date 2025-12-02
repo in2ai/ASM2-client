@@ -32,8 +32,11 @@ class FaissManifest:
 
 
     def add_processed_ids(self, source, processed_ids):
-        self.manifest['processed_ids'].setdefault(source, [])
-        self.manifest['processed_ids'][source].extend(processed_ids)
+        self.manifest['processed_ids'].setdefault(source, {})
+
+        for id, time in processed_ids:
+            print(self.manifest['processed_ids'][source])
+            self.manifest['processed_ids'][source][id] = time
 
 
     def add_chunks(self, chunks):
@@ -51,6 +54,6 @@ class FaissManifest:
 
     def contains_file(self, file: FaissFile) -> bool:
         source = file.metadata['source']
-        self.manifest['processed_ids'].setdefault(source, [])
+        self.manifest['processed_ids'].setdefault(source, {})
 
         return file.metadata['id'] in self.manifest['processed_ids'][source]

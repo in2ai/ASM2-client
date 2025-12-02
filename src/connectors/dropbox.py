@@ -147,6 +147,7 @@ def construir_vectorstore_dropbox(dbx):
             "id": f.id, 
             "name": f.name, 
             "path_lower": f.path_lower, 
+            "modifiedTime": f.client_modified,
             "mimeType": guess_mime_from_name(f.name)
         } 
         for f in files

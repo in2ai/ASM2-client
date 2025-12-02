@@ -61,6 +61,8 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
         docs_batch, pending_ids = [], []
 
     for f in files:
+        f.metadata['source'] = source
+
         if manifest.contains_file(f): 
             continue
 
@@ -68,11 +70,10 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
         
         if not txt: continue
 
-        f.metadata['source'] = source
         base_doc = Document(page_content=txt, metadata=f.metadata)
         chunks = DOCUMENT_SPLITTER.split_documents([base_doc])
         docs_batch.extend(chunks)
-        pending_ids.append(f.metadata["id"])
+        pending_ids.append((f.metadata["id"], f.metadata["modifiedTime"]))
 
         if len(docs_batch) >= batch_size: 
             flush("lote")
