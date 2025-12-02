@@ -145,17 +145,82 @@ def dropbox_can_read(dbx, file_id: str) -> bool:
 
 @st.cache_resource(show_spinner=False)
 def construir_vectorstore_dropbox_cached(file_tuples, token, batch_size=200, persist_path="faiss_index_dropbox"):
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    """
+    Indexado incremental de Dropbox:
+    - Solo reembebe ficheros nuevos o modificados (por modifiedTime).
+    - Mantiene el índice FAISS existente si ya existe.
+    - NO borra vectores antiguos (FAISS no lo soporta bien), pero evita recalcular.
+    """
+    def load_manifest(path):
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {"files": {}, "total_chunks": 0}
+
+    def save_manifest(path, state):
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+
     os.makedirs(persist_path, exist_ok=True)
+    manifest_path = os.path.join(persist_path, "progress.json")
+    state = load_manifest(manifest_path)
+    files_state = state.get("files", {})
+
+    # Normalizamos: tuplas -> dicts
+    file_dicts = [dict(t) if not isinstance(t, dict) else t for t in file_tuples]
+
+    # Mapas útiles
+    current_map = {f["id"]: f for f in file_dicts}
+    known_ids   = set(files_state.keys())
+    current_ids = set(current_map.keys())
+
+    new_ids       = current_ids - known_ids
+    maybe_mod_ids = current_ids & known_ids
+    deleted_ids   = known_ids - current_ids
+
+    # Detectar modificados comparando modifiedTime
+    modified_ids = set()
+    for fid in maybe_mod_ids:
+        old_mt = files_state.get(fid, {}).get("modifiedTime")
+        new_mt = current_map[fid].get("modifiedTime")
+        if new_mt and old_mt and new_mt != old_mt:
+            modified_ids.add(fid)
+
+    print(f"Dropbox sync → nuevos: {len(new_ids)} · modificados: {len(modified_ids)} · borrados: {len(deleted_ids)}")
+
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+    # Cargar índice existente o crear uno nuevo
     try:
         vectordb = FAISS.load_local(persist_path, embeddings, allow_dangerous_deserialization=True)
         print(f"📂 (Dropbox) Cargando índice desde {persist_path}")
-        return vectordb
     except Exception:
-        pass
+        index = faiss.IndexFlatL2(1536)
+        vectordb = FAISS(
+            embedding_function=embeddings,
+            index=index,
+            docstore=InMemoryDocstore({}),
+            index_to_docstore_id={},
+        )
+        print(f"🆕 (Dropbox) Creando índice nuevo en {persist_path}")
 
-    index = faiss.IndexFlatL2(1536)
-    vectordb = FAISS(embedding_function=embeddings, index=index, docstore=InMemoryDocstore({}), index_to_docstore_id={})
+    # Marcamos "borrados" y "modificados" como no activos (por si luego quieres filtrarlos)
+    for fid in deleted_ids | modified_ids:
+        info = files_state.get(fid, {})
+        info["active"] = False
+        files_state[fid] = info
+
+    # Si no hay nada nuevo ni modificado → no reindexamos nada
+    if not new_ids and not modified_ids:
+        state["files"] = files_state
+        save_manifest(manifest_path, state)
+        print("✅ Índice de Dropbox sincronizado (sin nuevos embeddings).")
+        return vectordb
 
     dbx = dropbox.Dropbox(token)
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
@@ -163,25 +228,47 @@ def construir_vectorstore_dropbox_cached(file_tuples, token, batch_size=200, per
     docs_batch = []
     def flush():
         nonlocal docs_batch
-        if not docs_batch: return
+        if not docs_batch:
+            return
         vectordb.add_documents(docs_batch)
         vectordb.save_local(persist_path)
         print(f"🧩 (Dropbox) Persistidos {len(docs_batch)} chunks")
         docs_batch = []
 
-    for f in file_tuples:
-        fid = f["id"]; name = f["name"]; path_lower = f["path_lower"]; mime = f["mimeType"]
-        if mime not in ("application/pdf", "text/plain", "text/markdown"): continue
+    # Reindexar SOLO nuevos + modificados
+    # (los borrados simplemente ya no se reindexan)
+    index_ids = list(new_ids) + list(modified_ids)
+    for fid in index_ids:
+        f = current_map[fid]
+        name = f["name"]
+        path_lower = f["path_lower"]
+        mime = f["mimeType"]
+        if mime not in ("application/pdf", "text/plain", "text/markdown"): 
+            continue
         txt = dropbox_read_text(dbx, file_id=fid, path_lower=path_lower, mime=mime)
-        if not txt: continue
+        if not txt: 
+            continue
         base = Document(
             page_content=txt,
             metadata={"source":"dropbox","id":fid,"path_lower":path_lower,"title":name,"mimeType":mime}
         )
         chunks = splitter.split_documents([base])
         docs_batch.extend(chunks)
-        if len(docs_batch) >= batch_size: flush()
-    if docs_batch: flush()
+        
+        # Actualizar estado del fichero
+        files_state[fid] = {
+            "modifiedTime": f.get("modifiedTime"),
+            "active": True
+        }
+        
+        if len(docs_batch) >= batch_size: 
+            flush()
+    
+    if docs_batch: 
+        flush()
+    
+    state["files"] = files_state
+    save_manifest(manifest_path, state)
     print(f"💾 (Dropbox) Índice guardado en {persist_path}")
     return vectordb
 
