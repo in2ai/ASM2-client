@@ -21,14 +21,13 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { useChartVisibility } from "@/contexts/chart-visibility-context";
+import { Metrics } from "@/lib/metrics-constants";
 import { api, type RouterOutputs } from "@/trpc/react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { type DateRange } from "react-day-picker";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -40,58 +39,34 @@ import {
 } from "recharts";
 import { AppLayout } from "./app-layout";
 
-const usageChartConfig: ChartConfig = {
-  users: {
-    label: "Unique Users",
-    color: "hsl(221 83% 53%)",
-  },
-  sessions: {
-    label: "Active Sessions",
-    color: "hsl(142 70% 45%)",
-  },
-};
-
-const tokenChartConfig: ChartConfig = {
-  value: {
-    label: "Average Tokens",
-    color: "hsl(268 83% 66%)",
-  },
-};
-
-const departmentChartConfig: ChartConfig = {
-  hr: { label: "HR", color: "hsl(11 84% 60%)" },
-  it: { label: "IT", color: "hsl(199 89% 62%)" },
-  legal: { label: "Legal", color: "hsl(330 72% 65%)" },
-  finance: { label: "Finance", color: "hsl(43 92% 58%)" },
+const roleChartConfig: ChartConfig = {
+  admin: { label: "Admin", color: "hsl(11 84% 60%)" },
+  user: { label: "User", color: "hsl(199 89% 62%)" },
+  viewer: { label: "Viewer", color: "hsl(330 72% 65%)" },
+  manager: { label: "Manager", color: "hsl(43 92% 58%)" },
   other: { label: "Other", color: "hsl(215 20% 65%)" },
 };
 
-const errorChartConfig: ChartConfig = {
-  timeout: { label: "Timeout", color: "hsl(0 84% 60%)" },
-  retrieval_failure: {
-    label: "Retrieval Failure",
-    color: "hsl(27 96% 61%)",
-  },
-  model_call_failure: {
-    label: "Model Call Failure",
-    color: "hsl(262 83% 68%)",
-  },
+const methodChartConfig: ChartConfig = {
+  GET: { label: "GET", color: "hsl(142 70% 45%)" },
+  POST: { label: "POST", color: "hsl(221 83% 53%)" },
+  PUT: { label: "PUT", color: "hsl(43 92% 58%)" },
+  DELETE: { label: "DELETE", color: "hsl(0 84% 60%)" },
+  PATCH: { label: "PATCH", color: "hsl(262 83% 68%)" },
   other: { label: "Other", color: "hsl(215 20% 65%)" },
-  total: { label: "Errors" },
 };
 
-// Move formatters inside components to avoid SSR/client mismatch
+const statusChartConfig: ChartConfig = {
+  "2xx": { label: "Success (2xx)", color: "hsl(142 70% 45%)" },
+  "3xx": { label: "Redirect (3xx)", color: "hsl(199 89% 62%)" },
+  "4xx": { label: "Client Error (4xx)", color: "hsl(43 92% 58%)" },
+  "5xx": { label: "Server Error (5xx)", color: "hsl(0 84% 60%)" },
+};
+
 const getDateFormatter = () =>
   new Intl.DateTimeFormat("es-ES", {
     dateStyle: "medium",
     timeStyle: "short",
-  });
-
-const getCurrencyFormatter = () =>
-  new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 3,
   });
 
 type MetricsResponse = RouterOutputs["metrics"]["get"];
@@ -105,22 +80,14 @@ interface WorkOSUser {
   organizationId?: string | null;
 }
 
-/**
- * Helper function to detect if the metrics response contains no data
- * Checks if all key usage metrics are zero
- */
 function isEmptyData(data: MetricsResponse): boolean {
   return (
-    data?.usage_metrics?.processed_queries.total === 0 &&
-    data?.usage_metrics?.active_sessions.daily === 0 &&
-    data?.usage_metrics?.unique_users.daily === 0
+    data?.user_activity?.total_events === 0 &&
+    data?.user_activity?.unique_users === 0 &&
+    data?.request_stats?.total_requests === 0
   );
 }
 
-/**
- * Helper function to get error title based on error type
- * Classifies errors into UNAUTHORIZED, FORBIDDEN, and general errors
- */
 function getErrorTitle(error: unknown): string {
   if (!error) return "Error Loading Metrics";
 
@@ -131,7 +98,6 @@ function getErrorTitle(error: unknown): string {
         ? error
         : "Unknown error";
 
-  // Check for tRPC error codes in the error message or data
   if (
     errorMessage.includes("UNAUTHORIZED") ||
     errorMessage.includes("You must be logged in")
@@ -169,9 +135,6 @@ function getErrorTitle(error: unknown): string {
   return "Error Loading Metrics";
 }
 
-/**
- * Helper function to get user-friendly error message based on error type
- */
 function getErrorMessage(error: unknown): string {
   if (!error)
     return "No se pudieron recuperar los datos. Por favor, intenta nuevamente.";
@@ -183,7 +146,6 @@ function getErrorMessage(error: unknown): string {
         ? error
         : "Unknown error";
 
-  // UNAUTHORIZED errors
   if (
     errorMessage.includes("UNAUTHORIZED") ||
     errorMessage.includes("You must be logged in")
@@ -191,7 +153,6 @@ function getErrorMessage(error: unknown): string {
     return "No tienes autorización para acceder a estos datos. Por favor, inicia sesión nuevamente.";
   }
 
-  // FORBIDDEN errors
   if (
     errorMessage.includes("FORBIDDEN") ||
     errorMessage.includes("You must be an administrator") ||
@@ -200,13 +161,10 @@ function getErrorMessage(error: unknown): string {
     return "No tienes permisos para acceder a este recurso. Contacta a tu administrador si crees que esto es un error.";
   }
 
-  // NOT_FOUND errors - these are typically empty data scenarios
-  // but if they reach here, they're actual errors
   if (errorMessage.includes("NOT_FOUND")) {
     return errorMessage;
   }
 
-  // TIMEOUT errors
   if (
     errorMessage.includes("TIMEOUT") ||
     errorMessage.includes("took too long")
@@ -214,7 +172,6 @@ function getErrorMessage(error: unknown): string {
     return "La solicitud tardó demasiado en completarse. Por favor, intenta nuevamente.";
   }
 
-  // Network errors
   if (
     errorMessage.includes("fetch failed") ||
     errorMessage.includes("Network request failed")
@@ -222,7 +179,6 @@ function getErrorMessage(error: unknown): string {
     return "Error de conexión. Por favor, verifica tu conexión a internet e intenta nuevamente.";
   }
 
-  // Server errors
   if (
     errorMessage.includes("INTERNAL_SERVER_ERROR") ||
     errorMessage.includes("Failed to fetch") ||
@@ -231,8 +187,6 @@ function getErrorMessage(error: unknown): string {
     return "Error del servidor. Por favor, intenta nuevamente más tarde o contacta al soporte si el problema persiste.";
   }
 
-  // Return the original error message if it's user-friendly
-  // Otherwise, return a generic message
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -240,10 +194,6 @@ function getErrorMessage(error: unknown): string {
   return "No se pudieron recuperar los datos. Por favor, intenta nuevamente.";
 }
 
-/**
- * Helper function to determine if an error is recoverable (can retry)
- * UNAUTHORIZED and FORBIDDEN errors should not show retry button
- */
 function isRecoverableError(error: unknown): boolean {
   if (!error) return true;
 
@@ -254,7 +204,6 @@ function isRecoverableError(error: unknown): boolean {
         ? error
         : "Unknown error";
 
-  // Non-recoverable errors: auth and permission errors
   if (
     errorMessage.includes("UNAUTHORIZED") ||
     errorMessage.includes("FORBIDDEN") ||
@@ -265,7 +214,6 @@ function isRecoverableError(error: unknown): boolean {
     return false;
   }
 
-  // All other errors are considered recoverable
   return true;
 }
 
@@ -279,11 +227,6 @@ interface PersistentHeaderProps {
   _userRole: string | undefined;
 }
 
-/**
- * PersistentHeader component that displays date controls, metadata, and action buttons
- * This component remains visible across all states (loading, empty, error, data)
- * Requirement 3.4: Removed nodeId parameter handling
- */
 function PersistentHeader({
   dateRange,
   onDateRangeChange,
@@ -304,7 +247,6 @@ function PersistentHeader({
                   ? `Actualizado ${lastUpdated}`
                   : "Actualizado hace momentos"}
               </p>
-              {/* Subtle loading indicator during background refresh */}
               {isFetching && (
                 <div className="text-muted-foreground flex items-center gap-1 text-xs">
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -312,16 +254,14 @@ function PersistentHeader({
                 </div>
               )}
             </div>
-            {/* Display current context info - removed node-specific messaging per Requirement 3.4 */}
             {stats && (
               <p className="text-muted-foreground text-xs">
-                {stats.documentCount} registro
-                {stats.documentCount !== 1 ? "s" : ""} de métricas
+                {stats.totalMetricsRecords} registro
+                {stats.totalMetricsRecords !== 1 ? "s" : ""} de métricas
               </p>
             )}
           </div>
         </div>
-        {/* Action buttons: Export and Refresh */}
         <div className="flex items-center gap-2">
           <ExportButton dateRange={dateRange} />
           <Button
@@ -342,7 +282,6 @@ function PersistentHeader({
         </div>
       </div>
 
-      {/* Date Range Selector */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <span className="text-muted-foreground text-sm font-medium">
           Rango de fechas:
@@ -353,20 +292,12 @@ function PersistentHeader({
   );
 }
 
-function humanizeKey(value: string) {
-  return value
-    .replaceAll("_", " ")
-    .replaceAll(/\b\w/g, (char) => char.toUpperCase());
-}
-
 export function MetricsDashboard() {
   const { user: authUser } = useAuth();
   const user = authUser as WorkOSUser | null;
 
-  // Set default date range - undefined means fetch all data without date filtering
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  // Requirement 3.4: Removed nodeId parameter handling - single-node architecture
   const metricsQuery = api.metrics.get.useQuery(
     {
       startDate: dateRange?.from,
@@ -375,7 +306,6 @@ export function MetricsDashboard() {
     {
       refetchInterval: 60_000,
       staleTime: 30_000,
-      // Only enable query when we have a user
       enabled: !!user,
     },
   );
@@ -384,7 +314,6 @@ export function MetricsDashboard() {
     metricsQuery;
   const refetch = metricsQuery.refetch as () => Promise<unknown>;
 
-  // Requirement 3.4: Removed nodeId parameter - single-node architecture
   const { data: stats } = api.metrics.getStats.useQuery(
     {
       startDate: dateRange?.from,
@@ -409,7 +338,6 @@ export function MetricsDashboard() {
     <AppLayout>
       {(view) => (
         <div className="mx-auto max-w-screen-2xl p-4 sm:p-6 lg:p-8">
-          {/* Persistent Header - Always Visible when authenticated and not in initial loading */}
           {user && !isPending && (
             <PersistentHeader
               dateRange={dateRange}
@@ -424,24 +352,19 @@ export function MetricsDashboard() {
             />
           )}
 
-          {/* Content Area - Conditional Rendering */}
           {isPending ? (
             <LoadingState />
           ) : !user ? (
-            // Handle unauthenticated state
             <ErrorState
               title="Authentication Required"
               message="Por favor, inicia sesión para ver las métricas."
               onRetry={() => {
-                window.location.reload();
+                globalThis.location.reload();
               }}
               isRetrying={false}
               showHomeButton={true}
             />
           ) : isError ? (
-            // Handle actual errors (network, auth, server errors)
-            // Error classification: UNAUTHORIZED, FORBIDDEN, and other server errors
-            // should display ErrorState without date controls
             <ErrorState
               title={getErrorTitle(error)}
               message={getErrorMessage(error)}
@@ -456,7 +379,6 @@ export function MetricsDashboard() {
               showHomeButton={true}
             />
           ) : !data || isEmptyData(data) ? (
-            // Handle empty data state - no metrics in selected date range
             <NoMetricsEmptyState
               onRefresh={() => {
                 void refetch();
@@ -500,19 +422,24 @@ function StatCard({
 }
 
 function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
-  const usage = metrics.usage_metrics;
-  const performance = metrics.performance_metrics;
-  const dailySessions = usage.active_sessions.daily;
-  const avgSession = usage.session_duration.average_minutes.toFixed(1);
-  const avgLatency = performance.average_response_time_ms.toFixed(0);
-  const totalQueries = usage.processed_queries.total.toLocaleString("es-ES");
+  const userActivity = metrics.user_activity;
+  const requestStats = metrics.request_stats;
+
+  const uniqueUsers = userActivity.unique_users.toLocaleString("es-ES");
+  const avgSession = userActivity.mean_session_length_seconds
+    ? (userActivity.mean_session_length_seconds / 60).toFixed(1)
+    : "0.0";
+  const avgLatency = requestStats.avg_latency
+    ? requestStats.avg_latency.toFixed(0)
+    : "0";
+  const totalRequests = requestStats.total_requests.toLocaleString("es-ES");
 
   return (
     <div className="mb-6 grid grid-cols-1 gap-4 sm:mb-8 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4">
       <StatCard
-        label="Sesiones activas hoy"
-        value={dailySessions.toString()}
-        helper="Tiempo real"
+        label="Usuarios únicos"
+        value={uniqueUsers}
+        helper="Total en el período"
       />
       <StatCard
         label="Duración media de sesión"
@@ -520,13 +447,13 @@ function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
         helper="Promedio agregado"
       />
       <StatCard
-        label="Tiempo medio de respuesta"
+        label="Latencia promedio"
         value={`${avgLatency} ms`}
-        helper="End-to-end"
+        helper="Tiempo de respuesta"
       />
       <StatCard
-        label="Consultas totales"
-        value={totalQueries}
+        label="Total de peticiones"
+        value={totalRequests}
         helper="Desde el inicio"
       />
     </div>
@@ -536,7 +463,6 @@ function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
 function LoadingState() {
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* Stats row skeleton */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4">
         {[1, 2, 3, 4].map((id) => (
           <Card key={`kpi-${id}`} className="rounded-xl">
@@ -551,7 +477,6 @@ function LoadingState() {
         ))}
       </div>
 
-      {/* Charts skeleton */}
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         {[1, 2, 3, 4, 5, 6].map((id) => (
           <Card key={id} className="overflow-hidden rounded-xl">
@@ -569,40 +494,18 @@ function LoadingState() {
   );
 }
 
-// 1. Métricas de uso e interacción
 function UsageMetrics({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
   const { visibility } = useChartVisibility();
-  const usage = metrics.usage_metrics;
+  const userActivity = metrics.user_activity;
 
-  const usageChartData = useMemo(
-    () => [
-      {
-        period: "Diario",
-        users: usage.unique_users.daily,
-        sessions: usage.active_sessions.daily,
-      },
-      {
-        period: "Semanal",
-        users: usage.unique_users.weekly,
-        sessions: usage.active_sessions.weekly,
-      },
-      {
-        period: "Mensual",
-        users: usage.unique_users.monthly,
-        sessions: usage.active_sessions.monthly,
-      },
-    ],
-    [usage],
-  );
-
-  const departmentData = useMemo(
+  const roleDistributionData = useMemo(
     () =>
-      Object.entries(usage.department_distribution).map(([key, value]) => ({
-        department: key,
-        value,
-        fill: `var(--color-${key})`,
+      Object.entries(userActivity.role_distribution).map(([role, count]) => ({
+        role,
+        value: count,
+        fill: `var(--color-${role.toLowerCase()})`,
       })),
-    [usage.department_distribution],
+    [userActivity.role_distribution],
   );
 
   return (
@@ -612,84 +515,71 @@ function UsageMetrics({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
           1. Métricas de uso e interacción
         </h2>
         <p className="text-muted-foreground text-sm">
-          Seguimiento de usuarios activos y sesiones en tiempo real
+          Datos de la tabla user_activity
         </p>
         <div className="bg-border mt-3 h-px" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        {visibility.usageBarChart ? (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Número de usuarios únicos activos</CardTitle>
-              <CardDescription>Por día/semana/mes · AGREGADA</CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-hidden px-0">
-              <ChartContainer
-                config={usageChartConfig}
-                className="h-[320px] w-full"
-              >
-                <BarChart
-                  data={usageChartData}
-                  margin={{ top: 16, right: 16, left: 16, bottom: 8 }}
-                  barSize={36}
-                >
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="period" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend
-                    verticalAlign="top"
-                    content={<ChartLegendContent />}
-                  />
-                  <Bar
-                    dataKey="users"
-                    fill="var(--color-users)"
-                    radius={[8, 8, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="sessions"
-                    fill="var(--color-sessions)"
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {visibility.activeSessions ? (
+        {visibility.usageBarChart && (
           <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Número de sesiones activas</CardTitle>
-              <CardDescription>REAL-TIME</CardDescription>
+              <CardTitle>Usuarios únicos</CardTitle>
+              <CardDescription>
+                Total en el período seleccionado
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex h-[320px] items-center justify-center">
                 <div className="text-center" aria-live="polite">
                   <p className="text-primary text-6xl font-bold">
-                    {usage.active_sessions.daily}
+                    {userActivity.unique_users}
                   </p>
                   <p className="text-muted-foreground mt-2 text-sm">
-                    Sesiones activas hoy
+                    Usuarios únicos
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        ) : null}
+        )}
 
-        {visibility.sessionDuration ? (
+        {visibility.activeSessions && (
+          <Card className="rounded-xl transition-shadow hover:shadow-md">
+            <CardHeader>
+              <CardTitle>Eventos de actividad</CardTitle>
+              <CardDescription>Total de eventos registrados</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex h-[320px] items-center justify-center">
+                <div className="text-center" aria-live="polite">
+                  <p className="text-primary text-6xl font-bold">
+                    {userActivity.total_events.toLocaleString("es-ES")}
+                  </p>
+                  <p className="text-muted-foreground mt-2 text-sm">
+                    Eventos totales
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {visibility.sessionDuration && (
           <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
               <CardTitle>Duración media de sesión</CardTitle>
-              <CardDescription>AGREGADA</CardDescription>
+              <CardDescription>Calculado desde user_activity</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex h-[320px] items-center justify-center">
                 <div className="text-center">
                   <p className="text-primary text-6xl font-bold">
-                    {usage.session_duration.average_minutes.toFixed(1)}
+                    {userActivity.mean_session_length_seconds
+                      ? (userActivity.mean_session_length_seconds / 60).toFixed(
+                          1,
+                        )
+                      : "0.0"}
                   </p>
                   <p className="text-muted-foreground mt-2 text-sm">
                     Minutos promedio
@@ -698,117 +588,61 @@ function UsageMetrics({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
               </div>
             </CardContent>
           </Card>
-        ) : null}
+        )}
 
-        {visibility.departmentPieChart ? (
+        {visibility.departmentPieChart && roleDistributionData.length > 0 && (
           <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Distribución por departamentos/roles</CardTitle>
-              <CardDescription>Uso por área organizacional</CardDescription>
+              <CardTitle>Distribución por rol</CardTitle>
+              <CardDescription>Usuarios por rol de acceso</CardDescription>
             </CardHeader>
             <CardContent className="overflow-hidden px-0">
               <ChartContainer
-                config={departmentChartConfig}
+                config={roleChartConfig}
                 className="mx-auto h-[320px] w-full max-w-[420px]"
               >
                 <PieChart>
                   <Pie
-                    data={departmentData}
+                    data={roleDistributionData}
                     dataKey="value"
-                    nameKey="department"
+                    nameKey="role"
                     innerRadius={70}
                     outerRadius={120}
                     paddingAngle={4}
                     label
                   >
-                    {departmentData.map((entry) => (
-                      <Cell
-                        key={`cell-${entry.department}`}
-                        fill={entry.fill}
-                      />
+                    {roleDistributionData.map((entry) => (
+                      <Cell key={`cell-${entry.role}`} fill={entry.fill} />
                     ))}
                   </Pie>
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
-                        nameKey="name"
-                        labelKey="key"
+                        nameKey="role"
+                        labelKey="role"
                         hideIndicator
                       />
                     }
                   />
                   <ChartLegend
-                    content={<ChartLegendContent nameKey="department" />}
+                    content={<ChartLegendContent nameKey="role" />}
                     verticalAlign="bottom"
                   />
                 </PieChart>
               </ChartContainer>
             </CardContent>
           </Card>
-        ) : null}
-
-        {visibility.requestsPerUser ? (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Número de peticiones por usuario</CardTitle>
-              <CardDescription>
-                {usage.processed_queries.total.toLocaleString("es-ES")}{" "}
-                consultas totales · AGREGADA
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {usage.unique_users.monthly > 0
-                      ? (
-                          usage.processed_queries.total /
-                          usage.unique_users.monthly
-                        ).toFixed(1)
-                      : "0.0"}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Consultas por usuario
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {visibility.responseTime ? (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Tiempo de respuesta total</CardTitle>
-              <CardDescription>AGREGADA</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {metrics.performance_metrics.average_response_time_ms.toFixed(
-                      0,
-                    )}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Milisegundos promedio
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
+        )}
       </div>
     </div>
   );
 }
 
-// 2. Métricas de calidad del RAG
 function RAGQualityMetrics({
   metrics,
 }: Readonly<{ metrics: MetricsResponse }>) {
   const { visibility } = useChartVisibility();
-  const rag = metrics.rag_quality_metrics;
+  const metricsData = metrics.metrics;
 
   return (
     <div className="space-y-6">
@@ -817,70 +651,25 @@ function RAGQualityMetrics({
           2. Métricas de calidad del RAG
         </h2>
         <p className="text-muted-foreground text-sm">
-          Indicadores de rendimiento del sistema de recuperación
+          Datos de la tabla metrics (tag/value)
         </p>
         <div className="bg-border mt-3 h-px" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        {visibility.retrievalRate && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Tasa de recuperación con éxito</CardTitle>
-              <CardDescription>
-                % de veces que el sistema devuelve documentos relevantes en el
-                top-k
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {rag.successful_retrieval_rate.toFixed(1)}%
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Tasa de éxito
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.retrievalLatency && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Latency de recuperación</CardTitle>
-              <CardDescription>Tiempo en recuperar documentos</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {rag.retrieval_latency_ms.toFixed(0)}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Milisegundos
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {visibility.modelLatency && (
           <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Latencia del modelo</CardTitle>
-              <CardDescription>Tiempo de respuesta del LLM</CardDescription>
+              <CardTitle>Tiempo de respuesta promedio</CardTitle>
+              <CardDescription>
+                Métrica: {Metrics.LLM_RESPONSE_TIME}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex h-[320px] items-center justify-center">
                 <div className="text-center">
                   <p className="text-primary text-6xl font-bold">
-                    {metrics.performance_metrics.average_response_time_ms.toFixed(
-                      0,
-                    )}
+                    {metricsData.response_time?.toFixed(0) ?? "N/A"}
                   </p>
                   <p className="text-muted-foreground mt-2 text-sm">
                     Milisegundos
@@ -891,58 +680,20 @@ function RAGQualityMetrics({
           </Card>
         )}
 
-        {visibility.tokenUsage && (
+        {visibility.retrievalRate && (
           <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Número de tokens de entrada y salida</CardTitle>
-              <CardDescription>Promedio por consulta</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="grid grid-cols-2 gap-8 text-center">
-                  <div>
-                    <p className="text-primary text-4xl font-bold">
-                      {metrics.performance_metrics.token_usage.average_prompt.toFixed(
-                        0,
-                      )}
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                      Entrada
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-primary text-4xl font-bold">
-                      {metrics.performance_metrics.token_usage.average_completion.toFixed(
-                        0,
-                      )}
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-sm">Salida</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.documentsRetrieved && (
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>
-                Número de documentos recuperados por consulta
-              </CardTitle>
-              <CardDescription>
-                Antes y después del filtrado, RAG devuelve documentos agente
-                decide los que son relevantes
-              </CardDescription>
+              <CardTitle>Total de métricas registradas</CardTitle>
+              <CardDescription>Conteo total en tabla metrics</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex h-[320px] items-center justify-center">
                 <div className="text-center">
                   <p className="text-primary text-6xl font-bold">
-                    {rag.average_context_tokens.toFixed(0)}
+                    {metricsData.total_count.toLocaleString("es-ES")}
                   </p>
                   <p className="text-muted-foreground mt-2 text-sm">
-                    Tokens de contexto promedio
+                    Registros totales
                   </p>
                 </div>
               </div>
@@ -954,39 +705,54 @@ function RAGQualityMetrics({
   );
 }
 
-// 3. Métricas de rendimiento e infraestructura
 function PerformanceMetrics({
   metrics,
 }: Readonly<{ metrics: MetricsResponse }>) {
   const { visibility } = useChartVisibility();
-  const performance = metrics.performance_metrics;
+  const requestStats = metrics.request_stats;
 
-  const tokenUsageData = useMemo(
-    () => [
-      {
-        type: "Prompt",
-        value: performance.token_usage.average_prompt,
-      },
-      {
-        type: "Completion",
-        value: performance.token_usage.average_completion,
-      },
-      {
-        type: "Total",
-        value: performance.token_usage.average_total,
-      },
-    ],
-    [performance.token_usage],
+  const methodChartData = useMemo(
+    () =>
+      Object.entries(requestStats.method_breakdown).map(([method, count]) => ({
+        method,
+        value: count,
+        fill: `var(--color-${method})`,
+      })),
+    [requestStats.method_breakdown],
   );
 
-  const errorChartData = useMemo(
+  const statusChartData = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    Object.entries(requestStats.status_breakdown).forEach(([status, count]) => {
+      const statusNum = Number.parseInt(status);
+      if (statusNum >= 200 && statusNum < 300) {
+        grouped["2xx"] = (grouped["2xx"] ?? 0) + count;
+      } else if (statusNum >= 300 && statusNum < 400) {
+        grouped["3xx"] = (grouped["3xx"] ?? 0) + count;
+      } else if (statusNum >= 400 && statusNum < 500) {
+        grouped["4xx"] = (grouped["4xx"] ?? 0) + count;
+      } else if (statusNum >= 500) {
+        grouped["5xx"] = (grouped["5xx"] ?? 0) + count;
+      }
+    });
+    return Object.entries(grouped).map(([status, count]) => ({
+      status,
+      value: count,
+      fill: `var(--color-${status})`,
+    }));
+  }, [requestStats.status_breakdown]);
+
+  const endpointChartData = useMemo(
     () =>
-      Object.entries(performance.errors).map(([key, total]) => ({
-        key,
-        label: humanizeKey(key),
-        total,
-      })),
-    [performance.errors],
+      Object.entries(requestStats.endpoint_breakdown)
+        .slice(0, 10)
+        .map(([endpoint, count]) => ({
+          endpoint:
+            endpoint.length > 30 ? endpoint.substring(0, 30) + "..." : endpoint,
+          fullEndpoint: endpoint,
+          count,
+        })),
+    [requestStats.endpoint_breakdown],
   );
 
   return (
@@ -996,7 +762,7 @@ function PerformanceMetrics({
           3. Métricas de rendimiento e infraestructura
         </h2>
         <p className="text-muted-foreground text-sm">
-          Monitoreo de recursos y costos del sistema
+          Datos de la tabla requests
         </p>
         <div className="bg-border mt-3 h-px" />
       </div>
@@ -1005,14 +771,16 @@ function PerformanceMetrics({
         {visibility.responseTimeChart && (
           <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Tiempo medio de respuesta del chatbot</CardTitle>
-              <CardDescription>Latencia end-to-end</CardDescription>
+              <CardTitle>Latencia promedio de peticiones</CardTitle>
+              <CardDescription>
+                Tiempo de respuesta del servidor
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex h-[320px] items-center justify-center">
                 <div className="text-center">
                   <p className="text-primary text-6xl font-bold">
-                    {performance.average_response_time_ms.toFixed(0)}
+                    {requestStats.avg_latency?.toFixed(0) ?? "N/A"}
                   </p>
                   <p className="text-muted-foreground mt-2 text-sm">
                     Milisegundos
@@ -1023,85 +791,22 @@ function PerformanceMetrics({
           </Card>
         )}
 
-        {visibility.tokenUsageChart && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
+        {visibility.requestsPerUser && (
+          <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Uso de tokens</CardTitle>
+              <CardTitle>Total de peticiones</CardTitle>
               <CardDescription>
-                Prompt, completion, total — para costes en LLM
+                Registradas en la tabla requests
               </CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-hidden px-0">
-              <ChartContainer
-                config={tokenChartConfig}
-                className="h-[320px] w-full"
-              >
-                <AreaChart
-                  data={tokenUsageData}
-                  margin={{ top: 16, right: 16, left: 16, bottom: 8 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="type" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="var(--color-value)"
-                    fill="var(--color-value)"
-                    fillOpacity={0.2}
-                    strokeWidth={3}
-                    activeDot={{ r: 6 }}
-                  />
-                </AreaChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.resourceConsumption && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Consumo de CPU/GPU y memoria</CardTitle>
-              <CardDescription>En el servidor central</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="grid grid-cols-2 gap-8 text-center">
-                  <div>
-                    <p className="text-primary text-4xl font-bold">
-                      {performance.resource_consumption.cpu_percent.toFixed(1)}%
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-sm">CPU</p>
-                  </div>
-                  <div>
-                    <p className="text-primary text-4xl font-bold">
-                      {performance.resource_consumption.memory_mb.toFixed(0)} MB
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                      Memoria
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.costPerQuery && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Coste estimado por consulta</CardTitle>
-              <CardDescription>Si se usa un proveedor externo</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex h-[320px] items-center justify-center">
                 <div className="text-center">
                   <p className="text-primary text-6xl font-bold">
-                    {getCurrencyFormatter().format(performance.cost_per_query)}
+                    {requestStats.total_requests.toLocaleString("es-ES")}
                   </p>
                   <p className="text-muted-foreground mt-2 text-sm">
-                    Por consulta
+                    Peticiones totales
                   </p>
                 </div>
               </div>
@@ -1110,20 +815,131 @@ function PerformanceMetrics({
         )}
 
         {visibility.errorsChart && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md lg:col-span-2">
+          <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Errores por tipo</CardTitle>
+              <CardTitle>Tasa de errores</CardTitle>
               <CardDescription>
-                Timeout, fallo de recuperación, fallo en llamada al modelo, etc.
+                Porcentaje de respuestas 4xx y 5xx
               </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex h-[320px] items-center justify-center">
+                <div className="text-center">
+                  <p className="text-primary text-6xl font-bold">
+                    {metrics.error_rate.toFixed(2)}%
+                  </p>
+                  <p className="text-muted-foreground mt-2 text-sm">
+                    Tasa de error
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {visibility.tokenUsageChart && methodChartData.length > 0 && (
+          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
+            <CardHeader>
+              <CardTitle>Distribución por método HTTP</CardTitle>
+              <CardDescription>GET, POST, PUT, DELETE, etc.</CardDescription>
             </CardHeader>
             <CardContent className="overflow-hidden px-0">
               <ChartContainer
-                config={errorChartConfig}
+                config={methodChartConfig}
+                className="mx-auto h-[320px] w-full max-w-[420px]"
+              >
+                <PieChart>
+                  <Pie
+                    data={methodChartData}
+                    dataKey="value"
+                    nameKey="method"
+                    innerRadius={70}
+                    outerRadius={120}
+                    paddingAngle={4}
+                    label
+                  >
+                    {methodChartData.map((entry) => (
+                      <Cell key={`cell-${entry.method}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        nameKey="method"
+                        labelKey="method"
+                        hideIndicator
+                      />
+                    }
+                  />
+                  <ChartLegend
+                    content={<ChartLegendContent nameKey="method" />}
+                    verticalAlign="bottom"
+                  />
+                </PieChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {visibility.resourceConsumption && statusChartData.length > 0 && (
+          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
+            <CardHeader>
+              <CardTitle>Distribución por código de estado</CardTitle>
+              <CardDescription>2xx, 3xx, 4xx, 5xx</CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-hidden px-0">
+              <ChartContainer
+                config={statusChartConfig}
+                className="mx-auto h-[320px] w-full max-w-[420px]"
+              >
+                <PieChart>
+                  <Pie
+                    data={statusChartData}
+                    dataKey="value"
+                    nameKey="status"
+                    innerRadius={70}
+                    outerRadius={120}
+                    paddingAngle={4}
+                    label
+                  >
+                    {statusChartData.map((entry) => (
+                      <Cell key={`cell-${entry.status}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        nameKey="status"
+                        labelKey="status"
+                        hideIndicator
+                      />
+                    }
+                  />
+                  <ChartLegend
+                    content={<ChartLegendContent nameKey="status" />}
+                    verticalAlign="bottom"
+                  />
+                </PieChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {visibility.costPerQuery && endpointChartData.length > 0 && (
+          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Top endpoints</CardTitle>
+              <CardDescription>Endpoints más utilizados</CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-hidden px-0">
+              <ChartContainer
+                config={{
+                  count: { label: "Peticiones", color: "hsl(221 83% 53%)" },
+                }}
                 className="h-[320px] w-full"
               >
                 <BarChart
-                  data={errorChartData}
+                  data={endpointChartData}
                   layout="vertical"
                   margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
                 >
@@ -1136,28 +952,25 @@ function PerformanceMetrics({
                   />
                   <YAxis
                     type="category"
-                    dataKey="label"
+                    dataKey="endpoint"
                     tickLine={false}
                     axisLine={false}
-                    width={180}
+                    width={200}
                   />
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
-                        labelKey="key"
-                        nameKey="label"
+                        labelKey="fullEndpoint"
+                        nameKey="endpoint"
                         hideIndicator
                       />
                     }
                   />
-                  <Bar dataKey="total" radius={[0, 8, 8, 0]}>
-                    {errorChartData.map((entry) => (
-                      <Cell
-                        key={entry.key}
-                        fill={`var(--color-${entry.key})`}
-                      />
-                    ))}
-                  </Bar>
+                  <Bar
+                    dataKey="count"
+                    fill="var(--color-count)"
+                    radius={[0, 8, 8, 0]}
+                  />
                 </BarChart>
               </ChartContainer>
             </CardContent>
@@ -1168,11 +981,10 @@ function PerformanceMetrics({
   );
 }
 
-// Extras interesantes
 function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
   const { visibility } = useChartVisibility();
-  const analytics = metrics.extra_analytics;
-  const alerts = metrics.alerts;
+  const topWords = metrics.top_words;
+  const topTopics = metrics.top_topics;
 
   return (
     <div className="space-y-6">
@@ -1181,51 +993,103 @@ function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
           Extras interesantes
         </h2>
         <p className="text-muted-foreground text-sm">
-          Análisis adicionales y alertas del sistema
+          Datos de las tablas word_counts y topic_counts
         </p>
         <div className="bg-border mt-3 h-px" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        {visibility.topQueries && (
+        {visibility.commonWords && (
           <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Top queries</CardTitle>
-              <CardDescription>
-                Preguntas más frecuentes, útil para mejorar la base de
-                conocimiento
-              </CardDescription>
+              <CardTitle>Palabras más buscadas</CardTitle>
+              <CardDescription>De la tabla word_counts</CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="text-muted-foreground grid gap-2 text-sm">
-                {analytics.top_queries.map((query) => (
-                  <li key={query} className="bg-card/40 rounded-md border p-3">
-                    {query}
-                  </li>
-                ))}
-              </ul>
+              {topWords.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {topWords.map((item) => (
+                    <span
+                      key={item.word}
+                      className="text-muted-foreground rounded-full border px-3 py-1 text-xs font-medium"
+                    >
+                      #{item.word} ({item.count})
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  No hay datos de palabras disponibles
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {visibility.commonWords && (
+        {visibility.topQueries && (
           <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Palabras más comunes</CardTitle>
-              <CardDescription>
-                Términos frecuentes en las consultas
-              </CardDescription>
+              <CardTitle>Temas más frecuentes</CardTitle>
+              <CardDescription>De la tabla topic_counts</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {analytics.common_words.map((word) => (
-                  <span
-                    key={word}
-                    className="text-muted-foreground rounded-full border px-3 py-1 text-xs font-medium"
-                  >
-                    #{word}
-                  </span>
-                ))}
+              {topTopics.length > 0 ? (
+                <ul className="text-muted-foreground grid gap-2 text-sm">
+                  {topTopics.map((item) => (
+                    <li
+                      key={item.topic}
+                      className="bg-card/40 flex justify-between rounded-md border p-3"
+                    >
+                      <span>{item.topic}</span>
+                      <span className="font-medium">{item.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  No hay datos de temas disponibles
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {visibility.alerts && (
+          <Card className="rounded-xl transition-shadow hover:shadow-md">
+            <CardHeader>
+              <CardTitle>Estado del sistema</CardTitle>
+              <CardDescription>Resumen de métricas clave</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div
+                className={`rounded-lg border p-4 text-sm ${
+                  metrics.error_rate < 5
+                    ? "border-emerald-300/60 bg-emerald-100/70 dark:border-emerald-500/40 dark:bg-emerald-500/10"
+                    : metrics.error_rate < 10
+                      ? "border-yellow-300/60 bg-yellow-100/70 dark:border-yellow-500/40 dark:bg-yellow-500/10"
+                      : "border-red-300/60 bg-red-100/70 dark:border-red-500/40 dark:bg-red-500/10"
+                }`}
+              >
+                <p
+                  className={`font-medium ${
+                    metrics.error_rate < 5
+                      ? "text-emerald-900 dark:text-emerald-100"
+                      : metrics.error_rate < 10
+                        ? "text-yellow-900 dark:text-yellow-100"
+                        : "text-red-900 dark:text-red-100"
+                  }`}
+                >
+                  {metrics.error_rate < 5
+                    ? "Sistema saludable"
+                    : metrics.error_rate < 10
+                      ? "Atención requerida"
+                      : "Sistema con problemas"}
+                </p>
+                <p className="text-muted-foreground mt-1">
+                  Tasa de error: {metrics.error_rate.toFixed(2)}% · Latencia
+                  promedio:{" "}
+                  {metrics.request_stats.avg_latency?.toFixed(0) ?? "N/A"} ms
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -1234,39 +1098,30 @@ function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
         {visibility.thematicDistribution && (
           <Card className="rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
-              <CardTitle>Distribución temática de las consultas</CardTitle>
-              <CardDescription>RRHH, IT, legal, etc.</CardDescription>
+              <CardTitle>Distribución de roles</CardTitle>
+              <CardDescription>Usuarios activos por rol</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-[200px] items-center justify-center">
+              {Object.keys(metrics.user_activity.role_distribution).length >
+              0 ? (
+                <ul className="text-muted-foreground grid gap-2 text-sm">
+                  {Object.entries(metrics.user_activity.role_distribution).map(
+                    ([role, count]) => (
+                      <li
+                        key={role}
+                        className="bg-card/40 flex justify-between rounded-md border p-3"
+                      >
+                        <span className="capitalize">{role}</span>
+                        <span className="font-medium">{count}</span>
+                      </li>
+                    ),
+                  )}
+                </ul>
+              ) : (
                 <p className="text-muted-foreground text-sm">
-                  Ver distribución por departamentos en la sección de Uso
+                  No hay datos de distribución disponibles
                 </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.alerts && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Alertas automáticas</CardTitle>
-              <CardDescription>
-                En caso de degradación (ej. latencia &gt; X segundos, error rate
-                &gt; Y%)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border border-emerald-300/60 bg-emerald-100/70 p-4 text-sm dark:border-emerald-500/40 dark:bg-emerald-500/10">
-                <p className="font-medium text-emerald-900 dark:text-emerald-100">
-                  {humanizeKey(alerts.status)}
-                </p>
-                <p className="text-muted-foreground mt-1">
-                  Latencia objetivo:{" "}
-                  {alerts.latency_alert.toLocaleString("es-ES")} ms · Umbral de
-                  error: {alerts.error_rate_alert}%
-                </p>
-              </div>
+              )}
             </CardContent>
           </Card>
         )}

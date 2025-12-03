@@ -8,7 +8,13 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
-    METRICS_SERVICE_URL: z.url(),
+    // QuestDB connection configuration
+    QUESTDB_HOST: z.string(),
+    QUESTDB_PORT: z.coerce.number(),
+    QUESTDB_USER: z.string(),
+    QUESTDB_PASSWORD: z.string(),
+    QUESTDB_DATABASE: z.string(),
+    // WorkOS authentication
     WORKOS_API_KEY: z.string(),
     WORKOS_CLIENT_ID: z.string(),
     WORKOS_COOKIE_PASSWORD: z.string(),
@@ -30,7 +36,13 @@ export const env = createEnv({
    */
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
-    METRICS_SERVICE_URL: process.env.METRICS_SERVICE_URL,
+    // QuestDB connection
+    QUESTDB_HOST: process.env.QUESTDB_HOST,
+    QUESTDB_PORT: process.env.QUESTDB_PORT,
+    QUESTDB_USER: process.env.QUESTDB_USER,
+    QUESTDB_PASSWORD: process.env.QUESTDB_PASSWORD,
+    QUESTDB_DATABASE: process.env.QUESTDB_DATABASE,
+    // WorkOS authentication
     WORKOS_API_KEY: process.env.WORKOS_API_KEY,
     WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID,
     WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD,
