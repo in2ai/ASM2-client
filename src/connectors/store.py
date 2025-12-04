@@ -18,6 +18,15 @@ INDEX = faiss.IndexFlatL2(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 
+def setup_faiss_gpu(vectorstore):
+    try:
+        gpu_res = faiss.StandardGpuResources()
+        vectorstore.index = faiss.index_cpu_to_gpu(gpu_res, 0, vectorstore.index)
+        print('Set up FAISS GPU')
+
+    except Exception as e:
+        print('Unable to set up FAISS GPU')
+
 def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     global FAISS_PATH, DOCUMENT_SPLITTER, EMBEDDINGS, INDEX
 
@@ -29,6 +38,7 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
     try:
         vectorstore = FAISS.load_local(FAISS_PATH, EMBEDDINGS, allow_dangerous_deserialization=True)
+        setup_faiss_gpu(vectorstore)
 
         print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
         
@@ -38,6 +48,7 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     # Construct a new DB if needed
     if vectorstore is None:
         vectorstore = FAISS(embedding_function=EMBEDDINGS, index=INDEX, docstore=InMemoryDocstore({}), index_to_docstore_id={})
+        setup_faiss_gpu(vectorstore)
 
     # Check files to update
     current = manifest.get_processed_ids(source)
@@ -75,8 +86,10 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
         nonlocal docs_batch, pending_ids, manifest
         if not docs_batch: return
 
-        vectorstore.add_documents(docs_batch)
-        vectorstore.save_local(FAISS_PATH)
+        for i in range(0, len(docs_batch), batch_size):
+            sub_docs = docs_batch[i:i + batch_size]
+            vectorstore.add_documents(sub_docs)
+            vectorstore.save_local(FAISS_PATH)
 
         manifest.add_processed_ids(source, pending_ids)
         manifest.add_chunks(len(docs_batch))
