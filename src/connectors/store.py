@@ -37,10 +37,10 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     vectorstore = None
 
     try:
+        print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
+
         vectorstore = FAISS.load_local(FAISS_PATH, EMBEDDINGS, allow_dangerous_deserialization=True)
         setup_faiss_gpu(vectorstore)
-
-        print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
         
     except Exception:
         pass
@@ -59,12 +59,17 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
     for id in current.keys():
         if id not in new:
-            pass
-            # files_to_delete.add(id)
+            files_to_delete.add(id)
         
         elif id in new and new[id] != current[id]:
             files_to_add.add(id)
             files_to_delete.add(id)
+
+    # Early return if no changes are needed
+    if len(files_to_delete) == 0 and len(files_to_add) == 0:
+        print(f"📂 ({source}) El índice no necesita cambios")
+
+        return vectorstore
 
     # Delete chunks
     ids_to_delete = [
@@ -104,12 +109,12 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
         f.metadata['source'] = source
 
-        if manifest.contains_file(f): 
-            continue
-
         txt = f.get_text()
         
-        if not txt: continue
+        if not txt: 
+            # We add it to the manifest, since it has been already processed
+            manifest.add_processed_ids(source, [(f.metadata['id'], f.metadata["modifiedTime"])])
+            continue
 
         base_doc = Document(page_content=txt, metadata=f.metadata)
         chunks = DOCUMENT_SPLITTER.split_documents([base_doc])
