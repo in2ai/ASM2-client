@@ -25,7 +25,6 @@ from src.config.config import *
 from src.connectors.drive import drive_can_read, get_current_user_drive, oauth_login_drive, construir_vectorstore_drive
 from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_vectorstore_dropbox
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
-from src.utils.helpers import cosine_dist
 
 # Metrics
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words
@@ -118,10 +117,6 @@ def reindex_all_sources():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=1600):
-    """
-    vectordbs: lista de tuplas (source, vectordb) con source en {"drive","dropbox"}.
-    services: dict {'drive': service_drive, 'dropbox': dbx}
-    """
     # Register that the user is still active
     register_user_activity()
 
@@ -129,7 +124,6 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
     search_terms = extract_search_terms(query)
     register_words(search_terms)
 
-    emb = OpenAIEmbeddings(model="text-embedding-3-small")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
     allowed_chunks = []
@@ -141,7 +135,9 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
         if 'drive' in services:
             drive_user = get_current_user_drive(services["drive"])
         
-        for f in vectordb.similarity_search(query, k=256):    
+        search = vectordb.similarity_search_with_score(query, k=256)
+
+        for f, s in search:   
             source = f.metadata['source']
 
             if source == "Drive" and "drive" in services and has_access(services["drive"], f.metadata, drive_user):
@@ -153,34 +149,27 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
             elif source == "Onedrive" and "onedrive_token" in services and has_access(services["onedrive_token"], f.metadata):
                 allowed_chunks.append(f)
 
+            # We stop iterating when we have k docs or the score is too low
+            if len(allowed_chunks) == k or s < threshold:
+                break
+
     if not allowed_chunks:
         return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
-    # 2) Re-ranking por similitud semántica
-    q_vec = emb.embed_query(query)
-    texts = [(d.page_content or "")[:chunk_chars] for d in allowed_chunks]
-    d_vecs = emb.embed_documents(texts)
-    paired = list(zip(allowed_chunks, [cosine_dist(q_vec, dv) for dv in d_vecs]))
-    paired.sort(key=lambda x: x[1], reverse=True)
-
-    picked = [d for d, s in paired if s >= float(threshold)][:k] or [d for d, s in paired[:k]]
-
-    insert_metric(Metrics.NUM_DOCS_LLM.value, len(picked))
-    insert_metric(Metrics.RELEVANT_DOC_RATE.value, len(picked) / len(allowed_chunks))
-
-    # 3) Contexto
+    # 2) Contexto
     def cite(d):
         src = d.metadata.get("source","drive")
         tag = "Drive" if src == "drive" else "Dropbox"
         t = d.metadata.get("title","(sin título)")
         return f"[{tag}:{t}] {(d.page_content or '')[:chunk_chars]}"
-    contexto = "\n\n".join(cite(d) for d in picked)
+    
+    contexto = "\n\n".join(cite(d) for d in allowed_chunks)
 
     insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
-    # 4) LLM
+    # 3) LLM
     system = ("Eres un asistente RAG en ESPAÑOL. Responde SOLO con el CONTEXTO. "
               "Redacta en lenguaje natural, claro y directo. Cita los títulos entre corchetes.")
     user = f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"
@@ -193,8 +182,9 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
     insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, llm.get_num_tokens(ans))
 
     if not ans or not ans.strip():
-        t = picked[0].metadata.get("title", "(sin título)")
-        ans = f"Según [{t}]: {(picked[0].page_content or '')[:chunk_chars]}"
+        t = allowed_chunks[0].metadata.get("title", "(sin título)")
+        ans = f"Según [{t}]: {(allowed_chunks[0].page_content or '')[:chunk_chars]}"
+
     return ans
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -364,7 +354,7 @@ with st.sidebar:
     st.session_state.sources_selected = sel
 
     st.markdown("### 🎚️ Umbral de relevancia")
-    threshold = st.slider("Umbral (0.0 = permisivo · 0.90 = estricto)", 0.0, 0.90, 0.55, 0.01)
+    threshold = st.slider("Umbral (0.0 = permisivo · 0.90 = estricto)", 0.0, 0.90, 0.45, 0.01)
     st.session_state.threshold = threshold
 
     st.markdown("### 🔄 Reindexar contenidos")
@@ -417,7 +407,7 @@ if prompt:
             else:
                 ans = responder_multi(
                     prompt, vectordb, services,
-                    threshold=st.session_state.get("threshold", 0.55), k=6
+                    threshold=st.session_state.get("threshold", 0.45), k=6
                 )
 
         except Exception as e:

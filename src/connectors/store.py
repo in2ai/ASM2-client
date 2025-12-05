@@ -14,7 +14,7 @@ from src.connectors.manifest import FaissManifest
 
 FAISS_PATH = "faiss_index"
 
-INDEX = faiss.IndexFlatL2(1536)
+INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 
@@ -38,9 +38,7 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
     try:
         print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
-
         vectorstore = FAISS.load_local(FAISS_PATH, EMBEDDINGS, allow_dangerous_deserialization=True)
-        setup_faiss_gpu(vectorstore)
         
     except Exception:
         pass
@@ -48,7 +46,6 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     # Construct a new DB if needed
     if vectorstore is None:
         vectorstore = FAISS(embedding_function=EMBEDDINGS, index=INDEX, docstore=InMemoryDocstore({}), index_to_docstore_id={})
-        setup_faiss_gpu(vectorstore)
 
     # Check files to update
     current = manifest.get_processed_ids(source)
@@ -68,6 +65,7 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     # Early return if no changes are needed
     if len(files_to_delete) == 0 and len(files_to_add) == 0:
         print(f"📂 ({source}) El índice no necesita cambios")
+        setup_faiss_gpu(vectorstore)
 
         return vectorstore
 
@@ -132,5 +130,7 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     manifest.save()
 
     print(f"💾 ({source}) Índice guardado en {FAISS_PATH}")
+    
+    setup_faiss_gpu(vectorstore)
 
     return vectorstore
