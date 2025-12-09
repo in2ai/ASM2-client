@@ -100,6 +100,33 @@ def has_access(service_or_token, doc_metadata, user_ctx=None):
     return drive_can_read(service_or_token, fid) if fid else bool(fast_allow)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# REINDEXAR MANUALMENTE (botón)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def reindex_all_sources():
+    """Reconstruye/actualiza los índices de las fuentes conectadas."""
+    # Google Drive
+    if "service" in st.session_state:
+        with st.spinner("🔄 Reindexando Google Drive…"):
+            st.session_state.vectordb = construir_vectorstore_drive(st.session_state.service)
+        st.success("✅ Índice de Drive actualizado.")
+
+    # Dropbox
+    if st.session_state.get("dbx"):
+        with st.spinner(f"🔄 Reindexando Dropbox ({DROPBOX_ROOT or '/'})…"):
+            st.session_state.vectordb_dropbox = construir_vectorstore_dropbox(st.session_state.dbx)
+        st.success("✅ Índice de Dropbox actualizado.")
+
+    # OneDrive
+    if st.session_state.get("onedrive_token"):
+        try:
+            with st.spinner(f"🔄 Reindexando OneDrive ({ONEDRIVE_ROOT or '/'})…"):
+                st.session_state.vectordb_onedrive = construir_vectorstore_onedrive(st.session_state.onedrive_token)
+            st.success("✅ Índice de OneDrive actualizado.")
+        except Exception as e:
+            st.error(f"❌ No se pudo reindexar OneDrive: {e}")
+
+# ─────────────────────────────────────────────────────────────────────────────
 # RESPONDER (multi-origen)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -320,6 +347,12 @@ with st.sidebar:
     st.markdown("### 🎚️ Umbral de relevancia")
     threshold = st.slider("Umbral (0.0 = permisivo · 0.90 = estricto)", 0.0, 0.90, 0.55, 0.01)
     st.session_state.threshold = threshold
+
+    st.markdown("### 🔄 Reindexar contenidos")
+    st.caption("Pulsa para detectar e indexar nuevos ficheros en las fuentes conectadas.")
+
+    if st.button("Reindexar ahora", use_container_width=True):
+        reindex_all_sources()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CARGA / CONSTRUCCIÓN ÍNDICES

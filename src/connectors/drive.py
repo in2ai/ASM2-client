@@ -230,7 +230,7 @@ def construir_vectorstore_drive_cached(files_serializable, creds_dict, batch_siz
                     return json.load(f)
             except Exception:
                 pass
-        return {"processed_ids": [], "total_chunks": 0, "completed": False, "started_at": datetime.datetime.now().isoformat()}
+        return {"files": {}, "total_chunks": 0}
 
     def save_manifest(path, state):
         tmp = path + ".tmp"
@@ -241,65 +241,102 @@ def construir_vectorstore_drive_cached(files_serializable, creds_dict, batch_siz
     os.makedirs(persist_path, exist_ok=True)
     manifest_path = os.path.join(persist_path, "progress.json")
     state = load_manifest(manifest_path)
-    processed_ids = set(state.get("processed_ids", []))
-    total_chunks = int(state.get("total_chunks", 0))
-    was_completed = bool(state.get("completed", False))
+    files_state = state.get("files", {})
+
+    # Lista actual de ficheros en Drive
+    files_list = [dict(t) if not isinstance(t, dict) else t for t in files_serializable]
+
+    # Mapas por comodidad
+    current_map = {f["id"]: f for f in files_list}
+    known_ids   = set(files_state.keys())
+    current_ids = set(current_map.keys())
+
+    new_ids      = current_ids - known_ids
+    maybe_mod_ids = current_ids & known_ids
+    deleted_ids  = known_ids - current_ids
+
+    # Detectar modificados comparando modifiedTime
+    modified_ids = set()
+    for fid in maybe_mod_ids:
+        old_mt = files_state[fid].get("modifiedTime")
+        new_mt = current_map[fid].get("modifiedTime")
+        if new_mt and old_mt and new_mt != old_mt:
+            modified_ids.add(fid)
+
+    print(f"Drive sync → nuevos: {len(new_ids)} · modificados: {len(modified_ids)} · borrados: {len(deleted_ids)}")
 
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     vectorstore = None
     try:
         vectorstore = FAISS.load_local(persist_path, embeddings, allow_dangerous_deserialization=True)
         print(f"📂 (Drive) Cargando índice desde {persist_path}")
-        if was_completed:
-            print("✅ Índice ya completo. Usando caché.")
-            return vectorstore
     except Exception:
-        pass
-
-    if vectorstore is None:
         index = faiss.IndexFlatL2(1536)
         vectorstore = FAISS(embedding_function=embeddings, index=index, docstore=InMemoryDocstore({}), index_to_docstore_id={})
+        print(f"🆕 (Drive) Creando índice nuevo en {persist_path}")
+
+    # Marcar como no activos los borrados y los modificados (porque sus chunks antiguos quedan "stale")
+    for fid in deleted_ids | modified_ids:
+        info = files_state.get(fid, {})
+        info["active"] = False
+        files_state[fid] = info
+
+    # Si no hay nada nuevo/modificado, solo guardamos estado de borrados y salimos
+    if not new_ids and not modified_ids:
+        state["files"] = files_state
+        save_manifest(manifest_path, state)
+        print("✅ Índice de Drive sincronizado (sin nuevos embeddings).")
+        return vectorstore
 
     service = build("drive", "v3", credentials=Credentials.from_authorized_user_info(creds_dict))
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 
-    files_serializable = [dict(t) if not isinstance(t, dict) else t for t in files_serializable]
-    remaining_files = [f for f in files_serializable if f["id"] not in processed_ids]
-
-    docs_batch, pending_ids = [], []
-
-    def flush(reason="batch"):
-        nonlocal docs_batch, pending_ids, total_chunks, state
-        if not docs_batch: return
+    docs_batch = []
+    def flush():
+        nonlocal docs_batch
+        if not docs_batch:
+            return
         vectorstore.add_documents(docs_batch)
-        total_chunks += len(docs_batch)
         vectorstore.save_local(persist_path)
-        for fid in pending_ids: processed_ids.add(fid)
-        state.update({"processed_ids": list(processed_ids), "total_chunks": total_chunks, "completed": False})
-        save_manifest(manifest_path, state)
-        print(f"🧩 (Drive) Persistidos {len(docs_batch)} chunks [{reason}]")
-        docs_batch, pending_ids = [], []
+        print(f"🧩 (Drive) Persistidos {len(docs_batch)} chunks")
+        docs_batch = []
 
-    for idx, f in enumerate(files_serializable):
-        if f["id"] in processed_ids: continue
-        txt = extraer_texto_drive(service, f["id"], f["mimeType"])
-        if not txt: continue
-        acl = get_acl_drive(service, f["id"])
+    # Reindexar solo nuevos + modificados
+    for fid in (list(new_ids) + list(modified_ids)):
+        f = current_map[fid]
+        name = f["name"]; mime = f["mimeType"]
+        txt = extraer_texto_drive(service, fid, mime)
+        if not txt:
+            continue
+        acl = get_acl_drive(service, fid)
         base_doc = Document(
             page_content=txt,
             metadata={
                 "source": "drive",
-                "title": f["name"], "id": f["id"], "mimeType": f["mimeType"],
-                "modifiedTime": f.get("modifiedTime"), "acl": acl
-            }
+                "title": name,
+                "id": fid,
+                "mimeType": mime,
+                "modifiedTime": f.get("modifiedTime"),
+                "acl": acl,
+            },
         )
         chunks = splitter.split_documents([base_doc])
-        docs_batch.extend(chunks); pending_ids.append(f["id"])
-        if len(docs_batch) >= batch_size: flush("lote")
+        docs_batch.extend(chunks)
 
-    if docs_batch: flush("final")
-    if not processed_ids and total_chunks == 0: raise RuntimeError("No se encontraron documentos legibles (Drive).")
-    state["completed"] = True; save_manifest(manifest_path, state)
+        # Actualizar estado del fichero
+        files_state[fid] = {
+            "modifiedTime": f.get("modifiedTime"),
+            "active": True
+        }
+
+        if len(docs_batch) >= batch_size:
+            flush()
+
+    if docs_batch:
+        flush()
+
+    state["files"] = files_state
+    save_manifest(manifest_path, state)
     print(f"💾 (Drive) Índice guardado en {persist_path}")
     return vectorstore
 
