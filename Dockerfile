@@ -44,7 +44,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m spacy download es_core_news_md
 
 # Copiamos el resto del proyecto
-COPY . /app
+RUN mkdir src
+RUN mkdir img
+COPY app.py /app/src
+COPY src /app/src
+COPY img /app/img
 
 # No incluimos secretos en la imagen; se montarán como volumen
 # (client_secret.json, client_secret_website.json, .env, faiss_index/...)

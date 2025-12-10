@@ -13,8 +13,3 @@ def safe_execute(request, retries=6, backoff=1.7):
                 continue
             raise
     raise RuntimeError("Google API: demasiados fallos consecutivos (5xx).")
-
-def cosine_dist(a, b):
-    a = np.array(a); b = np.array(b)
-    denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-12
-    return float(np.dot(a, b) / denom)
