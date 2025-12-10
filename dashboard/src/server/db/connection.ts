@@ -12,7 +12,7 @@ function getPool(): pg.Pool {
       port: Number(env.QUESTDB_PORT),
       user: String(env.QUESTDB_USER),
       password: String(env.QUESTDB_PASSWORD),
-      database: String(env.QUESTDB_DATABASE),
+      database: String(env.QUESTDB_DB),
       connectionTimeoutMillis: 5000,
       max: 10,
       idleTimeoutMillis: 30000,

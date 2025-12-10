@@ -1,5 +1,13 @@
 import { createEnv } from "@t3-oss/env-nextjs";
+import { config } from "dotenv";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 import { z } from "zod";
+
+// Load environment variables from the root .env file (parent directory)
+// This allows sharing a single .env file across the monorepo
+const __dirname = dirname(fileURLToPath(import.meta.url));
+config({ path: resolve(__dirname, "../../.env") });
 
 export const env = createEnv({
   /**
@@ -13,7 +21,7 @@ export const env = createEnv({
     QUESTDB_PORT: z.coerce.number(),
     QUESTDB_USER: z.string(),
     QUESTDB_PASSWORD: z.string(),
-    QUESTDB_DATABASE: z.string(),
+    QUESTDB_DB: z.string(),
     // WorkOS authentication
     WORKOS_API_KEY: z.string(),
     WORKOS_CLIENT_ID: z.string(),
@@ -41,7 +49,7 @@ export const env = createEnv({
     QUESTDB_PORT: process.env.QUESTDB_PORT,
     QUESTDB_USER: process.env.QUESTDB_USER,
     QUESTDB_PASSWORD: process.env.QUESTDB_PASSWORD,
-    QUESTDB_DATABASE: process.env.QUESTDB_DATABASE,
+    QUESTDB_DB: process.env.QUESTDB_DB,
     // WorkOS authentication
     WORKOS_API_KEY: process.env.WORKOS_API_KEY,
     WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID,
