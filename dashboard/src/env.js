@@ -16,16 +16,23 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(["development", "test", "production"]),
-    // QuestDB connection configuration
     QUESTDB_HOST: z.string(),
     QUESTDB_PORT: z.coerce.number(),
     QUESTDB_USER: z.string(),
     QUESTDB_PASSWORD: z.string(),
     QUESTDB_DB: z.string(),
-    // WorkOS authentication
-    WORKOS_API_KEY: z.string(),
-    WORKOS_CLIENT_ID: z.string(),
-    WORKOS_COOKIE_PASSWORD: z.string(),
+    WORKOS_API_KEY: z.string().startsWith("sk_", {
+      message:
+        "WORKOS_API_KEY must start with 'sk_' (test) or 'sk_live' (production)",
+    }),
+    WORKOS_CLIENT_ID: z.string().startsWith("client_", {
+      message: "WORKOS_CLIENT_ID must start with 'client_'",
+    }),
+    // Cookie password must be at least 32 characters for secure encryption
+    WORKOS_COOKIE_PASSWORD: z.string().min(32, {
+      message:
+        "WORKOS_COOKIE_PASSWORD must be at least 32 characters. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+    }),
   },
 
   /**
@@ -34,8 +41,14 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string(),
-    NEXT_PUBLIC_WORKOS_REDIRECT_URI: z.string(),
+    NEXT_PUBLIC_WORKOS_REDIRECT_URI: z
+      .url({
+        message: "NEXT_PUBLIC_WORKOS_REDIRECT_URI must be a valid URL",
+      })
+      .endsWith("/api/auth/callback", {
+        message:
+          "NEXT_PUBLIC_WORKOS_REDIRECT_URI must end with '/api/auth/callback'",
+      }),
   },
 
   /**
@@ -44,19 +57,16 @@ export const env = createEnv({
    */
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
-    // QuestDB connection
     QUESTDB_HOST: process.env.QUESTDB_HOST,
     QUESTDB_PORT: process.env.QUESTDB_PORT,
     QUESTDB_USER: process.env.QUESTDB_USER,
     QUESTDB_PASSWORD: process.env.QUESTDB_PASSWORD,
     QUESTDB_DB: process.env.QUESTDB_DB,
-    // WorkOS authentication
     WORKOS_API_KEY: process.env.WORKOS_API_KEY,
     WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID,
     WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD,
     NEXT_PUBLIC_WORKOS_REDIRECT_URI:
       process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
-    // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

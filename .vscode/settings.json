@@ -3,10 +3,12 @@
     "addgroup",
     "adduser",
     "authkit",
+    "clickjacking",
     "CLIENTVAR",
     "faiss",
     "geist",
     "healthcheck",
+    "imgix",
     "IRAG",
     "libc",
     "Milisegundos",
@@ -14,9 +16,11 @@
     "mongosh",
     "neverthrow",
     "nextjs",
+    "nosniff",
     "oklch",
     "questdb",
     "RRHH",
+    "SAMEORIGIN",
     "Segoe",
     "streamlit",
     "sysctls",
@@ -24,6 +28,7 @@
     "typesafety",
     "uvicorn",
     "workos",
-    "WORKOS"
+    "WORKOS",
+    "workoscdn"
   ]
 }

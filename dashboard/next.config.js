@@ -1,7 +1,3 @@
-/**
- * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially useful
- * for Docker builds.
- */
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
@@ -46,15 +42,34 @@ const config = {
           {
             key: "Content-Security-Policy",
             value: [
+              // Default: only allow resources from same origin
               "default-src 'self'",
+
+              // Scripts: self + inline (needed for Next.js hydration)
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+
+              // Styles: self + inline (needed for styled-components/emotion)
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: https:",
+
+              // Images: self, data URIs, blob URIs (WorkOS), and HTTPS sources
+              // WorkOS uses blob: for error pages and imgix/workoscdn for assets
+              "img-src 'self' data: blob: https://workos.imgix.net https://images.workoscdn.com https:",
+
+              // Fonts: self and data URIs
               "font-src 'self' data:",
-              "connect-src 'self' https://api.workos.com",
+
+              // API connections: self + WorkOS API
+              "connect-src 'self' https://api.workos.com https://*.workos.com",
+
+              // Prevent clickjacking
               "frame-ancestors 'self'",
+
+              // Restrict base URI to prevent base tag hijacking
               "base-uri 'self'",
-              "form-action 'self'",
+
+              // Form submissions: self + WorkOS authentication endpoints
+              // Required for OAuth redirects to WorkOS
+              "form-action 'self' https://api.workos.com https://*.workos.com",
             ].join("; "),
           },
         ],

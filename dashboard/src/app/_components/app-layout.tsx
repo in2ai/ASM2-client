@@ -1,5 +1,6 @@
 "use client";
 
+import { signOutAction } from "@/app/actions/auth";
 import { ChartVisibilityControls } from "@/components/chart-visibility-controls";
 import { PreferencesDialog } from "@/components/preferences-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -8,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { useState, type ElementType, type ReactNode } from "react";
+import { useFormStatus } from "react-dom";
 
 type View = "usage" | "rag-quality" | "performance" | "insights";
 
@@ -155,7 +156,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
 
             <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
-              {/* Role-aware navigation: NodeSelector for admins, company name for users */}
               <CompanyDisplay user={user} />
               <ViewSwitcher value={currentView} onChange={handleViewChange} />
               <ChartVisibilityControls view={currentView} />
@@ -163,7 +163,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </header>
 
-          {/* Content Area */}
           <main className="flex-1 overflow-y-auto">
             {children(currentView)}
           </main>
@@ -244,17 +243,11 @@ interface WorkOSUser {
   organizationId?: string | null;
 }
 
-/**
- * CompanyDisplay Component
- *
- * Displays user information in the header.
- */
 function CompanyDisplay({ user }: Readonly<{ user: WorkOSUser | null }>) {
   if (!user) {
     return null;
   }
 
-  // Simply display user info, no node selection
   return (
     <div className="text-muted-foreground hidden items-center gap-2 text-sm md:flex">
       <User className="h-4 w-4" />
@@ -263,16 +256,26 @@ function CompanyDisplay({ user }: Readonly<{ user: WorkOSUser | null }>) {
   );
 }
 
+function SignOutButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors outline-none data-disabled:pointer-events-none data-disabled:opacity-50"
+    >
+      {pending ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <LogOut className="h-4 w-4" />
+      )}
+      <span>{pending ? "Cerrando sesión..." : "Cerrar sesión"}</span>
+    </button>
+  );
+}
+
 function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const { signOut } = useAuth();
-
-  const handleSignOut = async () => {
-    setIsSigningOut(true);
-    await signOut();
-  };
-
-  // Get user initials for avatar
   const getInitials = (): string => {
     if (user?.firstName && user?.lastName) {
       return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
@@ -283,7 +286,6 @@ function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
     return "U";
   };
 
-  // Get display name
   const getDisplayName = (): string => {
     if (user?.firstName && user?.lastName) {
       return `${user.firstName} ${user.lastName}`;
@@ -315,7 +317,6 @@ function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
               <p className="text-sm leading-none font-medium">
                 {getDisplayName()}
               </p>
-              {/* Role indicator badge */}
               {user?.role === "admin" ? (
                 <Badge variant="default" className="ml-2 gap-1">
                   <Shield className="h-3 w-3" />
@@ -331,7 +332,6 @@ function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
             <p className="text-muted-foreground text-xs leading-none">
               {user?.email ?? "usuario@empresa.com"}
             </p>
-            {/* Display company name for end users */}
             {user?.role !== "admin" && user?.organizationId && (
               <p className="text-muted-foreground flex items-center gap-1 text-xs leading-none">
                 <Building2 className="h-3 w-3" />
@@ -345,14 +345,9 @@ function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
           <PreferencesDialog />
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut} disabled={isSigningOut}>
-          {isSigningOut ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <LogOut className="mr-2 h-4 w-4" />
-          )}
-          <span>{isSigningOut ? "Cerrando sesión..." : "Cerrar sesión"}</span>
-        </DropdownMenuItem>
+        <form action={signOutAction} className="w-full">
+          <SignOutButton />
+        </form>
       </DropdownMenuContent>
     </DropdownMenu>
   );
