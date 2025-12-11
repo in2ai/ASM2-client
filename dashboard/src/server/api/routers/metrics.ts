@@ -22,8 +22,6 @@ import { z } from "zod";
 const metricsQuerySchema = z.object({
   startDate: z.date().optional(),
   endDate: z.date().optional(),
-  limit: z.number().min(1).max(1000).default(100),
-  skip: z.number().min(0).default(0),
 });
 
 /**
