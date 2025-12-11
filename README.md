@@ -73,7 +73,7 @@ Crea un archivo `.env` basado en los ejemplos proporcionados. Las variables clav
 Levanta todos los servicios con un solo comando:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 Esto iniciará:
