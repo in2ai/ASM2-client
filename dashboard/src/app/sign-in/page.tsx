@@ -20,7 +20,10 @@ export default async function SignInPage({
 
   if (user) {
     const { returnTo } = await searchParams;
-    redirect(returnTo ?? "/");
+    // Only allow relative paths to prevent open redirect
+    const safeReturnTo =
+      returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/";
+    redirect(safeReturnTo);
   }
 
   const signInUrl = await getSignInUrl();
