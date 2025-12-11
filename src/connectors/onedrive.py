@@ -1,20 +1,13 @@
 import requests
 import msal
 import io
-import json
-import os
 
-import faiss
 import streamlit as st
 from PyPDF2 import PdfReader
 
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
-
 from src.config.config import *
+from src.connectors.faiss_file import OnedriveFile
+from src.connectors.store import build_vectorstore
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ONEDRIVE (MICROSOFT GRAPH)
@@ -228,147 +221,23 @@ def onedrive_can_read(token_dict, item_id: str) -> bool:
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_resource(show_spinner=False)
-def construir_vectorstore_onedrive_cached(file_tuples, token_dict, batch_size=200, persist_path="faiss_index_onedrive"):
-    """
-    Indexado incremental de OneDrive:
-    - Solo reembebe ficheros nuevos o modificados (modifiedTime).
-    - Marca como active=False los ficheros que ya no están.
-    """
-    def load_manifest(path):
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return {"files": {}, "total_chunks": 0}
+def construir_vectorstore_onedrive():
+    token_dict = st.session_state.onedrive_token
 
-    def save_manifest(path, state):
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-
-    os.makedirs(persist_path, exist_ok=True)
-    manifest_path = os.path.join(persist_path, "progress.json")
-    state = load_manifest(manifest_path)
-    files_state = state.get("files", {})
-
-    # Normalizar tuplas -> dicts
-    file_dicts = [dict(t) if not isinstance(t, dict) else t for t in file_tuples]
-
-    # Mapas útiles
-    current_map = {f["id"]: f for f in file_dicts}
-    known_ids   = set(files_state.keys())
-    current_ids = set(current_map.keys())
-
-    new_ids       = current_ids - known_ids
-    maybe_mod_ids = current_ids & known_ids
-    deleted_ids   = known_ids - current_ids
-
-    # Detectar modificados
-    modified_ids = set()
-    for fid in maybe_mod_ids:
-        old_mt = files_state.get(fid, {}).get("modifiedTime")
-        new_mt = current_map[fid].get("modifiedTime")
-        if new_mt and old_mt and new_mt != old_mt:
-            modified_ids.add(fid)
-
-    print(f"OneDrive sync → nuevos: {len(new_ids)} · modificados: {len(modified_ids)} · borrados: {len(deleted_ids)}")
-
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-    # Cargar índice existente o crear uno nuevo
-    try:
-        vectordb = FAISS.load_local(persist_path, embeddings, allow_dangerous_deserialization=True)
-        print(f"📂 (OneDrive) Cargando índice desde {persist_path}")
-    except Exception:
-        index = faiss.IndexFlatL2(1536)
-        vectordb = FAISS(embedding_function=embeddings, index=index, docstore=InMemoryDocstore({}), index_to_docstore_id={})
-        print(f"🆕 (OneDrive) Creando índice nuevo en {persist_path}")
-
-    # Marcamos "borrados" y "modificados" como no activos (por si luego quieres filtrarlos)
-    for fid in deleted_ids | modified_ids:
-        info = files_state.get(fid, {})
-        info["active"] = False
-        files_state[fid] = info
-
-    # Si no hay nada que reindexar, solo guardamos estado
-    if not new_ids and not modified_ids:
-        state["files"] = files_state
-        save_manifest(manifest_path, state)
-        print("✅ Índice de OneDrive sincronizado (sin nuevos embeddings).")
-        try:
-            st.success("✅ OneDrive indexado: sin cambios.")
-        except Exception:
-            pass
-        return vectordb
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-
-    docs_batch = []
-    printed = 0
-
-    def flush():
-        nonlocal docs_batch
-        if not docs_batch:
-            return
-        vectordb.add_documents(docs_batch)
-        vectordb.save_local(persist_path)
-        print(f"🧩 (OneDrive) Persistidos {len(docs_batch)} chunks")
-        docs_batch = []
-
-    # Reindexar SOLO nuevos + modificados
-    for fid in list(new_ids) + list(modified_ids):
-        f = current_map[fid]
-        name = f["name"]
-        mime = (f.get("mimeType") or "").lower()
-
-        # 👇 Log UI + consola de cada documento (no bloquea si no hay contexto Streamlit)
-        try:
-            st.write(f"• Indexando **{name}** ({mime}) …")
-        except Exception:
-            pass
-        print(f"(OneDrive) Indexando: {name} [{mime}] id={fid}")
-
-        txt  = onedrive_download(token_dict, fid, mime_hint=mime)
-        if not txt:
-            try:
-                st.warning(f"Saltado: {name} (vacío o no legible)")
-            except Exception:
-                pass
-            continue
-
-        base = Document(page_content=txt, metadata={"source":"onedrive","id":fid,"title":name,"mimeType":mime})
-        chunks = splitter.split_documents([base])
-        docs_batch.extend(chunks)
-        printed += 1
-
-        # Actualizar estado del fichero
-        files_state[fid] = {
-            "modifiedTime": f.get("modifiedTime"),
-            "active": True
-        }
-
-        if len(docs_batch) >= batch_size:
-            flush()
-
-    if docs_batch:
-        flush()
-    
-    state["files"] = files_state
-    save_manifest(manifest_path, state)
-    print(f"💾 (OneDrive) Índice guardado en {persist_path}")
-    try:
-        st.success(f"✅ OneDrive indexado: {printed} archivos.")
-    except Exception:
-        pass
-    return vectordb
-
-
-def construir_vectorstore_onedrive(token_dict):
+    # Create file list
     files = onedrive_list_files(token_dict, ONEDRIVE_ROOT or "")
-    files_small = [{"id": f["id"], "name": f["name"], "mimeType": f.get("mimeType", "")} for f in files]
-    files_serializable = tuple(tuple(sorted(d.items())) for d in files_small)
-    return construir_vectorstore_onedrive_cached(files_serializable, token_dict)
+
+    files = [
+        {
+            "id": f["id"], 
+            "name": f["name"], 
+            "modifiedTime": f["modifiedTime"],
+            "mimeType": f.get("mimeType", "")
+        } 
+        for f in files
+    ]
+
+    files = [OnedriveFile(f, token_dict) for f in files]
+
+    # Populate vector DB
+    return build_vectorstore(files, 'Onedrive')

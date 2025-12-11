@@ -25,7 +25,6 @@ from src.config.config import *
 from src.connectors.drive import drive_can_read, get_current_user_drive, oauth_login_drive, construir_vectorstore_drive
 from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_vectorstore_dropbox
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
-from src.utils.helpers import cosine_dist
 
 # Metrics
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words
@@ -58,8 +57,14 @@ def extract_usage_metrics():
         # Wait a little bit before pooling again
         time.sleep(30)
 
-thread = threading.Thread(target=extract_usage_metrics, daemon=True)
-thread.start()
+
+@st.cache_resource
+def start_usage_metrics_thread():
+    thread = threading.Thread(target=extract_usage_metrics, daemon=True)
+    thread.start()
+
+
+start_usage_metrics_thread()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISOS UNIFICADOS
@@ -104,37 +109,14 @@ def has_access(service_or_token, doc_metadata, user_ctx=None):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def reindex_all_sources():
-    """Reconstruye/actualiza los índices de las fuentes conectadas."""
-    # Google Drive
-    if "service" in st.session_state:
-        with st.spinner("🔄 Reindexando Google Drive…"):
-            st.session_state.vectordb = construir_vectorstore_drive(st.session_state.service)
-        st.success("✅ Índice de Drive actualizado.")
-
-    # Dropbox
-    if st.session_state.get("dbx"):
-        with st.spinner(f"🔄 Reindexando Dropbox ({DROPBOX_ROOT or '/'})…"):
-            st.session_state.vectordb_dropbox = construir_vectorstore_dropbox(st.session_state.dbx)
-        st.success("✅ Índice de Dropbox actualizado.")
-
-    # OneDrive
-    if st.session_state.get("onedrive_token"):
-        try:
-            with st.spinner(f"🔄 Reindexando OneDrive ({ONEDRIVE_ROOT or '/'})…"):
-                st.session_state.vectordb_onedrive = construir_vectorstore_onedrive(st.session_state.onedrive_token)
-            st.success("✅ Índice de OneDrive actualizado.")
-        except Exception as e:
-            st.error(f"❌ No se pudo reindexar OneDrive: {e}")
+    get_vectordb.clear()
+    get_vectordb()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RESPONDER (multi-origen)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars=1600):
-    """
-    vectordbs: lista de tuplas (source, vectordb) con source en {"drive","dropbox"}.
-    services: dict {'drive': service_drive, 'dropbox': dbx}
-    """
+def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=1600):
     # Register that the user is still active
     register_user_activity()
 
@@ -142,7 +124,6 @@ def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars
     search_terms = extract_search_terms(query)
     register_words(search_terms)
 
-    emb = OpenAIEmbeddings(model="text-embedding-3-small")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
     allowed_chunks = []
@@ -151,48 +132,44 @@ def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars
     insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(query))
 
     with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
-        for source, vdb in vectordbs:
-            cands = vdb.similarity_search(query, k=256)
-            if source == "drive":
-                user_ctx = get_current_user_drive(services["drive"])
-                allowed = [d for d in cands if has_access(services["drive"], d.metadata, user_ctx)]
-            elif source == "onedrive":
-                allowed = [d for d in cands if has_access(services["onedrive_token"], d.metadata)]
-            elif source == "dropbox":
-                allowed = [d for d in cands if has_access(services["dropbox"], d.metadata)]
-            else:
-                allowed = []
-            allowed_chunks.extend(allowed)
-            print(f"🔎 {source}: cands={len(cands)} allowed={len(allowed)}")
+        if 'drive' in services:
+            drive_user = get_current_user_drive(services["drive"])
+        
+        search = vectordb.similarity_search_with_score(query, k=256)
+
+        for f, s in search:   
+            source = f.metadata['source']
+
+            if source == "Drive" and "drive" in services and has_access(services["drive"], f.metadata, drive_user):
+                allowed_chunks.append(f)
+
+            elif source == "Dropbox" and "dropbox" in services and has_access(services["dropbox"], f.metadata):
+                allowed_chunks.append(f)
+
+            elif source == "Onedrive" and "onedrive_token" in services and has_access(services["onedrive_token"], f.metadata):
+                allowed_chunks.append(f)
+
+            # We stop iterating when we have k docs or the score is too low
+            if len(allowed_chunks) == k or s < threshold:
+                break
 
     if not allowed_chunks:
         return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
-    # 2) Re-ranking por similitud semántica
-    q_vec = emb.embed_query(query)
-    texts = [(d.page_content or "")[:chunk_chars] for d in allowed_chunks]
-    d_vecs = emb.embed_documents(texts)
-    paired = list(zip(allowed_chunks, [cosine_dist(q_vec, dv) for dv in d_vecs]))
-    paired.sort(key=lambda x: x[1], reverse=True)
-
-    picked = [d for d, s in paired if s >= float(threshold)][:k] or [d for d, s in paired[:k]]
-
-    insert_metric(Metrics.NUM_DOCS_LLM.value, len(picked))
-    insert_metric(Metrics.RELEVANT_DOC_RATE.value, len(picked) / len(allowed_chunks))
-
-    # 3) Contexto
+    # 2) Contexto
     def cite(d):
         src = d.metadata.get("source","drive")
         tag = "Drive" if src == "drive" else "Dropbox"
         t = d.metadata.get("title","(sin título)")
         return f"[{tag}:{t}] {(d.page_content or '')[:chunk_chars]}"
-    contexto = "\n\n".join(cite(d) for d in picked)
+    
+    contexto = "\n\n".join(cite(d) for d in allowed_chunks)
 
     insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
-    # 4) LLM
+    # 3) LLM
     system = ("Eres un asistente RAG en ESPAÑOL. Responde SOLO con el CONTEXTO. "
               "Redacta en lenguaje natural, claro y directo. Cita los títulos entre corchetes.")
     user = f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"
@@ -205,8 +182,9 @@ def responder_multi(query, vectordbs, services, threshold=0.50, k=6, chunk_chars
     insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, llm.get_num_tokens(ans))
 
     if not ans or not ans.strip():
-        t = picked[0].metadata.get("title", "(sin título)")
-        ans = f"Según [{t}]: {(picked[0].page_content or '')[:chunk_chars]}"
+        t = allowed_chunks[0].metadata.get("title", "(sin título)")
+        ans = f"Según [{t}]: {(allowed_chunks[0].page_content or '')[:chunk_chars]}"
+
     return ans
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -236,6 +214,33 @@ section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px;
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CARGA / CONSTRUCCIÓN ÍNDICES
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_resource
+def get_vectordb():
+    vectordb = None
+
+    if "service" in st.session_state:
+        with st.spinner("Construyendo / Cargando índice de Drive…"):
+            vectordb = construir_vectorstore_drive()
+
+    if "dbx" in st.session_state:
+        with st.spinner(f"Construyendo / Cargando índice de Dropbox ({DROPBOX_ROOT or '/'})…"):
+            vectordb = construir_vectorstore_dropbox()
+
+    if "onedrive_token" in st.session_state:
+        try:
+            with st.spinner(f"Construyendo / Cargando índice de OneDrive ({ONEDRIVE_ROOT or '/'})…"):
+                vectordb = construir_vectorstore_onedrive()
+        except Exception as e:
+            pass
+
+    return vectordb
+
+get_vectordb()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR (sesiones y fuentes)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -256,7 +261,9 @@ with st.sidebar:
             service = oauth_login_drive()
             if service:
                 st.session_state.service = service
+                get_vectordb.clear()
                 st.rerun()
+
         else:
             if st.button("Conectar con Google Drive", use_container_width=True):
                 # Llamada inicial que muestra la URL de autorización y hace st.stop()
@@ -270,7 +277,7 @@ with st.sidebar:
             except Exception: pass
             st.success("Sesión Drive cerrada.")
             st.rerun()
- 
+
     st.markdown("### 🔐 OneDrive")
     if ONEDRIVE_CLIENT_ID:
         if "onedrive_token" not in st.session_state:
@@ -285,6 +292,7 @@ with st.sidebar:
                 if tok:
                     st.session_state.onedrive_token = tok
                     st.session_state.pop("odc_auth_mode", None)
+                    get_vectordb.clear()
                     st.rerun()
         else:
             if st.button("Desconectar OneDrive", use_container_width=True):
@@ -310,6 +318,8 @@ with st.sidebar:
         if dbx_client:
             st.session_state.dbx = dbx_client
             st.session_state.pop("dbx_auth_mode", None)
+            get_vectordb.clear()
+
             try:
                 acc = st.session_state.dbx.users_get_current_account()
                 root_effective = (DROPBOX_ROOT or "").strip() or "(raíz de la app)"
@@ -324,7 +334,6 @@ with st.sidebar:
                 st.session_state.pop(k, None)
             st.success("Dropbox desconectado.")
             st.rerun()
-
 
     st.markdown("### ⚙️ Fuentes a consultar")
 
@@ -345,7 +354,7 @@ with st.sidebar:
     st.session_state.sources_selected = sel
 
     st.markdown("### 🎚️ Umbral de relevancia")
-    threshold = st.slider("Umbral (0.0 = permisivo · 0.90 = estricto)", 0.0, 0.90, 0.55, 0.01)
+    threshold = st.slider("Umbral (0.0 = permisivo · 0.90 = estricto)", 0.0, 0.90, 0.45, 0.01)
     st.session_state.threshold = threshold
 
     st.markdown("### 🔄 Reindexar contenidos")
@@ -353,27 +362,6 @@ with st.sidebar:
 
     if st.button("Reindexar ahora", use_container_width=True):
         reindex_all_sources()
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CARGA / CONSTRUCCIÓN ÍNDICES
-# ─────────────────────────────────────────────────────────────────────────────
-
-if "service" in st.session_state and "vectordb" not in st.session_state:
-    with st.spinner("Construyendo / Cargando índice de Drive…"):
-        st.session_state.vectordb = construir_vectorstore_drive(st.session_state.service)
-    st.success("✅ Índice de Drive listo.")
-
-if st.session_state.get("dbx") and "vectordb_dropbox" not in st.session_state:
-    with st.spinner(f"Construyendo / Cargando índice de Dropbox ({DROPBOX_ROOT or '/'})…"):
-        st.session_state.vectordb_dropbox = construir_vectorstore_dropbox(st.session_state.dbx)
-    st.success("✅ Índice de Dropbox listo.")
-if st.session_state.get("onedrive_token") and "vectordb_onedrive" not in st.session_state:
-    try:
-        with st.spinner(f"Construyendo / Cargando índice de OneDrive ({ONEDRIVE_ROOT or '/'})…"):
-            st.session_state.vectordb_onedrive = construir_vectorstore_onedrive(st.session_state.onedrive_token)
-        st.success("✅ Índice de OneDrive listo.")
-    except Exception as e:
-        st.error(f"❌ No se pudo construir el índice de OneDrive: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # UI PRINCIPAL (chat)
@@ -397,26 +385,33 @@ if prompt:
     st.markdown(f'<div class="chat-row user"><div class="chat-bubble-user">{prompt}</div></div>', unsafe_allow_html=True)
     with st.spinner("Pensando…"):
         try:
-            sel = st.session_state.get("sources_selected") or []
-            vectordbs = []; services = {}
-            if "Drive" in sel and "vectordb" in st.session_state:
-                vectordbs.append(("drive", st.session_state.vectordb))
+            # Add the connectors
+            sel = st.session_state.get("sources_selected") or []                
+            services = {}
+            
+            if "Drive" in sel and "service" in st.session_state:
                 services["drive"] = st.session_state.service
-            if "Dropbox" in sel and "vectordb_dropbox" in st.session_state and "dbx" in st.session_state:
-                vectordbs.append(("dropbox", st.session_state.vectordb_dropbox))
+
+            if "Dropbox" in sel and "dbx" in st.session_state:
                 services["dropbox"] = st.session_state.dbx
-            if "OneDrive" in sel and "vectordb_onedrive" in st.session_state and "onedrive_token" in st.session_state:
-                vectordbs.append(("onedrive", st.session_state.vectordb_onedrive))
+
+            if "OneDrive" in sel and "onedrive_token" in st.session_state:
                 services["onedrive_token"] = st.session_state.onedrive_token
 
-            if not vectordbs:
+            vectordb = get_vectordb()
+
+            # Check the vector DB
+            if vectordb is None:
                 ans = "Conecta al menos una fuente (Drive/Dropbox) en la barra lateral."
+
             else:
                 ans = responder_multi(
-                    prompt, vectordbs, services,
-                    threshold=st.session_state.get("threshold", 0.55), k=6
+                    prompt, vectordb, services,
+                    threshold=st.session_state.get("threshold", 0.45), k=6
                 )
+
         except Exception as e:
             ans = f"Error: {e}"
+
     st.markdown(f'<div class="chat-row bot"><div class="chat-bubble-bot">{ans}</div></div>', unsafe_allow_html=True)
     st.session_state.messages.append({"role": "assistant", "content": ans})
