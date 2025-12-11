@@ -73,6 +73,8 @@ services:
       dockerfile: Dockerfile
     image: dashboard:latest
     container_name: dashboard
+    depends_on:
+      - questdb
     ports:
       - "3001:3001"
     env_file:
