@@ -1,9 +1,16 @@
 "use client";
 
-import { Component, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { env } from "@/env";
 import { AlertCircle } from "lucide-react";
+import { Component, type ReactNode } from "react";
 
 interface AuthErrorBoundaryProps {
   children: ReactNode;
@@ -34,22 +41,27 @@ export class AuthErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-muted/10 p-4">
+        <div className="bg-muted/10 flex min-h-screen items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader className="space-y-1 text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-                <AlertCircle className="h-6 w-6 text-destructive" />
+              <div className="bg-destructive/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+                <AlertCircle className="text-destructive h-6 w-6" />
               </div>
-              <CardTitle className="text-2xl font-bold">Error de autenticación</CardTitle>
+              <CardTitle className="text-2xl font-bold">
+                Error de autenticación
+              </CardTitle>
               <CardDescription>
-                Ocurrió un error al procesar tu sesión. Por favor, intenta nuevamente.
+                Ocurrió un error al procesar tu sesión. Por favor, intenta
+                nuevamente.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {this.state.error && (
-                <div className="rounded-md bg-muted p-3">
-                  <p className="text-xs text-muted-foreground">
-                    {this.state.error.message}
+                <div className="bg-muted rounded-md p-3">
+                  <p className="text-muted-foreground text-xs">
+                    {env.NODE_ENV === "development"
+                      ? this.state.error.message
+                      : "Error de autenticación interno"}
                   </p>
                 </div>
               )}
