@@ -22,15 +22,15 @@ export const env = createEnv({
     QUESTDB_PASSWORD: z.string(),
     QUESTDB_DB: z.string(),
     WORKOS_API_KEY: z.string().startsWith("sk_", {
-      message:
+      error:
         "WORKOS_API_KEY must start with 'sk_' (test) or 'sk_live' (production)",
     }),
     WORKOS_CLIENT_ID: z.string().startsWith("client_", {
-      message: "WORKOS_CLIENT_ID must start with 'client_'",
+      error: "WORKOS_CLIENT_ID must start with 'client_'",
     }),
     // Cookie password must be at least 32 characters for secure encryption
     WORKOS_COOKIE_PASSWORD: z.string().min(32, {
-      message:
+      error:
         "WORKOS_COOKIE_PASSWORD must be at least 32 characters. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
     }),
   },
@@ -43,10 +43,10 @@ export const env = createEnv({
   client: {
     NEXT_PUBLIC_WORKOS_REDIRECT_URI: z
       .url({
-        message: "NEXT_PUBLIC_WORKOS_REDIRECT_URI must be a valid URL",
+        error: "NEXT_PUBLIC_WORKOS_REDIRECT_URI must be a valid URL",
       })
       .endsWith("/api/auth/callback", {
-        message:
+        error:
           "NEXT_PUBLIC_WORKOS_REDIRECT_URI must end with '/api/auth/callback'",
       }),
   },
