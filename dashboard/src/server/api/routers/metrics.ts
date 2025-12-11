@@ -56,6 +56,14 @@ interface DashboardMetrics {
   };
 }
 
+function formatDateForQuery(date?: Date): string | undefined {
+  if (!date) return undefined;
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Builds query parameters from input (date range only, no user filtering)
  */
@@ -64,8 +72,8 @@ function buildQueryParams(input: {
   endDate?: Date;
 }): MetricsQueryParams {
   return {
-    startDate: input.startDate?.toISOString().split("T")[0],
-    endDate: input.endDate?.toISOString().split("T")[0],
+    startDate: formatDateForQuery(input.startDate),
+    endDate: formatDateForQuery(input.endDate),
   };
 }
 
