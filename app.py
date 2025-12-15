@@ -199,9 +199,9 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
 
     # 2) Contexto
     def cite(d):
-        src = d.metadata.get("source","drive")
-        tag = "Drive" if src == "drive" else "Dropbox"
-        t = d.metadata.get("title","(sin título)")
+        src = d.metadata.get("source", "Drive")
+        tag = {"Drive": "Drive", "Dropbox": "Dropbox", "Onedrive": "OneDrive"}.get(src, src)
+        t = d.metadata.get("title", "(sin título)")
         return f"[{tag}:{t}] {(d.page_content or '')[:chunk_chars]}"
     
     contexto = "\n\n".join(cite(d) for d in allowed_chunks)
@@ -215,8 +215,9 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
               "Usa el historial de conversación para seguir el hilo.")
     
     # Construir lista de mensajes para el LLM desde st.session_state.messages
+    # Excluir el último mensaje (la consulta actual) ya que se añade después con contexto
     messages = [SystemMessage(content=system)]
-    for m in history[-10:]:  # Últimos 10 mensajes
+    for m in history[:-1][-10:]:  # Últimos 10 mensajes excluyendo el actual
         if m["role"] == "user":
             messages.append(HumanMessage(content=m["content"]))
         else:
