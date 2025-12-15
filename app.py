@@ -13,8 +13,8 @@ import os
 import threading
 import time
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 import streamlit as st
 
@@ -65,6 +65,41 @@ def start_usage_metrics_thread():
 
 
 start_usage_metrics_thread()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REFORMATEADOR DE CONSULTAS (con memoria conversacional)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def rewrite_query_with_context(query: str, history: list) -> str:
+    """
+    Reescribe la query para clarificar pronombres y referencias usando el historial de conversación.
+    """
+    if not history or len(history) < 2:
+        return query
+    
+    # Coger los últimos 4 mensajes como contexto
+    recent = history[-4:]
+    history_text = "\n".join(
+        f"{'Usuario' if m['role']=='user' else 'Asistente'}: {m['content'][:300]}"
+        for m in recent
+    )
+    
+    rewriter_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    prompt = f"""Dado este historial de conversación:
+{history_text}
+
+Tu tarea: Si la siguiente consulta contiene pronombres o referencias ambiguas (como "eso", "ese documento", "lo mismo", "más sobre eso"), reescríbela para que sea autocontenida.
+Si la consulta ya es clara y autocontenida, devuélvela tal cual.
+
+Consulta original: {query}
+
+Responde SOLO con la consulta reescrita, sin explicaciones:"""
+    
+    try:
+        rewritten = rewriter_llm.invoke([HumanMessage(content=prompt)]).content.strip()
+        return rewritten if rewritten else query
+    except Exception:
+        return query
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISOS UNIFICADOS
@@ -128,14 +163,18 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
 
     allowed_chunks = []
 
+    # 0) Reescribir consulta con historial conversacional (clarifica pronombres/referencias)
+    history = st.session_state.get("messages", [])
+    expanded_query = rewrite_query_with_context(query, history)
+
     # 1) Recuperar candidatos de cada origen y filtrar por permisos
-    insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(query))
+    insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(expanded_query))
 
     with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
         if 'drive' in services:
             drive_user = get_current_user_drive(services["drive"])
         
-        search = vectordb.similarity_search_with_score(query, k=256)
+        search = vectordb.similarity_search_with_score(expanded_query, k=256)
 
         for f, s in search:   
             source = f.metadata['source']
@@ -169,15 +208,25 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
 
     insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
-    # 3) LLM
-    system = ("Eres un asistente RAG en ESPAÑOL. Responde SOLO con el CONTEXTO. "
-              "Redacta en lenguaje natural, claro y directo. Cita los títulos entre corchetes.")
-    user = f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"
+    # 3) LLM con historial de conversación
+    system = ("Eres un asistente conversacional RAG en ESPAÑOL. Responde SOLO con el CONTEXTO proporcionado. "
+              "No improvises si no tienes información en el contexto. "
+              "Redacta en lenguaje natural, claro y directo. Cita los títulos entre corchetes. "
+              "Usa el historial de conversación para seguir el hilo.")
+    
+    # Construir lista de mensajes para el LLM desde st.session_state.messages
+    messages = [SystemMessage(content=system)]
+    for m in history[-10:]:  # Últimos 10 mensajes
+        if m["role"] == "user":
+            messages.append(HumanMessage(content=m["content"]))
+        else:
+            messages.append(AIMessage(content=m["content"]))
+    messages.append(HumanMessage(content=f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"))
 
-    insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user))
+    insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"))
 
     with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
-        ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
+        ans = llm.invoke(messages).content
 
     insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, llm.get_num_tokens(ans))
 
@@ -367,8 +416,9 @@ with st.sidebar:
 # UI PRINCIPAL (chat)
 # ─────────────────────────────────────────────────────────────────────────────
 
-st.title("ACM2 - RAG con ACL (Drive + Dropbox)")
+st.title("ASM2 - RAG con ACL (Drive + OneDrive + Dropbox)")
 
+# Inicializar historial de mensajes
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -402,7 +452,7 @@ if prompt:
 
             # Check the vector DB
             if vectordb is None:
-                ans = "Conecta al menos una fuente (Drive/Dropbox) en la barra lateral."
+                ans = "Conecta al menos una fuente (Drive/OneDrive/Dropbox) en la barra lateral."
 
             else:
                 ans = responder_multi(
@@ -413,5 +463,8 @@ if prompt:
         except Exception as e:
             ans = f"Error: {e}"
 
+    # Renderizar respuesta en UI
     st.markdown(f'<div class="chat-row bot"><div class="chat-bubble-bot">{ans}</div></div>', unsafe_allow_html=True)
+    
+    # Guardar en historial
     st.session_state.messages.append({"role": "assistant", "content": ans})
