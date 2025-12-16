@@ -24,7 +24,7 @@ def oauth_dropbox():
             consumer_key=DROPBOX_APP_KEY,
             consumer_secret=DROPBOX_APP_SECRET,
             token_access_type="offline",
-            scope=["files.metadata.read", "files.content.read"],
+            scope=["files.metadata.read", "files.content.read", "account_info.read"],
             include_granted_scopes="user",
             use_pkce=True,
         )
