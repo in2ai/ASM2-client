@@ -135,7 +135,7 @@ def listar_bfs_drive(service, root_folder_id):
             resp = safe_execute(
                 service.files().list(
                     q=f"'{current}' in parents and trashed=false",
-                    fields="nextPageToken, files(id,name,mimeType,modifiedTime)",
+                    fields="nextPageToken, files(id,name,mimeType,modifiedTime,webViewLink)",
                     pageSize=1000, pageToken=page_token,
                     includeItemsFromAllDrives=True, supportsAllDrives=True
                 )
@@ -238,12 +238,15 @@ def construir_vectorstore_drive():
         "application/pdf", "application/vnd.google-apps.document", "text/plain", "text/markdown"
     )]
 
+    # print(files)
+
     files = [
         {
             "id": f["id"], 
             "name": f["name"], 
             "mimeType": f["mimeType"], 
             "modifiedTime": f["modifiedTime"],
+            "webViewLink": f.get("webViewLink"),
             "acl": get_acl_drive(auth_service, f["id"])
         } 
         for f in files
