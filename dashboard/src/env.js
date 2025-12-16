@@ -1,13 +1,5 @@
 import { createEnv } from "@t3-oss/env-nextjs";
-import { config } from "dotenv";
-import { dirname, resolve } from "path";
-import { fileURLToPath } from "url";
 import { z } from "zod";
-
-// Load environment variables from the root .env file (parent directory)
-// This allows sharing a single .env file across the monorepo
-const __dirname = dirname(fileURLToPath(import.meta.url));
-config({ path: resolve(__dirname, "../../.env") });
 
 export const env = createEnv({
   /**
