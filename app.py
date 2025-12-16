@@ -12,9 +12,11 @@
 import os
 import threading
 import time
+from typing import Optional, List
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from pydantic import BaseModel, Field
 
 import streamlit as st
 
@@ -31,6 +33,21 @@ from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_us
 
 # Utils
 from src.utils.nlp import extract_search_terms
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pydantic models for structured LLM output
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Source(BaseModel):
+    """A source document cited in the response."""
+    title: str = Field(description="The title or filename of the source document")
+    source_type: str = Field(description="The type of source: 'Drive', 'Dropbox', or 'OneDrive'")
+    link: Optional[str] = Field(default=None, description="The webViewLink URL to the document (only available for Drive)")
+
+class RAGResponse(BaseModel):
+    """Structured response from the RAG system."""
+    answer: str = Field(description="The answer to the user's question based on the context provided")
+    sources: List[Source] = Field(description="List of sources cited in the answer")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Hardware usage metrics
@@ -201,39 +218,89 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
     def cite(d):
         src = d.metadata.get("source", "Drive")
         tag = {"Drive": "Drive", "Dropbox": "Dropbox", "Onedrive": "OneDrive"}.get(src, src)
-        t = d.metadata.get("title", "(sin título)")
-        return f"[{tag}:{t}] {(d.page_content or '')[:chunk_chars]}"
+        t = d.metadata.get("title") or d.metadata.get("name") or "(sin título)"
+        link = d.metadata.get("webViewLink") or ""
+        link_info = f" (Link: {link})" if link else ""
+        return f"[{tag}:{t}{link_info}] {(d.page_content or '')[:chunk_chars]}"
+
+    # Build available sources info for the LLM
+    available_sources = []
+    seen_ids = set()
+    for d in allowed_chunks:
+        doc_id = d.metadata.get("id")
+        if doc_id in seen_ids:
+            continue
+        seen_ids.add(doc_id)
+        
+        src = d.metadata.get("source", "Drive")
+        tag = {"Drive": "Drive", "Dropbox": "Dropbox", "Onedrive": "OneDrive"}.get(src, src)
+        t = d.metadata.get("title") or d.metadata.get("name") or "(sin título)"
+        link = d.metadata.get("webViewLink")  # Solo Drive tiene este enlace por ahora
+        available_sources.append({"title": t, "source_type": tag, "link": link})
     
     contexto = "\n\n".join(cite(d) for d in allowed_chunks)
+    print(contexto)
 
     insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
-    # 3) LLM con historial de conversación
+    # 3) LLM con historial de conversación y structured output
     system = ("Eres un asistente conversacional RAG en ESPAÑOL. Responde SOLO con el CONTEXTO proporcionado. "
               "No improvises si no tienes información en el contexto. "
-              "Redacta en lenguaje natural, claro y directo. Cita los títulos entre corchetes. "
+              "Redacta en lenguaje natural, claro y directo. "
+              "En tu respuesta estructurada, incluye las fuentes que hayas utilizado. "
               "Usa el historial de conversación para seguir el hilo.")
     
+    sources_info = "\n".join([
+        f"- {s['title']} ({s['source_type']})" + (f" - Link: {s['link']}" if s['link'] else " - Sin enlace disponible")
+        for s in available_sources
+    ])
+    print(sources_info)
+    
     # Construir lista de mensajes para el LLM desde st.session_state.messages
-    # Excluir el último mensaje (la consulta actual) ya que se añade después con contexto
+    # Excluir el último mensaje (la query actual) ya que se añade después con contexto
     messages = [SystemMessage(content=system)]
     for m in history[:-1][-10:]:  # Últimos 10 mensajes excluyendo el actual
         if m["role"] == "user":
             messages.append(HumanMessage(content=m["content"]))
         else:
             messages.append(AIMessage(content=m["content"]))
-    messages.append(HumanMessage(content=f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"))
+    
+    user_message = f"""CONTEXTO:
+{contexto}
 
-    insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"))
+FUENTES DISPONIBLES (usa estas para citar en tu respuesta):
+{sources_info}
+
+PREGUNTA:
+{query}"""
+    
+    messages.append(HumanMessage(content=user_message))
+
+    insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user_message))
+
+    # Usar output estructurado
+    structured_llm = llm.with_structured_output(RAGResponse)
 
     with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
-        ans = llm.invoke(messages).content
+        response: RAGResponse = structured_llm.invoke(messages)
 
-    insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, llm.get_num_tokens(ans))
+    insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, llm.get_num_tokens(response.answer))
 
-    if not ans or not ans.strip():
-        t = allowed_chunks[0].metadata.get("title", "(sin título)")
-        ans = f"Según [{t}]: {(allowed_chunks[0].page_content or '')[:chunk_chars]}"
+    if not response or not response.answer.strip():
+        t = allowed_chunks[0].metadata.get("title") or allowed_chunks[0].metadata.get("name") or "(sin título)"
+        return f"Según [{t}]: {(allowed_chunks[0].page_content or '')[:chunk_chars]}"
+
+    ans = response.answer
+    
+    if response.sources:
+        ans += "<br><br><b>Fuentes:</b><ul>"
+        for src in response.sources:
+            if src.link:
+                print('Link:', src.link)
+                ans += f'<li><a href="{src.link}" target="_blank">{src.title}</a> ({src.source_type})</li>'
+            else:
+                ans += f"<li>{src.title} ({src.source_type})</li>"
+        ans += "</ul>"
 
     return ans
 
