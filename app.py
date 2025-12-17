@@ -351,7 +351,8 @@ def get_vectordb():
             with st.spinner(f"Construyendo / Cargando índice de OneDrive ({ONEDRIVE_ROOT or '/'})…"):
                 vectordb = construir_vectorstore_onedrive()
         except Exception as e:
-            pass
+            print(f"[OneDrive ERROR] {type(e).__name__}: {e}")
+            st.error(f"❌ Error indexando OneDrive: {e}")
 
     return vectordb
 
