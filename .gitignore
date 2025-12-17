@@ -210,3 +210,7 @@ __marimo__/
 secrets/
 faiss_index/
 questdb/
+
+node_modules/
+package-lock.json
+package.json
