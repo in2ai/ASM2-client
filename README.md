@@ -63,6 +63,7 @@ Crea un archivo `.env` basado en los ejemplos proporcionados. Las variables clav
 - `WORKOS_CLIENT_ID`: Client ID de la aplicación.
 - `WORKOS_COOKIE_PASSWORD`: Contraseña segura para encriptación de cookies.
 - `NEXT_PUBLIC_WORKOS_REDIRECT_URI`: URI de redirección (ej. `http://localhost:3001/api/auth/callback`).
+- `REDIRECT_URI`: URI de redirección para la aplicación Streamlit (ej. `http://localhost:8501/`).
 
 > **Nota:** Asegúrate de tener los archivos de secrets (`client_secret.json`, etc.) en la carpeta `secrets/` si son requeridos por el cliente Python.
 

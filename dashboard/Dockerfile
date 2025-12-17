@@ -45,6 +45,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV SKIP_ENV_VALIDATION=true
 ENV NODE_ENV=production
 
+# NEXT_PUBLIC_* variables must be available at build time
+# because they are inlined into the client-side JavaScript bundle
+ARG NEXT_PUBLIC_WORKOS_REDIRECT_URI
+ENV NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
+
 # Build the application
 RUN pnpm run build
 

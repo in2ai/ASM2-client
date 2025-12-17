@@ -2,15 +2,20 @@ import { config as dotenvConfig } from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const envPath = resolve(__dirname, "../.env");
-const result = dotenvConfig({ path: envPath });
+// Only load .env file manually in local development when env vars aren't already set.
+const isEnvAlreadyLoaded = !!process.env.WORKOS_API_KEY;
 
-if (result.error) {
-  console.warn(
-    `Failed to load environment variables from ${envPath}`,
-    result.error,
-  );
+if (!isEnvAlreadyLoaded && !process.env.SKIP_ENV_VALIDATION) {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const envPath = resolve(__dirname, "../.env");
+  const result = dotenvConfig({ path: envPath });
+
+  if (result.error) {
+    console.warn(
+      `Failed to load environment variables from ${envPath}`,
+      result.error,
+    );
+  }
 }
 
 // Import env.js after dotenvConfig loaded the environment variables
