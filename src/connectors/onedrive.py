@@ -150,9 +150,9 @@ def onedrive_list_files(token_dict, root_path):
     # ---- Funciones auxiliares para listar ----
     def _children_url(path):
         if not path or path.strip() in ("", "/"):
-            return f"{GRAPH}/me/drive/root/children?$select=id,name,file,folder,lastModifiedDateTime"
+            return f"{GRAPH}/me/drive/root/children?$select=id,name,file,folder,lastModifiedDateTime,webUrl"
         p = path if path.startswith("/") else f"/{path}"
-        return f"{GRAPH}/me/drive/root:{p}:/children?$select=id,name,file,folder,lastModifiedDateTime"
+        return f"{GRAPH}/me/drive/root:{p}:/children?$select=id,name,file,folder,lastModifiedDateTime,webUrl"
 
     files = []
 
@@ -174,7 +174,7 @@ def onedrive_list_files(token_dict, root_path):
             data = r.json()
             for it in data.get("value", []):
                 if it.get("folder"):
-                    sub_url = f"{GRAPH}/me/drive/items/{it['id']}/children?$select=id,name,file,folder,lastModifiedDateTime"
+                    sub_url = f"{GRAPH}/me/drive/items/{it['id']}/children?$select=id,name,file,folder,lastModifiedDateTime,webUrl"
                     walk(sub_url)
                 elif it.get("file"):
                     mime = (it["file"].get("mimeType") or "").lower()
@@ -183,6 +183,7 @@ def onedrive_list_files(token_dict, root_path):
                         "name": it["name"],
                         "mimeType": mime,
                         "modifiedTime": it.get("lastModifiedDateTime"),
+                        "webUrl": it.get("webUrl"),
                     })
             url = data.get("@odata.nextLink")
 
@@ -232,7 +233,8 @@ def construir_vectorstore_onedrive():
             "id": f["id"], 
             "name": f["name"], 
             "modifiedTime": f["modifiedTime"],
-            "mimeType": f.get("mimeType", "")
+            "mimeType": f.get("mimeType", ""),
+            "webViewLink": f.get("webUrl")
         } 
         for f in files
     ]
