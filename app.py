@@ -27,6 +27,7 @@ from src.config.config import *
 from src.connectors.drive import drive_can_read, get_current_user_drive, oauth_login_drive, construir_vectorstore_drive
 from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_vectorstore_dropbox
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
+from src.connectors.store import create_hybrid_retriever
 
 # Metrics
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words
@@ -168,7 +169,7 @@ def reindex_all_sources():
 # RESPONDER (multi-origen)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=1600):
+def responder_multi(query, vectordb, hybrid_retriever, services, threshold=0.50, k=6, chunk_chars=1600):
     # Register that the user is still active
     register_user_activity()
 
@@ -184,16 +185,21 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
     history = st.session_state.get("messages", [])
     expanded_query = rewrite_query_with_context(query, history)
 
-    # 1) Recuperar candidatos de cada origen y filtrar por permisos
+    # 1) Recuperar candidatos usando búsqueda híbrida (BM25 + Vector) y filtrar por permisos
     insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(expanded_query))
 
     with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
         if 'drive' in services:
             drive_user = get_current_user_drive(services["drive"])
         
-        search = vectordb.similarity_search_with_score(expanded_query, k=256)
+        # Usar búsqueda híbrida si está disponible, sino solo búsqueda vectorial
+        if hybrid_retriever is not None:
+            search_results = hybrid_retriever.invoke(expanded_query)
+        else:
+            # Fallback a búsqueda vectorial pura
+            search_results = [doc for doc, _ in vectordb.similarity_search_with_score(expanded_query, k=256)]
 
-        for f, s in search:   
+        for f in search_results:
             source = f.metadata['source']
 
             if source == "Drive" and "drive" in services and has_access(services["drive"], f.metadata, drive_user):
@@ -205,8 +211,8 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
             elif source == "Onedrive" and "onedrive_token" in services and has_access(services["onedrive_token"], f.metadata):
                 allowed_chunks.append(f)
 
-            # We stop iterating when we have k docs or the score is too low
-            if len(allowed_chunks) == k or s < threshold:
+            # Paramos cuando tenemos k documentos
+            if len(allowed_chunks) == k:
                 break
 
     if not allowed_chunks:
@@ -354,7 +360,13 @@ def get_vectordb():
             print(f"[OneDrive ERROR] {type(e).__name__}: {e}")
             st.error(f"❌ Error indexando OneDrive: {e}")
 
-    return vectordb
+    # Crear retriever híbrido (BM25 + Vector)
+    hybrid_retriever = None
+    if vectordb is not None:
+        with st.spinner("Construyendo índice híbrido BM25…"):
+            hybrid_retriever, _ = create_hybrid_retriever(vectordb, k=256)
+
+    return vectordb, hybrid_retriever
 
 get_vectordb()
 
@@ -517,7 +529,7 @@ if prompt:
             if "OneDrive" in sel and "onedrive_token" in st.session_state:
                 services["onedrive_token"] = st.session_state.onedrive_token
 
-            vectordb = get_vectordb()
+            vectordb, hybrid_retriever = get_vectordb()
 
             # Check the vector DB
             if vectordb is None:
@@ -525,7 +537,7 @@ if prompt:
 
             else:
                 ans = responder_multi(
-                    prompt, vectordb, services,
+                    prompt, vectordb, hybrid_retriever, services,
                     threshold=st.session_state.get("threshold", 0.45), k=6
                 )
 

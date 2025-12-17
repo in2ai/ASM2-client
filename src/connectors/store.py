@@ -1,10 +1,12 @@
 import streamlit as st
 
-from typing import List
+from typing import List, Tuple
 import faiss
 
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers.ensemble import EnsembleRetriever
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
@@ -17,6 +19,10 @@ FAISS_PATH = "faiss_index"
 INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+
+# Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
+BM25_WEIGHT = 0.4
+VECTOR_WEIGHT = 0.6
 
 def setup_faiss_gpu(vectorstore):
     try:
@@ -134,3 +140,46 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     setup_faiss_gpu(vectorstore)
 
     return vectorstore
+
+
+def get_all_documents(vectorstore: FAISS) -> List[Document]:
+    """Extrae todos los documentos de un vectorstore FAISS para indexación BM25."""
+    if vectorstore is None:
+        return []
+    
+    return list(vectorstore.docstore._dict.values())
+
+
+def create_hybrid_retriever(vectorstore: FAISS, k: int = 256) -> Tuple[EnsembleRetriever, List[Document]]:
+    """
+    Crea un retriever híbrido combinando BM25 (léxico) y FAISS (semántico).
+    
+    Args:
+        vectorstore: El vectorstore FAISS
+        k: Número de documentos a recuperar de cada retriever
+        
+    Returns:
+        Tupla de (EnsembleRetriever, List[Document]) - el retriever y todos los documentos
+    """
+    # Obtener todos los documentos para BM25
+    all_docs = get_all_documents(vectorstore)
+    
+    if not all_docs:
+        return None, []
+    
+    # Crear retriever BM25
+    bm25_retriever = BM25Retriever.from_documents(all_docs)
+    bm25_retriever.k = k
+    
+    # Crear retriever FAISS
+    faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": k})
+    
+    # Combinar con EnsembleRetriever (Reciprocal Rank Fusion)
+    hybrid_retriever = EnsembleRetriever(
+        retrievers=[bm25_retriever, faiss_retriever],
+        weights=[BM25_WEIGHT, VECTOR_WEIGHT]
+    )
+    
+    print(f"🔀 Retriever híbrido creado: {len(all_docs)} documentos, BM25={BM25_WEIGHT}, Vector={VECTOR_WEIGHT}")
+    
+    return hybrid_retriever, all_docs
