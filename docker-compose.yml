@@ -71,6 +71,8 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
     image: dashboard:latest
     container_name: dashboard
     depends_on:
