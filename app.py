@@ -35,6 +35,9 @@ from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_us
 # Utils
 from src.utils.nlp import extract_search_terms
 
+# Reranker
+from sentence_transformers import CrossEncoder
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic models for structured LLM output
 # ─────────────────────────────────────────────────────────────────────────────
@@ -83,6 +86,53 @@ def start_usage_metrics_thread():
 
 
 start_usage_metrics_thread()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RERANKER (Cross-Encoder para reordenar resultados de búsqueda)
+# ─────────────────────────────────────────────────────────────────────────────
+
+RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+@st.cache_resource
+def get_reranker():
+    """Carga el modelo de reranking (cross-encoder) una sola vez."""
+    print(f"🔄 Cargando modelo de reranking: {RERANKER_MODEL}")
+    return CrossEncoder(RERANKER_MODEL)
+
+def rerank_documents(query: str, documents: list, top_k: int = None) -> list:
+    """
+    Reordena documentos usando un cross-encoder para mejor precisión.
+    
+    Args:
+        query: La consulta del usuario
+        documents: Lista de documentos (LangChain Document objects)
+        top_k: Número máximo de documentos a retornar (None = todos)
+    
+    Returns:
+        Lista de documentos reordenados por relevancia
+    """
+    if not documents:
+        return documents
+    
+    reranker = get_reranker()
+    
+    # Preparar tuplas (query, documento) para el cross-encoder
+    pairs = [(query, doc.page_content) for doc in documents]
+    
+    # Obtener scores del cross-encoder
+    scores = reranker.predict(pairs)
+    
+    # Combinar documentos con scores y ordenar por score descendente
+    scored_docs = list(zip(documents, scores))
+    scored_docs.sort(key=lambda x: x[1], reverse=True)
+    
+    # Extraer documentos ordenados
+    reranked_docs = [doc for doc, score in scored_docs]
+    
+    if top_k is not None:
+        reranked_docs = reranked_docs[:top_k]
+    
+    return reranked_docs
 
 # ─────────────────────────────────────────────────────────────────────────────
 # REFORMATEADOR DE CONSULTAS (con memoria conversacional)
@@ -185,20 +235,26 @@ def responder_multi(query, vectordb, hybrid_retriever, services, threshold=0.50,
     history = st.session_state.get("messages", [])
     expanded_query = rewrite_query_with_context(query, history)
 
-    # 1) Recuperar candidatos usando búsqueda híbrida (BM25 + Vector) y filtrar por permisos
+    # 1) Recuperar candidatos usando búsqueda híbrida (BM25 + Vector)
     insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(expanded_query))
 
     with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
         if 'drive' in services:
             drive_user = get_current_user_drive(services["drive"])
         
-        # Usar búsqueda híbrida si está disponible, sino solo búsqueda vectorial
+        # Usar búsqueda híbrida si está disponible, si no solo búsqueda vectorial
         if hybrid_retriever is not None:
             search_results = hybrid_retriever.invoke(expanded_query)
         else:
             # Fallback a búsqueda vectorial pura
             search_results = [doc for doc, _ in vectordb.similarity_search_with_score(expanded_query, k=256)]
 
+        # 1.5) Reranking: reordenar candidatos con cross-encoder para mayor precisión
+        if search_results:
+            search_results = rerank_documents(expanded_query, search_results)
+            print(f"🎯 Reranking aplicado a {len(search_results)} documentos")
+
+        # 2) Filtrar por permisos
         for f in search_results:
             source = f.metadata['source']
 
