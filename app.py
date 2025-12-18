@@ -159,6 +159,7 @@ def rewrite_query_with_context(query: str, history: list) -> str:
 Tu tarea: Si la siguiente consulta contiene pronombres o referencias ambiguas (como "eso", "ese documento", "lo mismo", "más sobre eso"), reescríbela para que sea autocontenida.
 Si la consulta ya es clara y autocontenida, devuélvela tal cual.
 
+
 Consulta original: {query}
 
 Responde SOLO con la consulta reescrita, sin explicaciones:"""
@@ -235,26 +236,17 @@ def responder_multi(query, vectordb, hybrid_retriever, services, threshold=0.50,
     history = st.session_state.get("messages", [])
     expanded_query = rewrite_query_with_context(query, history)
 
-    # 1) Recuperar candidatos usando búsqueda híbrida (BM25 + Vector)
+    # 1) Obtener chunks usando búsqueda híbrida (BM25 + Vector)
     insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(expanded_query))
 
     with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
+        drive_user = None
         if 'drive' in services:
             drive_user = get_current_user_drive(services["drive"])
         
-        # Usar búsqueda híbrida si está disponible, si no solo búsqueda vectorial
-        if hybrid_retriever is not None:
-            search_results = hybrid_retriever.invoke(expanded_query)
-        else:
-            # Fallback a búsqueda vectorial pura
-            search_results = [doc for doc, _ in vectordb.similarity_search_with_score(expanded_query, k=256)]
+        search_results = hybrid_retriever.invoke(expanded_query)
 
-        # 1.5) Reranking: reordenar candidatos con cross-encoder para mayor precisión
-        if search_results:
-            search_results = rerank_documents(expanded_query, search_results)
-            print(f"🎯 Reranking aplicado a {len(search_results)} documentos")
-
-        # 2) Filtrar por permisos
+        # 1.5) Filtrar por permisos
         for f in search_results:
             source = f.metadata['source']
 
@@ -267,9 +259,10 @@ def responder_multi(query, vectordb, hybrid_retriever, services, threshold=0.50,
             elif source == "Onedrive" and "onedrive_token" in services and has_access(services["onedrive_token"], f.metadata):
                 allowed_chunks.append(f)
 
-            # Paramos cuando tenemos k documentos
-            if len(allowed_chunks) == k:
-                break
+        # 2) Reranking
+        if allowed_chunks:
+            allowed_chunks = rerank_documents(expanded_query, allowed_chunks, top_k=k)
+            print(f"🎯 Reranking aplicado a {len(allowed_chunks)} documentos permitidos")
 
     if not allowed_chunks:
         return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
