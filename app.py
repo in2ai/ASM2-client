@@ -283,28 +283,30 @@ def responder_multi(query, hybrid_retriever, services, threshold=0.50, k=6, chun
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
     # 2) Contexto
-    def cite(d):
+    SOURCE_TAGS = {"Drive": "Drive", "Dropbox": "Dropbox", "Onedrive": "OneDrive"}
+    
+    def get_doc_info(d):
+        """Extrae info común de un documento: tag, título y enlace."""
         src = d.metadata.get("source", "Drive")
-        tag = {"Drive": "Drive", "Dropbox": "Dropbox", "Onedrive": "OneDrive"}.get(src, src)
-        t = d.metadata.get("title") or d.metadata.get("name") or "(sin título)"
-        link = d.metadata.get("webViewLink") or ""
-        link_info = f" (Link: {link})" if link else ""
-        return f"[{tag}:{t}{link_info}] {(d.page_content or '')[:chunk_chars]}"
+        tag = SOURCE_TAGS.get(src, src)
+        title = d.metadata.get("title") or d.metadata.get("name") or "(sin título)"
+        link = d.metadata.get("webViewLink")
+        return tag, title, link
 
-    # Build available sources info for the LLM
+    def cite(d):
+        tag, title, link = get_doc_info(d)
+        link_info = f" (Link: {link})" if link else ""
+        return f"[{tag}:{title}{link_info}] {(d.page_content or '')[:chunk_chars]}"
+
+    # Construir lista de fuentes disponibles para el LLM
     available_sources = []
     seen_ids = set()
     for d in allowed_chunks:
         doc_id = d.metadata.get("id")
-        if doc_id in seen_ids:
-            continue
-        seen_ids.add(doc_id)
-        
-        src = d.metadata.get("source", "Drive")
-        tag = {"Drive": "Drive", "Dropbox": "Dropbox", "Onedrive": "OneDrive"}.get(src, src)
-        t = d.metadata.get("title") or d.metadata.get("name") or "(sin título)"
-        link = d.metadata.get("webViewLink")  # Solo Drive tiene este enlace por ahora
-        available_sources.append({"title": t, "source_type": tag, "link": link})
+        if doc_id not in seen_ids:
+            seen_ids.add(doc_id)
+            tag, title, link = get_doc_info(d)
+            available_sources.append({"title": title, "source_type": tag, "link": link})
     
     contexto = "\n\n".join(cite(d) for d in allowed_chunks)
     print(contexto)
@@ -600,7 +602,7 @@ if prompt:
 
             else:
                 ans = responder_multi(
-                    prompt, vectordb, hybrid_retriever, services,
+                    prompt, hybrid_retriever, services,
                     threshold=st.session_state.get("threshold", 0.45), k=6
                 )
 
