@@ -1,28 +1,110 @@
 import streamlit as st
 
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import faiss
+import os
+import json
+import pickle
+
+import bm25s
+import Stemmer
 
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers.ensemble import EnsembleRetriever
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_openai import OpenAIEmbeddings
 
 from src.connectors.faiss_file import FaissFile
 from src.connectors.manifest import FaissManifest
 
 FAISS_PATH = "faiss_index"
+BM25_PATH = "bm25_index"
 
 INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+STEMMER = Stemmer.Stemmer("spanish")
 
 # Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
 BM25_WEIGHT = 0.2
 VECTOR_WEIGHT = 0.8
+
+
+class BM25Retriever(BaseRetriever):
+    """Retriever BM25"""
+    
+    index: Optional[bm25s.BM25] = None
+    documents: List[Document] = []
+    k: int = 256
+    
+    class Config:
+        arbitrary_types_allowed = True
+    
+    @classmethod
+    def load_local(cls, path: str, k: int = 256) -> "BM25Retriever":
+        """Carga índice BM25 desde disco."""
+        instance = cls(k=k)
+        instance.index = bm25s.BM25.load(path, load_corpus=False)
+        
+        with open(os.path.join(path, "documents.pkl"), "rb") as f:
+            instance.documents = pickle.load(f)
+        
+        return instance
+    
+    def save_local(self, path: str) -> None:
+        """Guarda índice BM25 en disco."""
+        os.makedirs(path, exist_ok=True)
+        self.index.save(path, corpus=None)
+        
+        with open(os.path.join(path, "documents.pkl"), "wb") as f:
+            pickle.dump(self.documents, f)
+        
+        with open(os.path.join(path, "metadata.json"), "w") as f:
+            json.dump({"num_documents": len(self.documents)}, f)
+    
+    def add_documents(self, documents: List[Document]) -> None:
+        """Construye índice BM25 a partir de documentos."""
+        if not documents:
+            return
+        
+        self.documents = documents
+        corpus = [doc.page_content for doc in documents]
+        corpus_tokens = bm25s.tokenize(corpus, stemmer=STEMMER)
+        
+        self.index = bm25s.BM25()
+        self.index.index(corpus_tokens)
+    
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
+        """Recupera documentos relevantes."""
+        if self.index is None or not self.documents:
+            return []
+        
+        query_tokens = bm25s.tokenize([query], stemmer=STEMMER)
+        results, _ = self.index.retrieve(query_tokens, k=min(self.k, len(self.documents)))
+        
+        return [self.documents[idx] for idx in results[0] if 0 <= idx < len(self.documents)]
+    
+    @staticmethod
+    def index_exists(path: str) -> bool:
+        """Verifica si existe un índice válido."""
+        return all(os.path.exists(os.path.join(path, f)) for f in ["index.pkl", "documents.pkl", "metadata.json"])
+    
+    @staticmethod
+    def needs_rebuild(path: str, doc_count: int) -> bool:
+        """Verifica si el índice necesita reconstruirse."""
+        metadata_file = os.path.join(path, "metadata.json")
+        if not os.path.exists(metadata_file):
+            return True
+        
+        try:
+            with open(metadata_file, "r") as f:
+                return json.load(f).get("num_documents", 0) != doc_count
+        except Exception:
+            return True
 
 def setup_faiss_gpu(vectorstore):
     try:
@@ -167,14 +249,21 @@ def create_hybrid_retriever(vectorstore: FAISS, k: int = 256) -> Tuple[EnsembleR
     if not all_docs:
         return None, []
     
-    # Crear retriever BM25
-    bm25_retriever = BM25Retriever.from_documents(all_docs)
-    bm25_retriever.k = k
+    # Cargar o construir índice BM25
+    if BM25Retriever.index_exists(BM25_PATH) and not BM25Retriever.needs_rebuild(BM25_PATH, len(all_docs)):
+        print(f"📂 BM25: Cargando índice desde {BM25_PATH}")
+        bm25_retriever = BM25Retriever.load_local(BM25_PATH, k=k)
+    else:
+        print(f"🔨 BM25: Construyendo índice...")
+        bm25_retriever = BM25Retriever(k=k)
+        bm25_retriever.add_documents(all_docs)
+        bm25_retriever.save_local(BM25_PATH)
+        print(f"💾 BM25: Índice guardado en {BM25_PATH}")
     
     # Crear retriever FAISS
     faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": k})
     
-    # Combinar con EnsembleRetriever (Reciprocal Rank Fusion)
+    # Combinar con EnsembleRetriever
     hybrid_retriever = EnsembleRetriever(
         retrievers=[bm25_retriever, faiss_retriever],
         weights=[BM25_WEIGHT, VECTOR_WEIGHT]

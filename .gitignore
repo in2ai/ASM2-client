@@ -209,6 +209,7 @@ __marimo__/
 # Ours
 secrets/
 faiss_index/
+bm25_index/
 questdb/
 
 node_modules/
