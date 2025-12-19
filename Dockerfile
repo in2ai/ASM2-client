@@ -20,6 +20,11 @@ ENV LANG=es_ES.UTF-8 \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# Directorio compartido para modelos de sentence-transformers
+# (evita que root y appuser usen cachés distintos)
+ENV SENTENCE_TRANSFORMERS_HOME=/app/models \
+    HF_HOME=/app/models
+
 # Config por defecto Streamlit (puedes sobreescribir por env)
 ENV STREAMLIT_SERVER_HEADLESS=true \
     STREAMLIT_SERVER_ENABLECORS=false \
@@ -43,8 +48,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Descargar modelo de spacy
 RUN python -m spacy download es_core_news_md
 
-# Pre-descargar modelo de reranking (sentence-transformers)
-RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')"
+# Crear directorio de modelos y pre-descargar modelo de reranking
+# chmod 755 asegura que cualquier usuario pueda leer los modelos (necesario para user: "${UID}:${GID}" en docker-compose)
+RUN mkdir -p /app/models && \
+    python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')" && \
+    chmod -R 755 /app/models
 
 # Copiamos el resto del proyecto
 RUN mkdir src

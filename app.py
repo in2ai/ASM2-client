@@ -96,7 +96,7 @@ RERANKER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 @st.cache_resource
 def get_reranker():
     """Carga el modelo de reranking (cross-encoder) una sola vez."""
-    print(f"🔄 Cargando modelo de reranking: {RERANKER_MODEL}")
+    # print(f"🔄 Cargando modelo de reranking: {RERANKER_MODEL}")
     return CrossEncoder(RERANKER_MODEL)
 
 def rerank_documents(query: str, documents: list, top_k: int = None, threshold: float = None) -> list:
