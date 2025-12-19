@@ -43,6 +43,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Descargar modelo de spacy
 RUN python -m spacy download es_core_news_md
 
+# Pre-descargar modelo de reranking (sentence-transformers)
+RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')"
+
 # Copiamos el resto del proyecto
 RUN mkdir src
 RUN mkdir img

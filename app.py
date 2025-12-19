@@ -91,7 +91,7 @@ start_usage_metrics_thread()
 # RERANKER (Cross-Encoder para reordenar resultados de búsqueda)
 # ─────────────────────────────────────────────────────────────────────────────
 
-RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+RERANKER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 
 @st.cache_resource
 def get_reranker():
@@ -99,7 +99,7 @@ def get_reranker():
     print(f"🔄 Cargando modelo de reranking: {RERANKER_MODEL}")
     return CrossEncoder(RERANKER_MODEL)
 
-def rerank_documents(query: str, documents: list, top_k: int = None) -> list:
+def rerank_documents(query: str, documents: list, top_k: int = None, threshold: float = None) -> list:
     """
     Reordena documentos usando un cross-encoder para mejor precisión.
     
@@ -107,6 +107,8 @@ def rerank_documents(query: str, documents: list, top_k: int = None) -> list:
         query: La consulta del usuario
         documents: Lista de documentos (LangChain Document objects)
         top_k: Número máximo de documentos a retornar (None = todos)
+        threshold: Umbral mínimo de relevancia (score raw del CrossEncoder).
+                   El modelo ms-marco está calibrado: >0 = relevante, <0 = no relevante.
     
     Returns:
         Lista de documentos reordenados por relevancia
@@ -121,10 +123,20 @@ def rerank_documents(query: str, documents: list, top_k: int = None) -> list:
     
     # Obtener scores del cross-encoder
     scores = reranker.predict(pairs)
+    print(f"DEBUG Raw scores: {scores}")
     
     # Combinar documentos con scores y ordenar por score descendente
     scored_docs = list(zip(documents, scores))
     scored_docs.sort(key=lambda x: x[1], reverse=True)
+    
+    # Filtrar por threshold (score raw: >0 = relevante, <0 = no relevante)
+    if threshold is not None:
+        original_count = len(scored_docs)
+        scored_docs = [(doc, score) for doc, score in scored_docs if score >= threshold]
+        if scored_docs:
+            print(f"Filtrado por threshold {threshold}: {len(scored_docs)}/{original_count} docs (scores: {scored_docs[0][1]:.2f} a {scored_docs[-1][1]:.2f})")
+        else:
+            print(f"Filtrado por threshold {threshold}: 0/{original_count} docs (todos filtrados)")
     
     # Extraer documentos ordenados
     reranked_docs = [doc for doc, score in scored_docs]
@@ -220,7 +232,7 @@ def reindex_all_sources():
 # RESPONDER (multi-origen)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def responder_multi(query, vectordb, hybrid_retriever, services, threshold=0.50, k=6, chunk_chars=1600):
+def responder_multi(query, hybrid_retriever, services, threshold=0.50, k=6, chunk_chars=1600):
     # Register that the user is still active
     register_user_activity()
 
@@ -235,6 +247,7 @@ def responder_multi(query, vectordb, hybrid_retriever, services, threshold=0.50,
     # 0) Reescribir consulta con historial conversacional (clarifica pronombres/referencias)
     history = st.session_state.get("messages", [])
     expanded_query = rewrite_query_with_context(query, history)
+    print(f"DEBUG Reescrita: {expanded_query}")
 
     # 1) Obtener chunks usando búsqueda híbrida (BM25 + Vector)
     insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(expanded_query))
@@ -259,10 +272,10 @@ def responder_multi(query, vectordb, hybrid_retriever, services, threshold=0.50,
             elif source == "Onedrive" and "onedrive_token" in services and has_access(services["onedrive_token"], f.metadata):
                 allowed_chunks.append(f)
 
-        # 2) Reranking
+        # 2) Reranking con filtrado por threshold
         if allowed_chunks:
-            allowed_chunks = rerank_documents(expanded_query, allowed_chunks, top_k=k)
-            print(f"🎯 Reranking aplicado a {len(allowed_chunks)} documentos permitidos")
+            allowed_chunks = rerank_documents(expanded_query, allowed_chunks, top_k=k, threshold=threshold)
+            print(f"🎯 Reranking aplicado: {len(allowed_chunks)} documentos tras filtrar por threshold={threshold}")
 
     if not allowed_chunks:
         return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
@@ -533,7 +546,8 @@ with st.sidebar:
     st.session_state.sources_selected = sel
 
     st.markdown("### 🎚️ Umbral de relevancia")
-    threshold = st.slider("Umbral (0.0 = permisivo · 0.90 = estricto)", 0.0, 0.90, 0.45, 0.01)
+    st.caption("Score del reranker: >0 = relevante, <0 = no relevante")
+    threshold = st.slider("Umbral", -2.0, 3.0, 0.0, 0.1)
     st.session_state.threshold = threshold
 
     st.markdown("### 🔄 Reindexar contenidos")

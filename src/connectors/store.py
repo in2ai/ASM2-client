@@ -21,8 +21,8 @@ EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 
 # Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
-BM25_WEIGHT = 0.4
-VECTOR_WEIGHT = 0.6
+BM25_WEIGHT = 0.2
+VECTOR_WEIGHT = 0.8
 
 def setup_faiss_gpu(vectorstore):
     try:
