@@ -93,7 +93,7 @@ start_usage_metrics_thread()
 
 RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_reranker():
     """Carga el modelo de reranking (cross-encoder)."""
     # print(f"🔄 Cargando modelo de reranking: {RERANKER_MODEL}")
@@ -394,7 +394,7 @@ section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px;
 # CARGA / CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_vectordb():
     vectordb = None
 
