@@ -91,7 +91,7 @@ start_usage_metrics_thread()
 # RERANKER (Cross-Encoder para reordenar resultados de búsqueda)
 # ─────────────────────────────────────────────────────────────────────────────
 
-RERANKER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 @st.cache_resource
 def get_reranker():
@@ -549,8 +549,8 @@ with st.sidebar:
     st.session_state.sources_selected = sel
 
     st.markdown("### 🎚️ Umbral de relevancia")
-    st.caption("Score del reranker: >0 = relevante, <0 = no relevante")
-    threshold = st.slider("Umbral", -2.0, 3.0, 0.0, 0.1)
+    st.caption("Score del reranker: 0 = no relevante, 1 = muy relevante")
+    threshold = st.slider("Umbral", 0.0, 1.0, 0.0, 0.01)
     st.session_state.threshold = threshold
 
     st.markdown("### 🔄 Reindexar contenidos")

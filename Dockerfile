@@ -51,7 +51,7 @@ RUN python -m spacy download es_core_news_md
 # Crear directorio de modelos y pre-descargar modelo de reranking
 # chmod 755 asegura que cualquier usuario pueda leer los modelos (necesario para user: "${UID}:${GID}" en docker-compose)
 RUN mkdir -p /app/models && \
-    python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')" && \
+    python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-v2-m3')" && \
     chmod -R 755 /app/models
 
 # Copiamos el resto del proyecto
