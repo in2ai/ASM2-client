@@ -549,7 +549,7 @@ with st.sidebar:
     st.session_state.sources_selected = sel
 
     st.markdown("### 🎚️ Umbral de relevancia")
-    st.caption("Score del reranker: 0 = no relevante, 1 = muy relevante")
+    st.caption(" 0 = no relevante, 1 = muy relevante")
     threshold = st.slider("Umbral", 0.0, 1.0, 0.0, 0.01)
     st.session_state.threshold = threshold
 
