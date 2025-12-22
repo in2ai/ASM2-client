@@ -30,8 +30,8 @@ DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overla
 STEMMER = Stemmer.Stemmer("spanish")
 
 # Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
-BM25_WEIGHT = 0.2
-VECTOR_WEIGHT = 0.8
+BM25_WEIGHT = 0.3
+VECTOR_WEIGHT = 0.7
 
 
 class BM25Retriever(BaseRetriever):

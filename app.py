@@ -95,7 +95,7 @@ RERANKER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 
 @st.cache_resource
 def get_reranker():
-    """Carga el modelo de reranking (cross-encoder) una sola vez."""
+    """Carga el modelo de reranking (cross-encoder)."""
     # print(f"🔄 Cargando modelo de reranking: {RERANKER_MODEL}")
     return CrossEncoder(RERANKER_MODEL)
 
@@ -104,7 +104,7 @@ def rerank_documents(query: str, documents: list, top_k: int = None, threshold: 
     Reordena documentos usando un cross-encoder para mejor precisión.
     
     Args:
-        query: La consulta del usuario
+        query: La query del usuario
         documents: Lista de documentos (LangChain Document objects)
         top_k: Número máximo de documentos a retornar (None = todos)
         threshold: Umbral mínimo de relevancia (score raw del CrossEncoder).
@@ -316,7 +316,8 @@ def responder_multi(query, hybrid_retriever, services, threshold=0.50, k=6, chun
     # 3) LLM con historial de conversación y structured output
     system = ("Eres un asistente conversacional RAG en ESPAÑOL. Responde SOLO con el CONTEXTO proporcionado. "
               "No improvises si no tienes información en el contexto. "
-              "Redacta en lenguaje natural, claro y directo. "
+              "En tu respuesta, no uses la palabra \"CONTEXTO\", sino usa \"las fuentes\"."
+              "Redacta en lenguaje natural, claro y directo."
               "En tu respuesta estructurada, incluye las fuentes que hayas utilizado. "
               "Usa el historial de conversación para seguir el hilo.")
     
