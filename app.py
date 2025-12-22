@@ -99,7 +99,7 @@ def get_reranker():
     # print(f"🔄 Cargando modelo de reranking: {RERANKER_MODEL}")
     return CrossEncoder(RERANKER_MODEL)
 
-def rerank_documents(query: str, documents: list, top_k: int = None, threshold: float = None) -> list:
+def rerank_documents(query: str, documents: list, top_k: int = None) -> list:
     """
     Reordena documentos usando un cross-encoder para mejor precisión.
     
@@ -107,8 +107,6 @@ def rerank_documents(query: str, documents: list, top_k: int = None, threshold: 
         query: La query del usuario
         documents: Lista de documentos (LangChain Document objects)
         top_k: Número máximo de documentos a retornar (None = todos)
-        threshold: Umbral mínimo de relevancia (score raw del CrossEncoder).
-                   El modelo ms-marco está calibrado: >0 = relevante, <0 = no relevante.
     
     Returns:
         Lista de documentos reordenados por relevancia
@@ -128,15 +126,6 @@ def rerank_documents(query: str, documents: list, top_k: int = None, threshold: 
     # Combinar documentos con scores y ordenar por score descendente
     scored_docs = list(zip(documents, scores))
     scored_docs.sort(key=lambda x: x[1], reverse=True)
-    
-    # Filtrar por threshold (score raw: >0 = relevante, <0 = no relevante)
-    if threshold is not None:
-        original_count = len(scored_docs)
-        scored_docs = [(doc, score) for doc, score in scored_docs if score >= threshold]
-        if scored_docs:
-            print(f"Filtrado por threshold {threshold}: {len(scored_docs)}/{original_count} docs (scores: {scored_docs[0][1]:.2f} a {scored_docs[-1][1]:.2f})")
-        else:
-            print(f"Filtrado por threshold {threshold}: 0/{original_count} docs (todos filtrados)")
     
     # Extraer documentos ordenados
     reranked_docs = [doc for doc, score in scored_docs]
@@ -232,7 +221,7 @@ def reindex_all_sources():
 # RESPONDER (multi-origen)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def responder_multi(query, hybrid_retriever, services, threshold=0.50, k=6, chunk_chars=1600):
+def responder_multi(query, hybrid_retriever, services, k=6, chunk_chars=1600):
     # Register that the user is still active
     register_user_activity()
 
@@ -272,10 +261,10 @@ def responder_multi(query, hybrid_retriever, services, threshold=0.50, k=6, chun
             elif source == "Onedrive" and "onedrive_token" in services and has_access(services["onedrive_token"], f.metadata):
                 allowed_chunks.append(f)
 
-        # 2) Reranking con filtrado por threshold
+        # 2) Reranking
         if allowed_chunks:
-            allowed_chunks = rerank_documents(expanded_query, allowed_chunks, top_k=k, threshold=threshold)
-            print(f"🎯 Reranking aplicado: {len(allowed_chunks)} documentos tras filtrar por threshold={threshold}")
+            allowed_chunks = rerank_documents(expanded_query, allowed_chunks, top_k=k)
+            print(f"🎯 Reranking aplicado: {len(allowed_chunks)} documentos")
 
     if not allowed_chunks:
         return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
@@ -548,11 +537,6 @@ with st.sidebar:
 
     st.session_state.sources_selected = sel
 
-    st.markdown("### 🎚️ Umbral de relevancia")
-    st.caption(" 0 = no relevante, 1 = muy relevante")
-    threshold = st.slider("Umbral", 0.0, 1.0, 0.0, 0.01)
-    st.session_state.threshold = threshold
-
     st.markdown("### 🔄 Reindexar contenidos")
     st.caption("Pulsa para detectar e indexar nuevos ficheros en las fuentes conectadas.")
 
@@ -602,10 +586,7 @@ if prompt:
                 ans = "Conecta al menos una fuente (Drive/OneDrive/Dropbox) en la barra lateral."
 
             else:
-                ans = responder_multi(
-                    prompt, hybrid_retriever, services,
-                    threshold=st.session_state.get("threshold", 0.45), k=6
-                )
+                ans = responder_multi(prompt, hybrid_retriever, services, k=6)
 
         except Exception as e:
             ans = f"Error: {e}"
