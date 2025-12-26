@@ -1,6 +1,5 @@
-import streamlit as st
-
 from typing import List
+import os
 import faiss
 
 from langchain_community.vectorstores import FAISS
@@ -11,12 +10,16 @@ from langchain_openai import OpenAIEmbeddings
 
 from src.connectors.faiss_file import FaissFile
 from src.connectors.manifest import FaissManifest
+from src.utils.topic import assign_topics, extract_initial_topics
 
 FAISS_PATH = "faiss_index"
 
 INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+
+CALCULATE_TOPICS = bool(os.getenv("CALCULATE_TOPICS", False))
+TOPIC_MIN_SIZE = os.getenv("TOPIC_MIN_SIZE", 20000)
 
 def setup_faiss_gpu(vectorstore):
     try:
@@ -91,7 +94,11 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
         for i in range(0, len(docs_batch), batch_size):
             sub_docs = docs_batch[i:i + batch_size]
-            vectorstore.add_documents(sub_docs)
+            new_ids = vectorstore.add_documents(sub_docs)
+
+            if CALCULATE_TOPICS and manifest.has_topics():
+                assign_topics(vectorstore, new_ids)
+
             vectorstore.save_local(FAISS_PATH)
 
         manifest.add_processed_ids(source, pending_ids)
@@ -124,6 +131,17 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
     if docs_batch: 
         flush("final")
+
+    # Add topics if needed
+    if CALCULATE_TOPICS and not manifest.has_topics():
+        if manifest.num_chunks() > TOPIC_MIN_SIZE:
+            print(f"💾 ({source}) Detectando temas...")
+            extract_initial_topics(vectorstore)
+            manifest.set_topics()
+            vectorstore.save_local(FAISS_PATH)
+            
+        else:
+            print(f"({source}) El índice es demasiado pequeño para detectar temas")
 
     # Update status manifest
     manifest.add_completed_source(source)

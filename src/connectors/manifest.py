@@ -16,7 +16,8 @@ def load_manifest(path):
     return {
         "processed_ids": {}, 
         "total_chunks": 0, 
-        "completed": {}, 
+        "completed": {},
+        "topics": False
     }
 
 
@@ -51,6 +52,10 @@ class FaissManifest:
             self.manifest['processed_ids'][source][id] = time
 
 
+    def num_chunks(self):
+        return self.manifest['total_chunks']
+
+
     def add_chunks(self, chunks):
         self.manifest['total_chunks'] += chunks
 
@@ -73,3 +78,11 @@ class FaissManifest:
         self.manifest['processed_ids'].setdefault(source, {})
 
         return file.metadata['id'] in self.manifest['processed_ids'][source]
+
+
+    def has_topics(self):
+        return self.manifest['topics']
+
+
+    def set_topics(self):
+        self.manifest['topics'] = True
