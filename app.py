@@ -27,7 +27,7 @@ from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_ve
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
 
 # Metrics
-from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words, register_topics
 
 # Utils
 from src.utils.nlp import extract_search_terms
@@ -155,6 +155,10 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
 
     if not allowed_chunks:
         return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
+    
+    # Register the topics of the returned docs
+    topics = {t for d in allowed_chunks for t, _ in d.metadata.get('topics', {}).items()}
+    register_topics(topics)
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
