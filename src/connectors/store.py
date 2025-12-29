@@ -27,12 +27,14 @@ BM25_PATH = "bm25_index"
 
 INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
-DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+# chunk_overlap aumentado de 100 a 200 para mejor coherencia entre chunks
+DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 STEMMER = Stemmer.Stemmer("spanish")
 
 # Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
-BM25_WEIGHT = 0.3
-VECTOR_WEIGHT = 0.7
+# BM25 funciona mejor en español, ajustado de 0.3/0.7 a 0.4/0.6
+BM25_WEIGHT = 0.4
+VECTOR_WEIGHT = 0.6
 
 
 class BM25Retriever(BaseRetriever):
