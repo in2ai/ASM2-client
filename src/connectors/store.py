@@ -17,6 +17,7 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_openai import OpenAIEmbeddings
+from pydantic import Field
 
 from src.connectors.faiss_file import FaissFile
 from src.connectors.manifest import FaissManifest
@@ -38,7 +39,7 @@ class BM25Retriever(BaseRetriever):
     """Retriever BM25"""
     
     index: Optional[bm25s.BM25] = None
-    documents: List[Document] = []
+    documents: List[Document] = Field(default_factory=list)
     k: int = 256
     
     class Config:
