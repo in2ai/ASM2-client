@@ -308,6 +308,7 @@ def responder_multi(query, hybrid_retriever, services, k=6, chunk_chars=1600):
               "En tu respuesta, no uses la palabra \"CONTEXTO\", sino usa \"las fuentes\"."
               "Redacta en lenguaje natural, claro y directo."
               "En tu respuesta estructurada, incluye las fuentes que hayas utilizado. "
+              "Si no utilizas ninguna fuente, no incluyas ninguna fuente en tu respuesta."
               "Usa el historial de conversación para seguir el hilo.")
     
     sources_info = "\n".join([
