@@ -418,7 +418,7 @@ def get_vectordb():
     hybrid_retriever = None
     if vectordb is not None:
         with st.spinner("Construyendo índice híbrido BM25…"):
-            hybrid_retriever, _ = create_hybrid_retriever(vectordb, k=256)
+            hybrid_retriever, _ = create_hybrid_retriever(vectordb, k=50)
 
     return vectordb, hybrid_retriever
 
