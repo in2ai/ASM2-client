@@ -2,6 +2,7 @@ import streamlit as st
 
 from typing import List, Tuple, Optional
 import faiss
+import hashlib
 import os
 import json
 import pickle
@@ -37,6 +38,15 @@ BM25_WEIGHT = 0.4
 VECTOR_WEIGHT = 0.6
 
 
+def get_config_hash() -> str:
+    """
+    Genera un hash de la configuración de chunking.
+    Si cambia chunk_size o chunk_overlap, el hash cambia y se fuerza rebuild.
+    """
+    config = f"chunk_size={DOCUMENT_SPLITTER._chunk_size}_overlap={DOCUMENT_SPLITTER._chunk_overlap}"
+    return hashlib.md5(config.encode()).hexdigest()[:8]
+
+
 class BM25Retriever(BaseRetriever):
     """Retriever BM25"""
     
@@ -67,7 +77,10 @@ class BM25Retriever(BaseRetriever):
             pickle.dump(self.documents, f)
         
         with open(os.path.join(path, "metadata.json"), "w") as f:
-            json.dump({"num_documents": len(self.documents)}, f)
+            json.dump({
+                "num_documents": len(self.documents),
+                "config_hash": get_config_hash()
+            }, f)
     
     def add_documents(self, documents: List[Document]) -> None:
         """Construye índice BM25 a partir de documentos."""
@@ -98,14 +111,21 @@ class BM25Retriever(BaseRetriever):
     
     @staticmethod
     def needs_rebuild(path: str, doc_count: int) -> bool:
-        """Verifica si el índice necesita reconstruirse."""
+        """Verifica si el índice necesita reconstruirse (por docs o config)."""
         metadata_file = os.path.join(path, "metadata.json")
         if not os.path.exists(metadata_file):
             return True
         
         try:
             with open(metadata_file, "r") as f:
-                return json.load(f).get("num_documents", 0) != doc_count
+                metadata = json.load(f)
+                # Rebuild si cambió el número de docs o la configuración de chunking
+                if metadata.get("num_documents", 0) != doc_count:
+                    return True
+                if metadata.get("config_hash") != get_config_hash():
+                    print(f"⚠️ BM25: Configuración de chunking cambió, reconstruyendo...")
+                    return True
+                return False
         except Exception:
             return True
 
@@ -123,20 +143,32 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
     # Read status manifest file
     manifest = FaissManifest(FAISS_PATH)
+    current_config_hash = get_config_hash()
+    
+    # Verificar si la configuración de chunking cambió
+    config_changed = manifest.needs_config_rebuild(current_config_hash)
+    if config_changed:
+        print(f"⚠️ FAISS ({source}): Configuración de chunking cambió, reconstruyendo índice completo...")
 
     # Check if the part for this source is already constructed
     vectorstore = None
 
-    try:
-        print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
-        vectorstore = FAISS.load_local(FAISS_PATH, EMBEDDINGS, allow_dangerous_deserialization=True)
-        
-    except Exception:
-        pass
+    if not config_changed:
+        try:
+            print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
+            vectorstore = FAISS.load_local(FAISS_PATH, EMBEDDINGS, allow_dangerous_deserialization=True)
+            
+        except Exception:
+            pass
 
-    # Construct a new DB if needed
+    # Construct a new DB if needed (or config changed)
     if vectorstore is None:
         vectorstore = FAISS(embedding_function=EMBEDDINGS, index=INDEX, docstore=InMemoryDocstore({}), index_to_docstore_id={})
+        # Limpiar manifest si config cambió
+        if config_changed:
+            manifest.manifest["processed_ids"] = {}
+            manifest.manifest["total_chunks"] = 0
+            manifest.manifest["completed"] = {}
 
     # Check files to update
     current = manifest.get_processed_ids(source)
@@ -216,11 +248,12 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     if docs_batch: 
         flush("final")
 
-    # Update status manifest
+    # Update status manifest con el hash de configuración actual
     manifest.add_completed_source(source)
+    manifest.set_config_hash(current_config_hash)
     manifest.save()
 
-    print(f"💾 ({source}) Índice guardado en {FAISS_PATH}")
+    print(f"💾 ({source}) Índice guardado en {FAISS_PATH} [config: {current_config_hash}]")
     
     setup_faiss_gpu(vectorstore)
 
