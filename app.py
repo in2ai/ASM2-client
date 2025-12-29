@@ -10,6 +10,7 @@
 
 # Main imports
 import os
+import re
 import threading
 import time
 from typing import Optional, List
@@ -380,6 +381,9 @@ def responder_streaming(query, hybrid_retriever, services, placeholder, k=6, chu
                 )
     
     insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, len(full_response.split()))
+    
+    # Limpiar cualquier sección de fuentes que el LLM haya añadido (evita duplicados)
+    full_response = re.split(r'\n\n?(?:\*\*)?[Ff]uentes:?(?:\*\*)?', full_response)[0].strip()
     
     # Añadir fuentes al final
     if available_sources:
