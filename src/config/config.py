@@ -29,7 +29,7 @@ if not REDIRECT_URI:
     st.error("❌ Falta REDIRECT_URI en .env"); st.stop()
 
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
-st.set_page_config(page_title="RAG Drive + Dropbox ACL", page_icon="💬", layout="wide")
+st.set_page_config(page_title="ASM2 - Asistente Conversacional Multiempresa", page_icon="💬", layout="wide")
 
 # OneDrive (Microsoft Graph)
 ONEDRIVE_CLIENT_ID = (os.getenv("ONEDRIVE_CLIENT_ID") or "").strip()

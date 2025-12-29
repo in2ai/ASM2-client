@@ -1,6 +1,6 @@
 # app.py
 # ─────────────────────────────────────────────────────────────────────────────
-# RAG sobre Google Drive ,Dropbox y One Drive con ACL:
+# Asistente Conversacional Multisectorial Multiempresa (ASM2)
 # - El índice puede crearlo un “superusuario”.
 # - Cada consulta se valida con las credenciales del usuario actual (Drive/Dropbox).
 # - Drive guarda ACL (permissionIds/domains/anyone) y valida en vivo.
@@ -547,7 +547,7 @@ with st.sidebar:
 # UI PRINCIPAL (chat)
 # ─────────────────────────────────────────────────────────────────────────────
 
-st.title("ASM2 - RAG con ACL (Drive + OneDrive + Dropbox)")
+st.title("Asistente Conversacional Multisectorial Multiempresa (ASM2)")
 
 # Inicializar historial de mensajes
 if "messages" not in st.session_state:
