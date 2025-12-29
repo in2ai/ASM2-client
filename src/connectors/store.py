@@ -255,7 +255,7 @@ def create_hybrid_retriever(vectorstore: FAISS, k: int = 256) -> Tuple[EnsembleR
         print(f"📂 BM25: Cargando índice desde {BM25_PATH}")
         bm25_retriever = BM25Retriever.load_local(BM25_PATH, k=k)
     else:
-        print(f"🔨 BM25: Construyendo índice...")
+        print("🔨 BM25: Construyendo índice...")
         bm25_retriever = BM25Retriever(k=k)
         bm25_retriever.add_documents(all_docs)
         bm25_retriever.save_local(BM25_PATH)
