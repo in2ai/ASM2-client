@@ -91,7 +91,12 @@ start_usage_metrics_thread()
 # RERANKER (Cross-Encoder para reordenar resultados de búsqueda)
 # ─────────────────────────────────────────────────────────────────────────────
 
-RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+# Modelo anterior (más preciso pero más lento, ~560M params):
+# RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+
+
+# Modelo multilingüe ligero (~117M params, soporta ES y 13 idiomas más):
+RERANKER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 
 @st.cache_resource(show_spinner=False)
 def get_reranker():
@@ -449,7 +454,8 @@ def get_vectordb():
     hybrid_retriever = None
     if vectordb is not None:
         with st.spinner("Construyendo índice híbrido BM25…"):
-            hybrid_retriever, _ = create_hybrid_retriever(vectordb, k=50)
+            # Reducido de k=50 a k=25 para mejor rendimiento en reranking
+            hybrid_retriever, _ = create_hybrid_retriever(vectordb, k=25)
 
     return vectordb, hybrid_retriever
 
