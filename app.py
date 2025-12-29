@@ -221,7 +221,11 @@ def reindex_all_sources():
 # RESPONDER (multi-origen)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def responder_multi(query, hybrid_retriever, services, k=6, chunk_chars=1600):
+def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=1600):
+    """
+    Prepara el contexto RAG: busca documentos, filtra por permisos, reordena.
+    Retorna (messages, available_sources, allowed_chunks) o None si no hay resultados.
+    """
     # Register that the user is still active
     register_user_activity()
 
@@ -267,7 +271,7 @@ def responder_multi(query, hybrid_retriever, services, k=6, chunk_chars=1600):
             print(f"🎯 Reranking aplicado: {len(allowed_chunks)} documentos")
 
     if not allowed_chunks:
-        return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
+        return None
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
@@ -302,23 +306,21 @@ def responder_multi(query, hybrid_retriever, services, k=6, chunk_chars=1600):
 
     insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
-    # 3) LLM con historial de conversación y structured output
+    # 3) Preparar mensajes para el LLM
     system = ("Eres un asistente conversacional RAG en ESPAÑOL. Responde SOLO con el CONTEXTO proporcionado. "
               "No improvises si no tienes información en el contexto. "
-              "En tu respuesta, no uses la palabra \"CONTEXTO\", sino usa \"las fuentes\"."
-              "Redacta en lenguaje natural, claro y directo."
-              "En tu respuesta estructurada, incluye las fuentes que hayas utilizado. "
-              "Si no utilizas ninguna fuente, no incluyas ninguna fuente en tu respuesta."
+              "En tu respuesta, no uses la palabra \"CONTEXTO\", sino usa \"las fuentes\". "
+              "Redacta en lenguaje natural, claro y directo. "
+              "NO incluyas las fuentes en tu respuesta, se añadirán automáticamente al final. "
               "Usa el historial de conversación para seguir el hilo.")
     
     sources_info = "\n".join([
-        f"- {s['title']} ({s['source_type']})" + (f" - Link: {s['link']}" if s['link'] else " - Sin enlace disponible")
+        f"- {s['title']} ({s['source_type']})"
         for s in available_sources
     ])
     print(sources_info)
     
     # Construir lista de mensajes para el LLM desde st.session_state.messages
-    # Excluir el último mensaje (la query actual) ya que se añade después con contexto
     messages = [SystemMessage(content=system)]
     for m in history[:-1][-10:]:  # Últimos 10 mensajes excluyendo el actual
         if m["role"] == "user":
@@ -329,7 +331,7 @@ def responder_multi(query, hybrid_retriever, services, k=6, chunk_chars=1600):
     user_message = f"""CONTEXTO:
 {contexto}
 
-FUENTES DISPONIBLES (usa estas para citar en tu respuesta):
+FUENTES DISPONIBLES:
 {sources_info}
 
 PREGUNTA:
@@ -339,31 +341,59 @@ PREGUNTA:
 
     insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user_message))
 
-    # Usar output estructurado
-    structured_llm = llm.with_structured_output(RAGResponse)
+    return messages, available_sources, allowed_chunks
 
-    with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
-        response: RAGResponse = structured_llm.invoke(messages)
 
-    insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, llm.get_num_tokens(response.answer))
-
-    if not response or not response.answer.strip():
-        t = allowed_chunks[0].metadata.get("title") or allowed_chunks[0].metadata.get("name") or "(sin título)"
-        return f"Según [{t}]: {(allowed_chunks[0].page_content or '')[:chunk_chars]}"
-
-    ans = response.answer
+def responder_streaming(query, hybrid_retriever, services, placeholder, k=6, chunk_chars=1600):
+    """
+    Genera respuesta con streaming. Actualiza el placeholder progresivamente.
+    Retorna la respuesta completa al final.
+    """
+    # Preparar contexto
+    result = preparar_contexto_rag(query, hybrid_retriever, services, k, chunk_chars)
     
-    if response.sources:
-        ans += "<br><br><b>Fuentes:</b><ul>"
-        for src in response.sources:
-            if src.link:
-                print('Link:', src.link)
-                ans += f'<li><a href="{src.link}" target="_blank">{src.title}</a> ({src.source_type})</li>'
+    if result is None:
+        msg = "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
+        placeholder.markdown(f'<div class="chat-bubble-bot">{msg}</div>', unsafe_allow_html=True)
+        return msg
+    
+    messages, available_sources, allowed_chunks = result
+    
+    # LLM con streaming
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2, streaming=True)
+    
+    full_response = ""
+    
+    with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
+        for chunk in llm.stream(messages):
+            if chunk.content:
+                full_response += chunk.content
+                # Actualizar placeholder con el texto acumulado
+                placeholder.markdown(
+                    f'<div class="chat-bubble-bot">{full_response}▌</div>', 
+                    unsafe_allow_html=True
+                )
+    
+    insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, len(full_response.split()))
+    
+    # Añadir fuentes al final
+    if available_sources:
+        sources_html = "<br><br><b>Fuentes:</b><ul>"
+        for src in available_sources:
+            if src.get("link"):
+                sources_html += f'<li><a href="{src["link"]}" target="_blank">{src["title"]}</a> ({src["source_type"]})</li>'
             else:
-                ans += f"<li>{src.title} ({src.source_type})</li>"
-        ans += "</ul>"
-
-    return ans
+                sources_html += f"<li>{src['title']} ({src['source_type']})</li>"
+        sources_html += "</ul>"
+        full_response += sources_html
+    
+    # Renderizar respuesta final sin cursor
+    placeholder.markdown(
+        f'<div class="chat-bubble-bot">{full_response}</div>', 
+        unsafe_allow_html=True
+    )
+    
+    return full_response
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ESTILOS
@@ -565,35 +595,45 @@ prompt = st.chat_input("Escribe tu mensaje…")
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.markdown(f'<div class="chat-row user"><div class="chat-bubble-user">{prompt}</div></div>', unsafe_allow_html=True)
-    with st.spinner("Pensando…"):
-        try:
-            # Add the connectors
-            sel = st.session_state.get("sources_selected") or []                
-            services = {}
-            
-            if "Drive" in sel and "service" in st.session_state:
-                services["drive"] = st.session_state.service
+    
+    # Crear placeholder para streaming
+    response_container = st.container()
+    with response_container:
+        st.markdown('<div class="chat-row bot">', unsafe_allow_html=True)
+        response_placeholder = st.empty()
+        
+    try:
+        # Add the connectors
+        sel = st.session_state.get("sources_selected") or []                
+        services = {}
+        
+        if "Drive" in sel and "service" in st.session_state:
+            services["drive"] = st.session_state.service
 
-            if "Dropbox" in sel and "dbx" in st.session_state:
-                services["dropbox"] = st.session_state.dbx
+        if "Dropbox" in sel and "dbx" in st.session_state:
+            services["dropbox"] = st.session_state.dbx
 
-            if "OneDrive" in sel and "onedrive_token" in st.session_state:
-                services["onedrive_token"] = st.session_state.onedrive_token
+        if "OneDrive" in sel and "onedrive_token" in st.session_state:
+            services["onedrive_token"] = st.session_state.onedrive_token
 
-            vectordb, hybrid_retriever = get_vectordb()
+        vectordb, hybrid_retriever = get_vectordb()
 
-            # Check the vector DB
-            if vectordb is None:
-                ans = "Conecta al menos una fuente (Drive/OneDrive/Dropbox) en la barra lateral."
+        # Check the vector DB
+        if vectordb is None:
+            ans = "Conecta al menos una fuente (Drive/OneDrive/Dropbox) en la barra lateral."
+            response_placeholder.markdown(f'<div class="chat-bubble-bot">{ans}</div>', unsafe_allow_html=True)
+        else:
+            # Mostrar spinner mientras prepara el contexto, luego streaming
+            with st.spinner("Pensando…"):
+                ans = responder_streaming(prompt, hybrid_retriever, services, response_placeholder, k=6)
 
-            else:
-                ans = responder_multi(prompt, hybrid_retriever, services, k=6)
+    except Exception as e:
+        ans = f"Error: {e}"
+        response_placeholder.markdown(f'<div class="chat-bubble-bot">{ans}</div>', unsafe_allow_html=True)
 
-        except Exception as e:
-            ans = f"Error: {e}"
-
-    # Renderizar respuesta en UI
-    st.markdown(f'<div class="chat-row bot"><div class="chat-bubble-bot">{ans}</div></div>', unsafe_allow_html=True)
+    # Cerrar div del chat-row
+    with response_container:
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Guardar en historial
     st.session_state.messages.append({"role": "assistant", "content": ans})
