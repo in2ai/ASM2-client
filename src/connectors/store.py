@@ -19,7 +19,7 @@ EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 
 CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
-TOPIC_MIN_SIZE = os.getenv("TOPIC_MIN_SIZE", 20000)
+TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
 
 def setup_faiss_gpu(vectorstore):
     try:

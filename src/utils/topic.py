@@ -9,8 +9,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_community.vectorstores import FAISS
 
-TOPIC_RESOLUTION = os.getenv("TOPIC_RESOLUTION", 0.025)
-TOPIC_MIN_CONTRIB = os.getenv("TOPIC_MIN_CONTRIB", 0.3)
+TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
+TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
 
 def extract_initial_topics(vdb: FAISS):
     # Iteration variables
@@ -92,6 +92,10 @@ def extract_initial_topics(vdb: FAISS):
     for v in g.vs:
         topics_repr = {}
         ns = g.neighbors(v)
+
+        if not ns:
+            continue
+
         contrib = 1.0 / len(ns)
 
         # Calculate topic contributions
@@ -104,11 +108,13 @@ def extract_initial_topics(vdb: FAISS):
                 topics_repr[topic] += contrib
 
         # Anything over the min rep is also representative
+        v_name = v["name"]
+
         for t, weight in topics_repr.items():
-            aggregated_topics.setdefault(n_name, {})
+            aggregated_topics.setdefault(v_name, {})
 
             if weight >= TOPIC_MIN_CONTRIB:
-                aggregated_topics[n_name][t] = max(weight, aggregated_topics[n_name].get(t, 0.0))
+                aggregated_topics[v_name][t] = max(weight, aggregated_topics[v_name].get(t, 0.0))
 
     # Update metadata
     for id, ts in aggregated_topics.items():
