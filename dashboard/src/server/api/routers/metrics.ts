@@ -2,7 +2,15 @@ import { Metrics } from "@/lib/metrics-constants";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import {
   countMetrics,
+  getActivityByDay,
+  getDetailedStatusCodes,
   getErrorRate,
+  getErrorRateByEndpoint,
+  getHourlyActivityPattern,
+  getLatencyByEndpoint,
+  getLatencyDistribution,
+  getMetricsByTag,
+  getRequestsByDay,
   getRequestStats,
   getTotalActivityEvents,
   getUniqueUsers,
@@ -11,9 +19,17 @@ import {
   meanSessionLength,
   topKSearchTerms,
   topKTopics,
+  type ActivityByDay,
+  type EndpointErrorRate,
+  type EndpointLatency,
+  type HourlyActivity,
+  type LatencyDistribution,
+  type MetricsByTag,
   type MetricsQueryParams,
+  type RequestsByDay,
   type RequestStats,
   type SearchTerm,
+  type StatusCodeDetail,
   type TopicCount,
 } from "@/server/db";
 import { TRPCError } from "@trpc/server";
@@ -32,6 +48,7 @@ interface DashboardMetrics {
   metrics: {
     response_time: number | null;
     total_count: number;
+    by_tag: MetricsByTag[];
   };
 
   top_words: SearchTerm[];
@@ -43,9 +60,17 @@ interface DashboardMetrics {
     unique_users: number;
     total_events: number;
     role_distribution: Record<string, number>;
+    by_day: ActivityByDay[];
+    hourly_pattern: HourlyActivity[];
   };
 
-  request_stats: RequestStats;
+  request_stats: RequestStats & {
+    by_day: RequestsByDay[];
+    latency_distribution: LatencyDistribution[];
+    latency_by_endpoint: EndpointLatency[];
+    error_by_endpoint: EndpointErrorRate[];
+    detailed_status_codes: StatusCodeDetail[];
+  };
 
   error_rate: number;
 
@@ -85,24 +110,40 @@ export const metricsRouter = createTRPCRouter({
         const [
           meanResponseTime,
           metricsCount,
+          metricsByTag,
           searchTerms,
           topics,
           sessionLength,
           uniqueUsersCount,
           totalEvents,
           roleDistribution,
+          activityByDay,
+          hourlyPattern,
           requestStats,
+          requestsByDay,
+          latencyDistribution,
+          latencyByEndpoint,
+          errorByEndpoint,
+          detailedStatusCodes,
           errorRate,
         ] = await Promise.all([
           meanMetric(Metrics.LLM_RESPONSE_TIME, params),
           countMetrics(params),
+          getMetricsByTag(params),
           topKSearchTerms(10, params),
           topKTopics(10, params),
           meanSessionLength(10, params),
           getUniqueUsers(params),
           getTotalActivityEvents(params),
           getUserRoleDistribution(params),
+          getActivityByDay(params),
+          getHourlyActivityPattern(params),
           getRequestStats(params),
+          getRequestsByDay(params),
+          getLatencyDistribution(params),
+          getLatencyByEndpoint(params),
+          getErrorRateByEndpoint(params),
+          getDetailedStatusCodes(params),
           getErrorRate(params),
         ]);
 
@@ -110,6 +151,7 @@ export const metricsRouter = createTRPCRouter({
           metrics: {
             response_time: meanResponseTime,
             total_count: metricsCount,
+            by_tag: metricsByTag,
           },
           top_words: searchTerms,
           top_topics: topics,
@@ -118,8 +160,17 @@ export const metricsRouter = createTRPCRouter({
             unique_users: uniqueUsersCount,
             total_events: totalEvents,
             role_distribution: roleDistribution,
+            by_day: activityByDay,
+            hourly_pattern: hourlyPattern,
           },
-          request_stats: requestStats,
+          request_stats: {
+            ...requestStats,
+            by_day: requestsByDay,
+            latency_distribution: latencyDistribution,
+            latency_by_endpoint: latencyByEndpoint,
+            error_by_endpoint: errorByEndpoint,
+            detailed_status_codes: detailedStatusCodes,
+          },
           error_rate: errorRate,
           metadata: {
             updatedAt: new Date().toISOString(),

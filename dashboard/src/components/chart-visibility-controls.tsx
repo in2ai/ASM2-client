@@ -31,10 +31,12 @@ export function ChartVisibilityControls({
           { id: "sessionDuration" as const, label: "Duración media de sesión" },
           {
             id: "departmentPieChart" as const,
-            label: "Distribución por departamentos",
+            label: "Distribución por rol",
           },
           { id: "requestsPerUser" as const, label: "Peticiones por usuario" },
           { id: "responseTime" as const, label: "Tiempo de respuesta total" },
+          { id: "activityTrend" as const, label: "Tendencia de actividad" },
+          { id: "hourlyActivityPattern" as const, label: "Patrón horario" },
         ];
       case "rag-quality":
         return [
@@ -49,6 +51,7 @@ export function ChartVisibilityControls({
             id: "documentsRetrieved" as const,
             label: "Documentos recuperados",
           },
+          { id: "metricsByTag" as const, label: "Métricas por tipo" },
         ];
       case "performance":
         return [
@@ -56,23 +59,33 @@ export function ChartVisibilityControls({
             id: "responseTimeChart" as const,
             label: "Tiempo medio de respuesta",
           },
-          { id: "tokenUsageChart" as const, label: "Uso de tokens" },
+          { id: "tokenUsageChart" as const, label: "Métodos HTTP" },
           {
             id: "resourceConsumption" as const,
-            label: "Consumo de CPU/GPU y memoria",
+            label: "Códigos de estado",
           },
-          { id: "costPerQuery" as const, label: "Coste estimado por consulta" },
+          { id: "costPerQuery" as const, label: "Top endpoints" },
           { id: "errorsChart" as const, label: "Errores por tipo" },
+          { id: "requestsTrend" as const, label: "Tendencia de peticiones" },
+          {
+            id: "latencyDistribution" as const,
+            label: "Distribución de latencia",
+          },
+          { id: "latencyByEndpoint" as const, label: "Latencia por endpoint" },
+          { id: "errorsByEndpoint" as const, label: "Errores por endpoint" },
+          { id: "detailedStatusCodes" as const, label: "Códigos detallados" },
         ];
       case "insights":
         return [
-          { id: "topQueries" as const, label: "Top queries" },
-          { id: "commonWords" as const, label: "Palabras más comunes" },
+          { id: "topQueries" as const, label: "Temas frecuentes" },
+          { id: "commonWords" as const, label: "Palabras más buscadas" },
           {
             id: "thematicDistribution" as const,
-            label: "Distribución temática",
+            label: "Distribución de roles",
           },
-          { id: "alerts" as const, label: "Alertas automáticas" },
+          { id: "alerts" as const, label: "Estado del sistema" },
+          { id: "topWordsBarChart" as const, label: "Gráfico de palabras" },
+          { id: "topicsBarChart" as const, label: "Gráfico de temas" },
         ];
       default:
         return [];
