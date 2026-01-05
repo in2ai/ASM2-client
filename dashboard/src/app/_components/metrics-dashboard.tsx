@@ -4,6 +4,7 @@ import { DateRangeSelector } from "@/components/date-range-selector";
 import { NoMetricsEmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { ExportButton } from "@/components/export-button";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,18 +14,32 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  type ChartConfig,
   ChartContainer,
   ChartLegend,
   ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
+  type ChartConfig,
 } from "@/components/ui/chart";
 import { useChartVisibility } from "@/contexts/chart-visibility-context";
+import { cn } from "@/lib/utils";
 import { api, type RouterOutputs } from "@/trpc/react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
-import { Loader2, RefreshCw } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  Activity,
+  AlertCircle,
+  ArrowUpRight,
+  BarChart3,
+  Clock,
+  Database,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  TrendingUp,
+  User,
+  Zap,
+} from "lucide-react";
+import { useMemo, useState, type ElementType } from "react";
 import { type DateRange } from "react-day-picker";
 import {
   Area,
@@ -67,21 +82,21 @@ const statusChartConfig: ChartConfig = {
 };
 
 const activityChartConfig: ChartConfig = {
-  event_count: { label: "Eventos", color: "hsl(221 83% 53%)" },
-  unique_users: { label: "Usuarios únicos", color: "hsl(142 70% 45%)" },
+  event_count: { label: "Eventos", color: "oklch(0.6 0.25 250)" },
+  unique_users: { label: "Usuarios únicos", color: "oklch(0.7 0.2 150)" },
 };
 
 const requestsChartConfig: ChartConfig = {
-  request_count: { label: "Peticiones", color: "hsl(221 83% 53%)" },
-  error_count: { label: "Errores", color: "hsl(0 84% 60%)" },
+  request_count: { label: "Peticiones", color: "oklch(0.6 0.25 250)" },
+  error_count: { label: "Errores", color: "oklch(0.6 0.25 20)" },
 };
 
 const latencyChartConfig: ChartConfig = {
-  count: { label: "Peticiones", color: "hsl(262 83% 68%)" },
+  count: { label: "Peticiones", color: "oklch(0.7 0.2 300)" },
 };
 
 const hourlyChartConfig: ChartConfig = {
-  event_count: { label: "Actividad", color: "hsl(199 89% 62%)" },
+  event_count: { label: "Actividad", color: "oklch(0.7 0.2 200)" },
 };
 
 const getDateFormatter = () =>
@@ -258,56 +273,55 @@ function PersistentHeader({
   _userRole,
 }: Readonly<PersistentHeaderProps>) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="text-muted-foreground text-xs sm:text-sm">
-                {lastUpdated
-                  ? `Actualizado ${lastUpdated}`
-                  : "Actualizado hace momentos"}
-              </p>
-              {isFetching && (
-                <div className="text-muted-foreground flex items-center gap-1 text-xs">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span className="hidden sm:inline">Actualizando...</span>
-                </div>
-              )}
+    <div className="mb-6 flex flex-col gap-4 sm:mb-8">
+      <div className="bg-card/50 flex flex-col gap-4 rounded-2xl border p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight">Vista General</h2>
+            {isFetching && (
+              <Badge variant="secondary" className="animate-pulse gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Actualizando
+              </Badge>
+            )}
+          </div>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+              </span>
+              {lastUpdated ? `Actualizado ${lastUpdated}` : "Actualizado ahora"}
             </div>
             {stats && (
-              <p className="text-muted-foreground text-xs">
-                {stats.totalMetricsRecords} registro
-                {stats.totalMetricsRecords !== 1 ? "s" : ""} de métricas
-              </p>
+              <div className="flex items-center gap-1.5">
+                <RefreshCw className="h-3.5 w-3.5" />
+                {stats.totalMetricsRecords.toLocaleString()} registros
+              </div>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <ExportButton dateRange={dateRange} />
-          <Button
-            onClick={onRefresh}
-            disabled={isFetching}
-            size="sm"
-            variant="outline"
-            className="min-h-[44px] gap-2"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
-            />
-            <span className="hidden sm:inline">
-              {isFetching ? "Actualizando..." : "Actualizar"}
-            </span>
-            <span className="sm:hidden">{isFetching ? "..." : "↻"}</span>
-          </Button>
-        </div>
-      </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <span className="text-muted-foreground text-sm font-medium">
-          Rango de fechas:
-        </span>
-        <DateRangeSelector value={dateRange} onChange={onDateRangeChange} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <DateRangeSelector value={dateRange} onChange={onDateRangeChange} />
+          </div>
+          <div className="flex items-center gap-2">
+            <ExportButton dateRange={dateRange} />
+            <Button
+              onClick={onRefresh}
+              disabled={isFetching}
+              size="icon"
+              variant="outline"
+              className="h-10 w-10 shrink-0 rounded-xl"
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", isFetching && "animate-spin")}
+              />
+              <span className="sr-only">Actualizar</span>
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -426,20 +440,50 @@ function StatCard({
   label,
   value,
   helper,
-}: Readonly<{ label: string; value: string; helper?: string }>) {
+  icon: Icon,
+  trend,
+}: Readonly<{
+  label: string;
+  value: string;
+  helper?: string;
+  icon: ElementType;
+  trend?: { value: string; positive: boolean };
+}>) {
   return (
-    <Card className="rounded-xl transition-shadow hover:shadow-sm">
-      <CardHeader className="p-3 pb-1">
-        <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+    <Card className="relative overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+      <div className="absolute top-0 right-0 p-4 opacity-[0.03] grayscale transition-opacity hover:opacity-[0.08]">
+        <Icon size={80} />
+      </div>
+      <CardHeader className="p-4 pb-2">
+        <div className="flex items-center justify-between">
+          <div className="bg-primary/10 text-primary rounded-lg p-2">
+            <Icon size={18} />
+          </div>
+          {trend && (
+            <Badge
+              variant={trend.positive ? "default" : "destructive"}
+              className={cn(
+                "h-5 px-1 text-[10px] font-bold",
+                trend.positive &&
+                  "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20",
+              )}
+            >
+              {trend.value}
+            </Badge>
+          )}
+        </div>
+        <CardDescription className="text-muted-foreground mt-2 text-[11px] font-semibold tracking-wider uppercase">
           {label}
         </CardDescription>
-        <CardTitle className="text-xl font-bold tracking-tight md:text-2xl">
+        <CardTitle className="text-2xl font-black tracking-tight lg:text-3xl">
           {value}
         </CardTitle>
       </CardHeader>
       {helper ? (
-        <CardContent className="p-3 pt-0">
-          <p className="text-muted-foreground text-[10px]">{helper}</p>
+        <CardContent className="p-4 pt-0">
+          <p className="text-muted-foreground text-[10px] font-medium">
+            {helper}
+          </p>
         </CardContent>
       ) : null}
     </Card>
@@ -467,46 +511,58 @@ function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
   const totalMetrics = metricsData.total_count.toLocaleString("es-ES");
 
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 md:grid-cols-4 lg:grid-cols-8">
+    <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
       <StatCard
         label="Usuarios únicos"
         value={uniqueUsers}
         helper="En el período"
+        icon={User}
       />
       <StatCard
         label="Eventos totales"
         value={totalEvents}
         helper="Interacciones"
+        icon={Activity}
       />
       <StatCard
         label="Sesión media"
-        value={`${avgSession} min`}
+        value={`${avgSession}m`}
         helper="Tiempo de uso"
+        icon={Clock}
       />
       <StatCard
         label="Latencia red"
-        value={`${avgLatency} ms`}
+        value={`${avgLatency}ms`}
         helper="Respuesta servidor"
+        icon={Zap}
       />
       <StatCard
         label="Peticiones"
         value={totalRequests}
         helper="Total sistema"
+        icon={TrendingUp}
       />
       <StatCard
         label="Tasa de error"
         value={`${errorRate}%`}
         helper="Respuestas fallidas"
+        icon={AlertCircle}
+        trend={{
+          value: `${errorRate}%`,
+          positive: Number.parseFloat(errorRate) < 5,
+        }}
       />
       <StatCard
         label="Latencia RAG"
-        value={`${ragLatency} ms`}
+        value={`${ragLatency}ms`}
         helper="Respuesta LLM"
+        icon={Sparkles}
       />
       <StatCard
         label="Métricas RAG"
         value={totalMetrics}
         helper="Registros totales"
+        icon={Database}
       />
     </div>
   );
@@ -514,30 +570,43 @@ function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
 
 function LoadingState() {
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+    <div className="animate-in fade-in space-y-6 duration-500 sm:space-y-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         {[1, 2, 3, 4, 5, 6, 7, 8].map((id) => (
-          <Card key={`kpi-${id}`} className="rounded-xl">
-            <CardHeader className="p-3 pb-1">
-              <CardDescription className="bg-muted h-2 w-16 animate-pulse rounded" />
-              <CardTitle className="bg-muted mt-2 h-6 w-20 animate-pulse rounded" />
+          <Card
+            key={`kpi-${id}`}
+            className="bg-card/40 overflow-hidden rounded-2xl border-none shadow-sm backdrop-blur-sm"
+          >
+            <div className="from-muted/20 absolute inset-0 bg-linear-to-br to-transparent" />
+            <CardHeader className="relative p-4 pb-2">
+              <div className="bg-muted h-8 w-8 animate-pulse rounded-lg" />
+              <div className="bg-muted mt-4 h-2 w-16 animate-pulse rounded" />
+              <div className="bg-muted mt-2 h-8 w-24 animate-pulse rounded" />
             </CardHeader>
-            <CardContent className="p-3 pt-0">
+            <CardContent className="relative p-4 pt-0">
               <div className="bg-muted h-2 w-12 animate-pulse rounded" />
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        {[1, 2, 3, 4, 5, 6].map((id) => (
-          <Card key={id} className="overflow-hidden rounded-xl">
-            <CardHeader>
-              <CardTitle className="bg-muted h-5 w-1/2 animate-pulse rounded" />
-              <CardDescription className="bg-muted mt-2 h-4 w-2/3 animate-pulse rounded" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {[1, 2, 3].map((id) => (
+          <Card
+            key={id}
+            className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm lg:even:col-span-2"
+          >
+            <CardHeader className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="bg-muted h-6 w-48 animate-pulse rounded" />
+                  <div className="bg-muted h-4 w-64 animate-pulse rounded" />
+                </div>
+                <div className="bg-muted h-10 w-10 animate-pulse rounded-xl" />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="bg-muted h-80 animate-pulse rounded-xl" />
+            <CardContent className="p-6 pt-0">
+              <div className="bg-muted/50 h-[300px] w-full animate-pulse rounded-xl" />
             </CardContent>
           </Card>
         ))}
@@ -594,157 +663,250 @@ function UsageMetrics({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        {visibility.departmentPieChart && roleDistributionData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Distribución por rol</CardTitle>
-              <CardDescription>Usuarios por rol de acceso</CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-hidden px-0">
-              <ChartContainer
-                config={roleChartConfig}
-                className="mx-auto h-[320px] w-full max-w-[420px]"
-              >
-                <PieChart>
-                  <Pie
-                    data={roleDistributionData}
-                    dataKey="value"
-                    nameKey="role"
-                    innerRadius={70}
-                    outerRadius={120}
-                    paddingAngle={4}
-                    label
-                  >
-                    {roleDistributionData.map((entry) => (
-                      <Cell key={`cell-${entry.role}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        nameKey="role"
-                        labelKey="role"
-                        hideIndicator
-                      />
-                    }
-                  />
-                  <ChartLegend
-                    content={<ChartLegendContent nameKey="role" />}
-                    verticalAlign="bottom"
-                  />
-                </PieChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
         {visibility.activityTrend && activityByDayData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Tendencia de actividad</CardTitle>
-              <CardDescription>Eventos y usuarios por día</CardDescription>
+          <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg lg:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold tracking-tight">
+                  Tendencia de actividad
+                </CardTitle>
+                <CardDescription>Eventos y usuarios por día</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <Activity size={20} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={activityChartConfig}
-                className="h-[320px] w-full"
+                className="h-[350px] w-full"
               >
                 <AreaChart
                   data={activityByDayData}
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                 >
                   <defs>
                     <linearGradient id="fillEvents" x1="0" y1="0" x2="0" y2="1">
                       <stop
                         offset="5%"
                         stopColor="var(--color-event_count)"
-                        stopOpacity={0.8}
+                        stopOpacity={0.3}
                       />
                       <stop
                         offset="95%"
                         stopColor="var(--color-event_count)"
-                        stopOpacity={0.1}
+                        stopOpacity={0}
                       />
                     </linearGradient>
                     <linearGradient id="fillUsers" x1="0" y1="0" x2="0" y2="1">
                       <stop
                         offset="5%"
                         stopColor="var(--color-unique_users)"
-                        stopOpacity={0.8}
+                        stopOpacity={0.3}
                       />
                       <stop
                         offset="95%"
                         stopColor="var(--color-unique_users)"
-                        stopOpacity={0.1}
+                        stopOpacity={0}
                       />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
                   <XAxis
                     dataKey="date"
                     tickLine={false}
                     axisLine={false}
-                    tickMargin={8}
+                    tickMargin={12}
+                    style={{ fontSize: 11, fontWeight: 500 }}
                   />
-                  <YAxis tickLine={false} axisLine={false} tickMargin={8} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={12}
+                    style={{ fontSize: 11, fontWeight: 500 }}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                    }
+                  />
                   <Area
                     type="monotone"
                     dataKey="event_count"
                     stroke="var(--color-event_count)"
                     fill="url(#fillEvents)"
-                    strokeWidth={2}
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                      fill: "var(--color-event_count)",
+                      strokeWidth: 2,
+                      stroke: "white",
+                    }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
                   />
                   <Area
                     type="monotone"
                     dataKey="unique_users"
                     stroke="var(--color-unique_users)"
                     fill="url(#fillUsers)"
-                    strokeWidth={2}
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                      fill: "var(--color-unique_users)",
+                      strokeWidth: 2,
+                      stroke: "white",
+                    }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
                   />
-                  <ChartLegend content={<ChartLegendContent />} />
+                  <ChartLegend
+                    content={<ChartLegendContent />}
+                    className="pt-4"
+                  />
                 </AreaChart>
               </ChartContainer>
             </CardContent>
           </Card>
         )}
 
-        {visibility.hourlyActivityPattern && hourlyPatternData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Patrón de actividad horaria</CardTitle>
-              <CardDescription>
-                Distribución de eventos por hora del día
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-hidden px-0">
-              <ChartContainer
-                config={hourlyChartConfig}
-                className="h-[280px] w-full"
-              >
-                <BarChart
-                  data={hourlyPatternData}
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+        <div className="grid grid-cols-1 gap-4 lg:col-span-2 lg:grid-cols-2">
+          {visibility.departmentPieChart && roleDistributionData.length > 0 && (
+            <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div className="space-y-1">
+                  <CardTitle className="text-lg font-bold">
+                    Distribución por rol
+                  </CardTitle>
+                  <CardDescription>Usuarios por rol de acceso</CardDescription>
+                </div>
+                <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                  <User size={18} />
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-hidden py-4">
+                <ChartContainer
+                  config={roleChartConfig}
+                  className="mx-auto h-[300px] w-full"
                 >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
-                    interval={2}
-                  />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar
-                    dataKey="event_count"
-                    fill="var(--color-event_count)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
+                  <PieChart>
+                    <Pie
+                      data={roleDistributionData}
+                      dataKey="value"
+                      nameKey="role"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                      cornerRadius={6}
+                    >
+                      {roleDistributionData.map((entry) => (
+                        <Cell
+                          key={`cell-${entry.role}`}
+                          fill={entry.fill}
+                          stroke="none"
+                        />
+                      ))}
+                    </Pie>
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          nameKey="role"
+                          labelKey="role"
+                          hideIndicator
+                          className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
+                        />
+                      }
+                    />
+                    <ChartLegend
+                      content={<ChartLegendContent nameKey="role" />}
+                      className="flex-wrap gap-x-4 gap-y-2 pt-4"
+                    />
+                  </PieChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {visibility.hourlyActivityPattern && hourlyPatternData.length > 0 && (
+            <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div className="space-y-1">
+                  <CardTitle className="text-lg font-bold">
+                    Patrón horario
+                  </CardTitle>
+                  <CardDescription>Eventos por hora del día</CardDescription>
+                </div>
+                <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                  <Clock size={18} />
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-hidden py-4">
+                <ChartContainer
+                  config={hourlyChartConfig}
+                  className="h-[300px] w-full"
+                >
+                  <BarChart
+                    data={hourlyPatternData}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="barGradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="var(--color-event_count)"
+                          stopOpacity={1}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="var(--color-event_count)"
+                          stopOpacity={0.6}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="hsl(var(--border))"
+                      opacity={0.5}
+                    />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      interval={3}
+                      style={{ fontSize: 10, fontWeight: 500 }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      style={{ fontSize: 10, fontWeight: 500 }}
+                    />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                      }
+                    />
+                    <Bar
+                      dataKey="event_count"
+                      fill="url(#barGradient)"
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={40}
+                    />
+                  </BarChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -780,49 +942,92 @@ function RAGQualityMetrics({
         <div className="bg-border mt-3 h-px" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6">
         {visibility.metricsByTag && metricsChartData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Métricas por tipo</CardTitle>
-              <CardDescription>
-                Valor promedio y conteo por etiqueta
-              </CardDescription>
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold tracking-tight">
+                  Métricas por tipo
+                </CardTitle>
+                <CardDescription>
+                  Valor promedio y conteo por etiqueta
+                </CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <Database size={20} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={{
                   avg_value: {
                     label: "Valor promedio",
-                    color: "hsl(221 83% 53%)",
+                    color: "oklch(0.6 0.25 250)",
                   },
-                  count: { label: "Conteo", color: "hsl(142 70% 45%)" },
+                  count: { label: "Conteo", color: "oklch(0.7 0.2 150)" },
                 }}
-                className="h-[320px] w-full"
+                className="h-[400px] w-full"
               >
                 <BarChart
                   data={metricsChartData}
                   layout="vertical"
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                  margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                  <XAxis type="number" tickLine={false} axisLine={false} />
+                  <defs>
+                    <linearGradient
+                      id="barAvgGradient"
+                      x1="0"
+                      y1="0"
+                      x2="1"
+                      y2="0"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="var(--color-avg_value)"
+                        stopOpacity={0.8}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="var(--color-avg_value)"
+                        stopOpacity={1}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    horizontal={false}
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    type="number"
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 11 }}
+                  />
                   <YAxis
                     type="category"
                     dataKey="tag"
                     tickLine={false}
                     axisLine={false}
-                    width={150}
+                    width={140}
+                    style={{ fontSize: 11, fontWeight: 600 }}
                   />
                   <ChartTooltip
                     content={
-                      <ChartTooltipContent labelKey="fullTag" hideIndicator />
+                      <ChartTooltipContent
+                        labelKey="fullTag"
+                        hideIndicator
+                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
+                      />
                     }
                   />
                   <Bar
                     dataKey="avg_value"
-                    fill="var(--color-avg_value)"
-                    radius={[0, 4, 4, 0]}
+                    fill="url(#barAvgGradient)"
+                    radius={[0, 6, 6, 0]}
+                    barSize={32}
                   />
                 </BarChart>
               </ChartContainer>
@@ -831,8 +1036,13 @@ function RAGQualityMetrics({
         )}
 
         {metricsChartData.length === 0 && (
-          <div className="text-muted-foreground flex h-[100px] items-center justify-center rounded-xl border border-dashed text-sm lg:col-span-2">
-            No hay métricas RAG disponibles en este período
+          <div className="bg-card/20 flex h-[200px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-8 text-center backdrop-blur-sm">
+            <div className="bg-muted text-muted-foreground rounded-full p-3">
+              <Database size={24} />
+            </div>
+            <p className="text-muted-foreground text-sm font-medium">
+              No hay métricas RAG disponibles en este período
+            </p>
           </div>
         )}
       </div>
@@ -964,30 +1174,41 @@ function PerformanceMetrics({
         <div className="bg-border mt-3 h-px" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {visibility.tokenUsageChart && methodChartData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Distribución por método HTTP</CardTitle>
-              <CardDescription>GET, POST, PUT, DELETE, etc.</CardDescription>
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-bold">
+                  Por método HTTP
+                </CardTitle>
+                <CardDescription>Distribución de peticiones</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <Zap size={18} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden">
               <ChartContainer
                 config={methodChartConfig}
-                className="mx-auto h-[320px] w-full max-w-[420px]"
+                className="mx-auto h-[300px] w-full"
               >
                 <PieChart>
                   <Pie
                     data={methodChartData}
                     dataKey="value"
                     nameKey="method"
-                    innerRadius={70}
-                    outerRadius={120}
-                    paddingAngle={4}
-                    label
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={5}
+                    cornerRadius={6}
                   >
                     {methodChartData.map((entry) => (
-                      <Cell key={`cell-${entry.method}`} fill={entry.fill} />
+                      <Cell
+                        key={`cell-${entry.method}`}
+                        fill={entry.fill}
+                        stroke="none"
+                      />
                     ))}
                   </Pie>
                   <ChartTooltip
@@ -996,12 +1217,13 @@ function PerformanceMetrics({
                         nameKey="method"
                         labelKey="method"
                         hideIndicator
+                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                       />
                     }
                   />
                   <ChartLegend
                     content={<ChartLegendContent nameKey="method" />}
-                    verticalAlign="bottom"
+                    className="flex-wrap gap-x-4 gap-y-2 pt-4"
                   />
                 </PieChart>
               </ChartContainer>
@@ -1010,28 +1232,37 @@ function PerformanceMetrics({
         )}
 
         {visibility.resourceConsumption && statusChartData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Distribución por código de estado</CardTitle>
-              <CardDescription>2xx, 3xx, 4xx, 5xx</CardDescription>
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-bold">Por estado</CardTitle>
+                <CardDescription>Códigos de respuesta</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <AlertCircle size={18} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden">
               <ChartContainer
                 config={statusChartConfig}
-                className="mx-auto h-[320px] w-full max-w-[420px]"
+                className="mx-auto h-[300px] w-full"
               >
                 <PieChart>
                   <Pie
                     data={statusChartData}
                     dataKey="value"
                     nameKey="status"
-                    innerRadius={70}
-                    outerRadius={120}
-                    paddingAngle={4}
-                    label
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={5}
+                    cornerRadius={6}
                   >
                     {statusChartData.map((entry) => (
-                      <Cell key={`cell-${entry.status}`} fill={entry.fill} />
+                      <Cell
+                        key={`cell-${entry.status}`}
+                        fill={entry.fill}
+                        stroke="none"
+                      />
                     ))}
                   </Pie>
                   <ChartTooltip
@@ -1040,12 +1271,13 @@ function PerformanceMetrics({
                         nameKey="status"
                         labelKey="status"
                         hideIndicator
+                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                       />
                     }
                   />
                   <ChartLegend
                     content={<ChartLegendContent nameKey="status" />}
-                    verticalAlign="bottom"
+                    className="flex-wrap gap-x-4 gap-y-2 pt-4"
                   />
                 </PieChart>
               </ChartContainer>
@@ -1053,37 +1285,153 @@ function PerformanceMetrics({
           </Card>
         )}
 
-        {visibility.costPerQuery && endpointChartData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Top endpoints</CardTitle>
-              <CardDescription>Endpoints más utilizados</CardDescription>
+        {visibility.requestsTrend && requestsByDayData.length > 0 && (
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold tracking-tight">
+                  Tendencia de peticiones
+                </CardTitle>
+                <CardDescription>Peticiones y errores por día</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <TrendingUp size={20} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden p-0 pt-4">
+              <ChartContainer
+                config={requestsChartConfig}
+                className="h-[350px] w-full"
+              >
+                <LineChart
+                  data={requestsByDayData}
+                  margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={12}
+                    style={{ fontSize: 11, fontWeight: 500 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={12}
+                    style={{ fontSize: 11, fontWeight: 500 }}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                    }
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="request_count"
+                    stroke="var(--color-request_count)"
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                      fill: "var(--color-request_count)",
+                      strokeWidth: 2,
+                      stroke: "white",
+                    }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="error_count"
+                    stroke="var(--color-error_count)"
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                      fill: "var(--color-error_count)",
+                      strokeWidth: 2,
+                      stroke: "white",
+                    }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
+                  />
+                  <ChartLegend
+                    content={<ChartLegendContent />}
+                    className="pt-4"
+                  />
+                </LineChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {visibility.costPerQuery && endpointChartData.length > 0 && (
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold tracking-tight">
+                  Top endpoints
+                </CardTitle>
+                <CardDescription>Endpoints más utilizados</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <ArrowUpRight size={20} />
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={{
-                  count: { label: "Peticiones", color: "hsl(221 83% 53%)" },
+                  count: { label: "Peticiones", color: "oklch(0.6 0.25 250)" },
                 }}
-                className="h-[320px] w-full"
+                className="h-[350px] w-full"
               >
                 <BarChart
                   data={endpointChartData}
                   layout="vertical"
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                  margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                  <defs>
+                    <linearGradient
+                      id="barEndpointGradient"
+                      x1="0"
+                      y1="0"
+                      x2="1"
+                      y2="0"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="var(--color-count)"
+                        stopOpacity={0.8}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="var(--color-count)"
+                        stopOpacity={1}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    horizontal={false}
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
                   <XAxis
                     type="number"
                     allowDecimals={false}
                     tickLine={false}
                     axisLine={false}
+                    style={{ fontSize: 11 }}
                   />
                   <YAxis
                     type="category"
                     dataKey="endpoint"
                     tickLine={false}
                     axisLine={false}
-                    width={200}
+                    width={180}
+                    style={{ fontSize: 11, fontWeight: 600 }}
                   />
                   <ChartTooltip
                     content={
@@ -1091,13 +1439,15 @@ function PerformanceMetrics({
                         labelKey="fullEndpoint"
                         nameKey="endpoint"
                         hideIndicator
+                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                       />
                     }
                   />
                   <Bar
                     dataKey="count"
-                    fill="var(--color-count)"
-                    radius={[0, 8, 8, 0]}
+                    fill="url(#barEndpointGradient)"
+                    radius={[0, 6, 6, 0]}
+                    barSize={24}
                   />
                 </BarChart>
               </ChartContainer>
@@ -1105,77 +1455,58 @@ function PerformanceMetrics({
           </Card>
         )}
 
-        {visibility.requestsTrend && requestsByDayData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Tendencia de peticiones</CardTitle>
-              <CardDescription>Peticiones y errores por día</CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-hidden px-0">
-              <ChartContainer
-                config={requestsChartConfig}
-                className="h-[280px] w-full"
-              >
-                <LineChart
-                  data={requestsByDayData}
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                  />
-                  <YAxis tickLine={false} axisLine={false} tickMargin={8} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line
-                    type="monotone"
-                    dataKey="request_count"
-                    stroke="var(--color-request_count)"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="error_count"
-                    stroke="var(--color-error_count)"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                </LineChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
         {visibility.latencyDistribution &&
           latencyDistributionData.length > 0 && (
-            <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-              <CardHeader>
-                <CardTitle>Distribución de latencia</CardTitle>
-                <CardDescription>
-                  Peticiones por rango de tiempo
-                </CardDescription>
+            <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div className="space-y-1">
+                  <CardTitle className="text-lg font-bold">
+                    Distribución de latencia
+                  </CardTitle>
+                  <CardDescription>
+                    Peticiones por rango de tiempo
+                  </CardDescription>
+                </div>
+                <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                  <Zap size={18} />
+                </div>
               </CardHeader>
-              <CardContent className="overflow-hidden px-0">
+              <CardContent className="overflow-hidden p-0 pt-4">
                 <ChartContainer
                   config={latencyChartConfig}
                   className="h-[280px] w-full"
                 >
                   <BarChart
                     data={latencyDistributionData}
-                    margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="range" tickLine={false} axisLine={false} />
-                    <YAxis tickLine={false} axisLine={false} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="hsl(var(--border))"
+                      opacity={0.5}
+                    />
+                    <XAxis
+                      dataKey="range"
+                      tickLine={false}
+                      axisLine={false}
+                      style={{ fontSize: 10 }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      style={{ fontSize: 10 }}
+                    />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                      }
+                    />
                     <Bar
                       dataKey="count"
                       fill="var(--color-count)"
-                      radius={[4, 4, 0, 0]}
+                      radius={[6, 6, 0, 0]}
+                      barSize={40}
                     />
                   </BarChart>
                 </ChartContainer>
@@ -1184,29 +1515,52 @@ function PerformanceMetrics({
           )}
 
         {visibility.detailedStatusCodes && detailedStatusData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Códigos de estado detallados</CardTitle>
-              <CardDescription>
-                Desglose completo de códigos HTTP
-              </CardDescription>
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-bold">
+                  Estados detallados
+                </CardTitle>
+                <CardDescription>Desglose completo de códigos</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <AlertCircle size={18} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={{
-                  count: { label: "Peticiones", color: "hsl(221 83% 53%)" },
+                  count: { label: "Peticiones", color: "oklch(0.6 0.25 250)" },
                 }}
                 className="h-[280px] w-full"
               >
                 <BarChart
                   data={detailedStatusData}
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="status" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    dataKey="status"
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 10 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 10 }}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                    }
+                  />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={40}>
                     {detailedStatusData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.fill} />
                     ))}
@@ -1218,19 +1572,24 @@ function PerformanceMetrics({
         )}
 
         {visibility.latencyByEndpoint && latencyByEndpointData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Latencia por endpoint</CardTitle>
-              <CardDescription>
-                Endpoints con mayor latencia promedio
-              </CardDescription>
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-bold">
+                  Latencia por endpoint
+                </CardTitle>
+                <CardDescription>Promedios más altos</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <Zap size={18} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={{
                   avg_latency: {
                     label: "Latencia (ms)",
-                    color: "hsl(43 92% 58%)",
+                    color: "oklch(0.7 0.2 60)",
                   },
                 }}
                 className="h-[280px] w-full"
@@ -1238,22 +1597,34 @@ function PerformanceMetrics({
                 <BarChart
                   data={latencyByEndpointData}
                   layout="vertical"
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                  margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                  <XAxis type="number" tickLine={false} axisLine={false} />
+                  <CartesianGrid
+                    horizontal={false}
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    type="number"
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 10 }}
+                  />
                   <YAxis
                     type="category"
                     dataKey="endpoint"
                     tickLine={false}
                     axisLine={false}
-                    width={180}
+                    width={100}
+                    style={{ fontSize: 10, fontWeight: 600 }}
                   />
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
                         labelKey="fullEndpoint"
                         hideIndicator
+                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                       />
                     }
                   />
@@ -1261,6 +1632,7 @@ function PerformanceMetrics({
                     dataKey="avg_latency"
                     fill="var(--color-avg_latency)"
                     radius={[0, 4, 4, 0]}
+                    barSize={20}
                   />
                 </BarChart>
               </ChartContainer>
@@ -1269,17 +1641,24 @@ function PerformanceMetrics({
         )}
 
         {visibility.errorsByEndpoint && errorByEndpointData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Errores por endpoint</CardTitle>
-              <CardDescription>Endpoints con más errores</CardDescription>
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-bold">
+                  Errores por endpoint
+                </CardTitle>
+                <CardDescription>Endpoints con más fallos</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <AlertCircle size={18} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={{
                   error_count: {
                     label: "Errores",
-                    color: "hsl(0 84% 60%)",
+                    color: "oklch(0.6 0.25 20)",
                   },
                 }}
                 className="h-[280px] w-full"
@@ -1287,22 +1666,34 @@ function PerformanceMetrics({
                 <BarChart
                   data={errorByEndpointData}
                   layout="vertical"
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                  margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                  <XAxis type="number" tickLine={false} axisLine={false} />
+                  <CartesianGrid
+                    horizontal={false}
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    type="number"
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 10 }}
+                  />
                   <YAxis
                     type="category"
                     dataKey="endpoint"
                     tickLine={false}
                     axisLine={false}
-                    width={180}
+                    width={100}
+                    style={{ fontSize: 10, fontWeight: 600 }}
                   />
                   <ChartTooltip
                     content={
                       <ChartTooltipContent
                         labelKey="fullEndpoint"
                         hideIndicator
+                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                       />
                     }
                   />
@@ -1310,6 +1701,7 @@ function PerformanceMetrics({
                     dataKey="error_count"
                     fill="var(--color-error_count)"
                     radius={[0, 4, 4, 0]}
+                    barSize={20}
                   />
                 </BarChart>
               </ChartContainer>
@@ -1360,27 +1752,38 @@ function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
         <div className="bg-border mt-3 h-px" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {visibility.commonWords && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Palabras más buscadas</CardTitle>
-              <CardDescription>De la tabla word_counts</CardDescription>
+          <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold tracking-tight">
+                  Palabras más buscadas
+                </CardTitle>
+                <CardDescription>
+                  Frecuencia en la tabla word_counts
+                </CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <Database size={20} />
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               {topWords.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {topWords.map((item) => (
-                    <span
+                    <Badge
                       key={item.word}
-                      className="text-muted-foreground rounded-full border px-3 py-1 text-xs font-medium"
+                      variant="secondary"
+                      className="bg-primary/5 text-primary hover:bg-primary/10 rounded-lg px-3 py-1.5 text-xs font-bold transition-all hover:scale-105"
                     >
-                      #{item.word} ({item.count})
-                    </span>
+                      #{item.word}{" "}
+                      <span className="ml-1.5 opacity-60">{item.count}</span>
+                    </Badge>
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground rounded-xl border border-dashed py-8 text-center text-sm">
                   No hay datos de palabras disponibles
                 </p>
               )}
@@ -1389,26 +1792,42 @@ function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
         )}
 
         {visibility.topQueries && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Temas más frecuentes</CardTitle>
-              <CardDescription>De la tabla topic_counts</CardDescription>
+          <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold tracking-tight">
+                  Temas más frecuentes
+                </CardTitle>
+                <CardDescription>De la tabla topic_counts</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <Sparkles size={20} />
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               {topTopics.length > 0 ? (
-                <ul className="text-muted-foreground grid gap-2 text-sm">
-                  {topTopics.map((item) => (
-                    <li
+                <div className="grid gap-3">
+                  {topTopics.map((item, idx) => (
+                    <div
                       key={item.topic}
-                      className="bg-card/40 flex justify-between rounded-md border p-3"
+                      className="group bg-background/40 hover:bg-background/60 flex items-center justify-between rounded-xl border p-4 transition-all hover:shadow-md"
                     >
-                      <span>{item.topic}</span>
-                      <span className="font-medium">{item.count}</span>
-                    </li>
+                      <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 text-primary flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold">
+                          {idx + 1}
+                        </div>
+                        <span className="text-sm font-semibold">
+                          {item.topic}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="font-black">
+                        {item.count}
+                      </Badge>
+                    </div>
                   ))}
-                </ul>
+                </div>
               ) : (
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground rounded-xl border border-dashed py-8 text-center text-sm">
                   No hay datos de temas disponibles
                 </p>
               )}
@@ -1417,30 +1836,56 @@ function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
         )}
 
         {visibility.topWordsBarChart && topWordsBarData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Gráfico de palabras buscadas</CardTitle>
-              <CardDescription>Top palabras por frecuencia</CardDescription>
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-bold">
+                  Gráfico de palabras
+                </CardTitle>
+                <CardDescription>Top palabras por frecuencia</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <BarChart3 size={18} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={{
-                  count: { label: "Búsquedas", color: "hsl(199 89% 62%)" },
+                  count: { label: "Búsquedas", color: "oklch(0.7 0.2 200)" },
                 }}
-                className="h-[280px] w-full"
+                className="h-[300px] w-full"
               >
                 <BarChart
                   data={topWordsBarData}
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="word" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    dataKey="word"
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 10 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 10 }}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                    }
+                  />
                   <Bar
                     dataKey="count"
                     fill="var(--color-count)"
-                    radius={[4, 4, 0, 0]}
+                    radius={[6, 6, 0, 0]}
+                    barSize={40}
                   />
                 </BarChart>
               </ChartContainer>
@@ -1449,41 +1894,64 @@ function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
         )}
 
         {visibility.topicsBarChart && topicsBarData.length > 0 && (
-          <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Gráfico de temas</CardTitle>
-              <CardDescription>Top temas por frecuencia</CardDescription>
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-bold">
+                  Gráfico de temas
+                </CardTitle>
+                <CardDescription>Top temas por frecuencia</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <TrendingUp size={18} />
+              </div>
             </CardHeader>
-            <CardContent className="overflow-hidden px-0">
+            <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={{
-                  count: { label: "Menciones", color: "hsl(330 72% 65%)" },
+                  count: { label: "Menciones", color: "oklch(0.7 0.2 330)" },
                 }}
-                className="h-[280px] w-full"
+                className="h-[300px] w-full"
               >
                 <BarChart
                   data={topicsBarData}
                   layout="vertical"
-                  margin={{ top: 16, right: 16, left: 16, bottom: 16 }}
+                  margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                  <XAxis type="number" tickLine={false} axisLine={false} />
+                  <CartesianGrid
+                    horizontal={false}
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    type="number"
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 10 }}
+                  />
                   <YAxis
                     type="category"
                     dataKey="topic"
                     tickLine={false}
                     axisLine={false}
-                    width={150}
+                    width={100}
+                    style={{ fontSize: 10, fontWeight: 600 }}
                   />
                   <ChartTooltip
                     content={
-                      <ChartTooltipContent labelKey="fullTopic" hideIndicator />
+                      <ChartTooltipContent
+                        labelKey="fullTopic"
+                        hideIndicator
+                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
+                      />
                     }
                   />
                   <Bar
                     dataKey="count"
                     fill="var(--color-count)"
-                    radius={[0, 4, 4, 0]}
+                    radius={[0, 6, 6, 0]}
+                    barSize={24}
                   />
                 </BarChart>
               </ChartContainer>
@@ -1492,77 +1960,130 @@ function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
         )}
 
         {visibility.alerts && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Estado del sistema</CardTitle>
-              <CardDescription>Resumen de métricas clave</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold tracking-tight">
+                  Estado del sistema
+                </CardTitle>
+                <CardDescription>
+                  Resumen de salud y performance
+                </CardDescription>
+              </div>
               <div
-                className={`rounded-lg border p-4 text-sm ${
+                className={cn(
+                  "rounded-xl p-2.5",
                   metrics.error_rate < 5
-                    ? "border-emerald-300/60 bg-emerald-100/70 dark:border-emerald-500/40 dark:bg-emerald-500/10"
+                    ? "bg-emerald-500/10 text-emerald-500"
                     : metrics.error_rate < 10
-                      ? "border-yellow-300/60 bg-yellow-100/70 dark:border-yellow-500/40 dark:bg-yellow-500/10"
-                      : "border-red-300/60 bg-red-100/70 dark:border-red-500/40 dark:bg-red-500/10"
-                }`}
+                      ? "bg-yellow-500/10 text-yellow-500"
+                      : "bg-red-500/10 text-red-500",
+                )}
               >
-                <p
-                  className={`font-medium ${
-                    metrics.error_rate < 5
-                      ? "text-emerald-900 dark:text-emerald-100"
-                      : metrics.error_rate < 10
-                        ? "text-yellow-900 dark:text-yellow-100"
-                        : "text-red-900 dark:text-red-100"
-                  }`}
-                >
-                  {metrics.error_rate < 5
-                    ? "Sistema saludable"
+                <Activity size={20} />
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div
+                className={cn(
+                  "rounded-2xl border p-6 transition-all",
+                  metrics.error_rate < 5
+                    ? "border-emerald-500/20 bg-emerald-500/5 shadow-inner shadow-emerald-500/5"
                     : metrics.error_rate < 10
-                      ? "Atención requerida"
-                      : "Sistema con problemas"}
-                </p>
-                <p className="text-muted-foreground mt-1">
-                  Tasa de error: {metrics.error_rate.toFixed(2)}% · Latencia
-                  promedio:{" "}
-                  {metrics.request_stats.avg_latency?.toFixed(0) ?? "N/A"} ms
-                </p>
+                      ? "border-yellow-500/20 bg-yellow-500/5 shadow-inner shadow-yellow-500/5"
+                      : "border-red-500/20 bg-red-500/5 shadow-inner shadow-red-500/5",
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "flex h-12 w-12 items-center justify-center rounded-2xl",
+                      metrics.error_rate < 5
+                        ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                        : metrics.error_rate < 10
+                          ? "bg-yellow-500 text-white shadow-lg shadow-yellow-500/20"
+                          : "bg-red-500 text-white shadow-lg shadow-red-500/20",
+                    )}
+                  >
+                    {metrics.error_rate < 5 ? (
+                      <TrendingUp size={24} />
+                    ) : (
+                      <AlertCircle size={24} />
+                    )}
+                  </div>
+                  <div>
+                    <p
+                      className={cn(
+                        "text-lg font-black tracking-tight",
+                        metrics.error_rate < 5
+                          ? "text-emerald-700 dark:text-emerald-300"
+                          : metrics.error_rate < 10
+                            ? "text-yellow-700 dark:text-yellow-300"
+                            : "text-red-700 dark:text-red-300",
+                      )}
+                    >
+                      {metrics.error_rate < 5
+                        ? "SISTEMA SEGURO"
+                        : metrics.error_rate < 10
+                          ? "ATENCIÓN NECESARIA"
+                          : "SISTEMA INSTABLE"}
+                    </p>
+                    <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
+                      Tasa de error: {metrics.error_rate.toFixed(2)}% ·
+                      Latencia:{" "}
+                      {metrics.request_stats.avg_latency?.toFixed(0) ?? "N/A"}{" "}
+                      ms
+                    </p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
         )}
-
-        {visibility.thematicDistribution && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Distribución de roles</CardTitle>
-              <CardDescription>Usuarios activos por rol</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {Object.keys(metrics.user_activity.role_distribution).length >
-              0 ? (
-                <ul className="text-muted-foreground grid gap-2 text-sm">
-                  {Object.entries(metrics.user_activity.role_distribution).map(
-                    ([role, count]) => (
-                      <li
-                        key={role}
-                        className="bg-card/40 flex justify-between rounded-md border p-3"
-                      >
-                        <span className="capitalize">{role}</span>
-                        <span className="font-medium">{count}</span>
-                      </li>
-                    ),
-                  )}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  No hay datos de distribución disponibles
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
       </div>
+
+      {visibility.thematicDistribution && (
+        <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="space-y-1">
+              <CardTitle className="text-xl font-bold tracking-tight">
+                Distribución de roles
+              </CardTitle>
+              <CardDescription>
+                Usuarios activos por rol en la organización
+              </CardDescription>
+            </div>
+            <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+              <User size={20} />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {Object.keys(metrics.user_activity.role_distribution).length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(metrics.user_activity.role_distribution).map(
+                  ([role, count]) => (
+                    <div
+                      key={role}
+                      className="bg-background/40 hover:bg-background/60 flex items-center justify-between rounded-xl border p-4 transition-all hover:shadow-md"
+                    >
+                      <span className="text-sm font-semibold capitalize">
+                        {role}
+                      </span>
+                      <Badge variant="secondary" className="font-black">
+                        {count}
+                      </Badge>
+                    </div>
+                  ),
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground rounded-xl border border-dashed py-8 text-center text-sm">
+                No hay datos de distribución disponibles
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

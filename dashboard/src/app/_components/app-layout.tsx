@@ -52,11 +52,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <ChartVisibilityProvider>
-      <div className="bg-muted/10 flex h-screen overflow-hidden">
+      <div className="dark:via-background flex h-screen overflow-hidden bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:to-slate-950">
         {/* Mobile Overlay */}
         {mobileMenuOpen && (
           <div
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
             aria-hidden="true"
           />
@@ -65,22 +65,20 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Sidebar */}
         <aside
           className={cn(
-            "bg-background fixed inset-y-0 left-0 z-50 flex flex-col border-r transition-transform duration-300 lg:static lg:translate-x-0",
-            // Mobile: slide in from left
+            "bg-card/40 fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-xl backdrop-blur-xl transition-all duration-300 lg:static lg:translate-x-0 lg:shadow-none",
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
-            // Desktop: collapsible width
-            "lg:transition-all lg:duration-300",
-            sidebarOpen ? "w-72" : "w-72 lg:w-20",
+            sidebarOpen ? "w-64" : "w-64 lg:w-20",
           )}
         >
-          <div className="flex h-16 items-center border-b px-4">
-            <BarChart3 className="text-primary mr-2 h-6 w-6 shrink-0" />
+          <div className="flex h-16 items-center px-6">
+            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-xl">
+              <BarChart3 className="text-primary h-6 w-6" />
+            </div>
             {sidebarOpen ? (
-              <span className="truncate text-lg font-semibold">
-                ACM2 Metrics
+              <span className="ml-3 truncate text-lg font-black tracking-tighter">
+                ACM2<span className="text-primary">METRICS</span>
               </span>
             ) : null}
-            {/* Close button for mobile */}
             <Button
               variant="ghost"
               size="icon"
@@ -91,51 +89,59 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Button>
           </div>
 
-          <nav className="flex-1 space-y-1 p-3">
-            <NavItem
-              icon={BarChart3}
-              label="Uso e Interacción"
-              active={currentView === "usage"}
-              onClick={() => handleViewChange("usage")}
-              collapsed={!sidebarOpen}
-            />
-            <NavItem
-              icon={Activity}
-              label="Calidad del RAG"
-              active={currentView === "rag-quality"}
-              onClick={() => handleViewChange("rag-quality")}
-              collapsed={!sidebarOpen}
-            />
-            <NavItem
-              icon={TrendingUp}
-              label="Rendimiento"
-              active={currentView === "performance"}
-              onClick={() => handleViewChange("performance")}
-              collapsed={!sidebarOpen}
-            />
-            <NavItem
-              icon={Sparkles}
-              label="Insights"
-              active={currentView === "insights"}
-              onClick={() => handleViewChange("insights")}
-              collapsed={!sidebarOpen}
-            />
-          </nav>
+          <div className="flex flex-1 flex-col justify-between p-3">
+            <nav className="space-y-1">
+              <NavItem
+                icon={BarChart3}
+                label="Uso e Interacción"
+                active={currentView === "usage"}
+                onClick={() => handleViewChange("usage")}
+                collapsed={!sidebarOpen}
+              />
+              <NavItem
+                icon={Activity}
+                label="Calidad del RAG"
+                active={currentView === "rag-quality"}
+                onClick={() => handleViewChange("rag-quality")}
+                collapsed={!sidebarOpen}
+              />
+              <NavItem
+                icon={TrendingUp}
+                label="Rendimiento"
+                active={currentView === "performance"}
+                onClick={() => handleViewChange("performance")}
+                collapsed={!sidebarOpen}
+              />
+              <NavItem
+                icon={Sparkles}
+                label="Insights"
+                active={currentView === "insights"}
+                onClick={() => handleViewChange("insights")}
+                collapsed={!sidebarOpen}
+              />
+            </nav>
+
+            {sidebarOpen && (
+              <div className="bg-primary/5 mb-4 rounded-xl p-4">
+                <p className="text-muted-foreground text-[10px] font-bold tracking-widest uppercase">
+                  Version
+                </p>
+                <p className="mt-1 text-xs font-medium">v2.4.0-production</p>
+              </div>
+            )}
+          </div>
         </aside>
 
         {/* Main Content */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Topbar */}
-          <header className="bg-background flex h-16 items-center justify-between border-b px-3 sm:px-4 md:px-6">
-            <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-              {/* Hamburger menu for mobile, collapse toggle for desktop */}
+          <header className="bg-background/40 flex h-16 items-center justify-between border-b px-4 backdrop-blur-md sm:px-6">
+            <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
                 size="icon"
-                className="min-h-[44px] min-w-[44px]"
+                className="bg-muted/50 hover:bg-muted h-10 w-10 rounded-xl transition-colors"
                 onClick={() => {
-                  // Mobile: toggle mobile menu
-                  // Desktop: toggle sidebar collapse
                   if (window.innerWidth < 1024) {
                     setMobileMenuOpen(!mobileMenuOpen);
                   } else {
@@ -146,17 +152,26 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Menu className="h-5 w-5" />
               </Button>
               <div className="hidden sm:block">
-                <h1 className="text-base leading-tight font-semibold sm:text-lg">
+                <h1 className="text-sm font-bold tracking-tight md:text-base">
                   Dashboard de Métricas
                 </h1>
-                <p className="text-muted-foreground hidden text-xs md:block">
-                  Uso, calidad del RAG, rendimiento e insights
-                </p>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className="h-4 border-emerald-500/20 bg-emerald-500/10 px-1 text-[8px] font-bold text-emerald-500 uppercase"
+                  >
+                    Live
+                  </Badge>
+                  <p className="text-muted-foreground text-[10px] font-medium tracking-widest uppercase">
+                    Real-time analysis
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
+            <div className="flex items-center gap-2 sm:gap-4">
               <CompanyDisplay user={user} />
+              <div className="bg-border/60 mx-1 hidden h-8 w-px md:block" />
               <ViewSwitcher value={currentView} onChange={handleViewChange} />
               <ChartVisibilityControls view={currentView} />
               <UserMenu user={user} />
@@ -190,12 +205,22 @@ function NavItem({
       variant={active ? "default" : "ghost"}
       onClick={onClick}
       className={cn(
-        "flex min-h-[44px] w-full items-center justify-start gap-3 px-3 py-2 text-sm font-medium",
-        !active && "text-muted-foreground hover:text-foreground",
+        "group relative flex h-11 w-full items-center justify-start gap-4 px-3 py-2 text-sm font-semibold transition-all",
+        active
+          ? "bg-primary text-primary-foreground shadow-primary/20 shadow-lg"
+          : "text-muted-foreground hover:bg-primary/5 hover:text-foreground",
       )}
     >
-      <Icon className="h-5 w-5 shrink-0" />
-      {!collapsed && <span className="truncate">{label}</span>}
+      <Icon
+        className={cn(
+          "h-5 w-5 shrink-0 transition-transform group-hover:scale-110",
+          active && "text-primary-foreground",
+        )}
+      />
+      {!collapsed && <span className="truncate tracking-tight">{label}</span>}
+      {active && !collapsed && (
+        <div className="bg-primary-foreground absolute right-2 h-1 w-1 rounded-full" />
+      )}
     </Button>
   );
 }
