@@ -116,6 +116,315 @@ interface WorkOSUser {
   organizationId?: string | null;
 }
 
+function StatCard({
+  label,
+  value,
+  helper,
+  icon: Icon,
+  trend,
+}: Readonly<{
+  label: string;
+  value: string;
+  helper?: string;
+  icon: ElementType;
+  trend?: { value: string; positive: boolean };
+}>) {
+  return (
+    <Card className="relative overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+      <div className="absolute top-0 right-0 p-4 opacity-[0.03] grayscale transition-opacity hover:opacity-[0.08]">
+        <Icon size={80} />
+      </div>
+      <CardHeader className="p-4 pb-2">
+        <div className="flex items-center justify-between">
+          <div className="bg-primary/10 text-primary rounded-lg p-2">
+            <Icon size={18} />
+          </div>
+          {trend && (
+            <Badge
+              variant={trend.positive ? "default" : "destructive"}
+              className={cn(
+                "h-5 px-1 text-[10px] font-bold",
+                trend.positive &&
+                  "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20",
+              )}
+            >
+              {trend.value}
+            </Badge>
+          )}
+        </div>
+        <CardDescription className="text-muted-foreground mt-2 text-[11px] font-semibold tracking-wider uppercase">
+          {label}
+        </CardDescription>
+        <CardTitle className="text-2xl font-black tracking-tight lg:text-3xl">
+          {value}
+        </CardTitle>
+      </CardHeader>
+      {helper ? (
+        <CardContent className="p-4 pt-0">
+          <p className="text-muted-foreground text-[10px] font-medium">
+            {helper}
+          </p>
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
+function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
+  const userActivity = metrics.user_activity;
+  const requestStats = metrics.request_stats;
+  const metricsData = metrics.metrics;
+
+  const uniqueUsers = userActivity.unique_users.toLocaleString("es-ES");
+  const totalEvents = userActivity.total_events.toLocaleString("es-ES");
+  const avgSession = userActivity.mean_session_length_seconds
+    ? (userActivity.mean_session_length_seconds / 60).toFixed(1)
+    : "0.0";
+  const avgLatency = requestStats.avg_latency
+    ? requestStats.avg_latency.toFixed(0)
+    : "0";
+  const totalRequests = requestStats.total_requests.toLocaleString("es-ES");
+  const errorRate = metrics.error_rate.toFixed(1);
+  const ragLatency = metricsData.response_time
+    ? metricsData.response_time.toFixed(0)
+    : "0";
+  const totalMetrics = metricsData.total_count.toLocaleString("es-ES");
+
+  return (
+    <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <StatCard
+        label="Usuarios únicos"
+        value={uniqueUsers}
+        helper="En el período"
+        icon={User}
+      />
+      <StatCard
+        label="Eventos totales"
+        value={totalEvents}
+        helper="Interacciones"
+        icon={Activity}
+      />
+      <StatCard
+        label="Sesión media"
+        value={`${avgSession}m`}
+        helper="Tiempo de uso"
+        icon={Clock}
+      />
+      <StatCard
+        label="Latencia red"
+        value={`${avgLatency}ms`}
+        helper="Respuesta servidor"
+        icon={Zap}
+      />
+      <StatCard
+        label="Peticiones"
+        value={totalRequests}
+        helper="Total sistema"
+        icon={TrendingUp}
+      />
+      <StatCard
+        label="Tasa de error"
+        value={`${errorRate}%`}
+        helper="Respuestas fallidas"
+        icon={AlertCircle}
+        trend={{
+          value: `${errorRate}%`,
+          positive: Number.parseFloat(errorRate) < 5,
+        }}
+      />
+      <StatCard
+        label="Latencia RAG"
+        value={`${ragLatency}ms`}
+        helper="Respuesta LLM"
+        icon={Sparkles}
+      />
+      <StatCard
+        label="Métricas RAG"
+        value={totalMetrics}
+        helper="Registros totales"
+        icon={Database}
+      />
+    </div>
+  );
+}
+
+function OverviewHighlights({
+  metrics,
+}: Readonly<{ metrics: MetricsResponse }>) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-xl font-semibold sm:text-2xl">Vista General</h2>
+        <p className="text-muted-foreground text-sm">
+          Resumen de los indicadores clave de rendimiento
+        </p>
+        <div className="bg-border mt-3 h-px" />
+      </div>
+
+      <StatsRow metrics={metrics} />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="space-y-1">
+              <CardTitle className="text-lg font-bold">
+                Actividad Reciente
+              </CardTitle>
+              <CardDescription>Eventos en los últimos días</CardDescription>
+            </div>
+            <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+              <Activity size={18} />
+            </div>
+          </CardHeader>
+          <CardContent className="h-[300px] p-0 pt-4">
+            <ChartContainer
+              config={{
+                event_count: { label: "Eventos", color: "oklch(0.6 0.25 250)" },
+              }}
+              className="h-full w-full"
+            >
+              <AreaChart
+                data={metrics.user_activity.by_day.slice(-7).map((item) => ({
+                  ...item,
+                  date: new Date(item.date).toLocaleDateString("es-ES", {
+                    day: "2-digit",
+                    month: "short",
+                  }),
+                }))}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient
+                    id="fillOverviewEvents"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="5%"
+                      stopColor="var(--color-event_count)"
+                      stopOpacity={0.3}
+                    />
+                    <stop
+                      offset="95%"
+                      stopColor="var(--color-event_count)"
+                      stopOpacity={0}
+                    />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="hsl(var(--border))"
+                  opacity={0.5}
+                />
+                <XAxis
+                  dataKey="date"
+                  tickLine={false}
+                  axisLine={false}
+                  style={{ fontSize: 10 }}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  style={{ fontSize: 10 }}
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="event_count"
+                  stroke="var(--color-event_count)"
+                  fill="url(#fillOverviewEvents)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="space-y-1">
+              <CardTitle className="text-lg font-bold">
+                Rendimiento Sistema
+              </CardTitle>
+              <CardDescription>Peticiones y errores recientes</CardDescription>
+            </div>
+            <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+              <Zap size={18} />
+            </div>
+          </CardHeader>
+          <CardContent className="h-[300px] p-0 pt-4">
+            <ChartContainer
+              config={{
+                request_count: {
+                  label: "Peticiones",
+                  color: "oklch(0.6 0.25 250)",
+                },
+                error_count: { label: "Errores", color: "oklch(0.6 0.25 20)" },
+              }}
+              className="h-full w-full"
+            >
+              <LineChart
+                data={metrics.request_stats.by_day.slice(-7).map((item) => ({
+                  ...item,
+                  date: new Date(item.date).toLocaleDateString("es-ES", {
+                    day: "2-digit",
+                    month: "short",
+                  }),
+                }))}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="hsl(var(--border))"
+                  opacity={0.5}
+                />
+                <XAxis
+                  dataKey="date"
+                  tickLine={false}
+                  axisLine={false}
+                  style={{ fontSize: 10 }}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  style={{ fontSize: 10 }}
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                  }
+                />
+                <Line
+                  type="monotone"
+                  dataKey="request_count"
+                  stroke="var(--color-request_count)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="error_count"
+                  stroke="var(--color-error_count)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 function isEmptyData(data: MetricsResponse): boolean {
   return (
     data?.user_activity?.total_events === 0 &&
@@ -421,150 +730,17 @@ export function MetricsDashboard() {
               isRefreshing={isRefetching}
             />
           ) : (
-            <>
-              <StatsRow metrics={data} />
-
+            <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500">
+              {view === "overview" && <OverviewHighlights metrics={data} />}
               {view === "usage" && <UsageMetrics metrics={data} />}
               {view === "rag-quality" && <RAGQualityMetrics metrics={data} />}
               {view === "performance" && <PerformanceMetrics metrics={data} />}
               {view === "insights" && <InsightsView metrics={data} />}
-            </>
+            </div>
           )}
         </div>
       )}
     </AppLayout>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  helper,
-  icon: Icon,
-  trend,
-}: Readonly<{
-  label: string;
-  value: string;
-  helper?: string;
-  icon: ElementType;
-  trend?: { value: string; positive: boolean };
-}>) {
-  return (
-    <Card className="relative overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-      <div className="absolute top-0 right-0 p-4 opacity-[0.03] grayscale transition-opacity hover:opacity-[0.08]">
-        <Icon size={80} />
-      </div>
-      <CardHeader className="p-4 pb-2">
-        <div className="flex items-center justify-between">
-          <div className="bg-primary/10 text-primary rounded-lg p-2">
-            <Icon size={18} />
-          </div>
-          {trend && (
-            <Badge
-              variant={trend.positive ? "default" : "destructive"}
-              className={cn(
-                "h-5 px-1 text-[10px] font-bold",
-                trend.positive &&
-                  "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20",
-              )}
-            >
-              {trend.value}
-            </Badge>
-          )}
-        </div>
-        <CardDescription className="text-muted-foreground mt-2 text-[11px] font-semibold tracking-wider uppercase">
-          {label}
-        </CardDescription>
-        <CardTitle className="text-2xl font-black tracking-tight lg:text-3xl">
-          {value}
-        </CardTitle>
-      </CardHeader>
-      {helper ? (
-        <CardContent className="p-4 pt-0">
-          <p className="text-muted-foreground text-[10px] font-medium">
-            {helper}
-          </p>
-        </CardContent>
-      ) : null}
-    </Card>
-  );
-}
-
-function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
-  const userActivity = metrics.user_activity;
-  const requestStats = metrics.request_stats;
-  const metricsData = metrics.metrics;
-
-  const uniqueUsers = userActivity.unique_users.toLocaleString("es-ES");
-  const totalEvents = userActivity.total_events.toLocaleString("es-ES");
-  const avgSession = userActivity.mean_session_length_seconds
-    ? (userActivity.mean_session_length_seconds / 60).toFixed(1)
-    : "0.0";
-  const avgLatency = requestStats.avg_latency
-    ? requestStats.avg_latency.toFixed(0)
-    : "0";
-  const totalRequests = requestStats.total_requests.toLocaleString("es-ES");
-  const errorRate = metrics.error_rate.toFixed(1);
-  const ragLatency = metricsData.response_time
-    ? metricsData.response_time.toFixed(0)
-    : "0";
-  const totalMetrics = metricsData.total_count.toLocaleString("es-ES");
-
-  return (
-    <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-      <StatCard
-        label="Usuarios únicos"
-        value={uniqueUsers}
-        helper="En el período"
-        icon={User}
-      />
-      <StatCard
-        label="Eventos totales"
-        value={totalEvents}
-        helper="Interacciones"
-        icon={Activity}
-      />
-      <StatCard
-        label="Sesión media"
-        value={`${avgSession}m`}
-        helper="Tiempo de uso"
-        icon={Clock}
-      />
-      <StatCard
-        label="Latencia red"
-        value={`${avgLatency}ms`}
-        helper="Respuesta servidor"
-        icon={Zap}
-      />
-      <StatCard
-        label="Peticiones"
-        value={totalRequests}
-        helper="Total sistema"
-        icon={TrendingUp}
-      />
-      <StatCard
-        label="Tasa de error"
-        value={`${errorRate}%`}
-        helper="Respuestas fallidas"
-        icon={AlertCircle}
-        trend={{
-          value: `${errorRate}%`,
-          positive: Number.parseFloat(errorRate) < 5,
-        }}
-      />
-      <StatCard
-        label="Latencia RAG"
-        value={`${ragLatency}ms`}
-        helper="Respuesta LLM"
-        icon={Sparkles}
-      />
-      <StatCard
-        label="Métricas RAG"
-        value={totalMetrics}
-        helper="Registros totales"
-        icon={Database}
-      />
-    </div>
   );
 }
 

@@ -13,7 +13,7 @@ import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { Eye, EyeOff, Settings } from "lucide-react";
 
 interface ChartControlsProps {
-  view: "usage" | "rag-quality" | "performance" | "insights";
+  view: "overview" | "usage" | "rag-quality" | "performance" | "insights";
 }
 
 export function ChartVisibilityControls({

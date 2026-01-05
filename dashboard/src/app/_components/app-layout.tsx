@@ -32,14 +32,14 @@ import {
 import { useState, type ElementType, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
-type View = "usage" | "rag-quality" | "performance" | "insights";
+type View = "overview" | "usage" | "rag-quality" | "performance" | "insights";
 
 interface AppLayoutProps {
   readonly children: (view: View) => ReactNode;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [currentView, setCurrentView] = useState<View>("usage");
+  const [currentView, setCurrentView] = useState<View>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user } = useAuth();
@@ -93,6 +93,13 @@ export function AppLayout({ children }: AppLayoutProps) {
             <nav className="space-y-1">
               <NavItem
                 icon={BarChart3}
+                label="Vista General"
+                active={currentView === "overview"}
+                onClick={() => handleViewChange("overview")}
+                collapsed={!sidebarOpen}
+              />
+              <NavItem
+                icon={TrendingUp}
                 label="Uso e Interacción"
                 active={currentView === "usage"}
                 onClick={() => handleViewChange("usage")}
@@ -106,7 +113,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 collapsed={!sidebarOpen}
               />
               <NavItem
-                icon={TrendingUp}
+                icon={Shield}
                 label="Rendimiento"
                 active={currentView === "performance"}
                 onClick={() => handleViewChange("performance")}
@@ -173,7 +180,9 @@ export function AppLayout({ children }: AppLayoutProps) {
               <CompanyDisplay user={user} />
               <div className="bg-border/60 mx-1 hidden h-8 w-px md:block" />
               <ViewSwitcher value={currentView} onChange={handleViewChange} />
-              <ChartVisibilityControls view={currentView} />
+              {currentView !== "overview" && (
+                <ChartVisibilityControls view={currentView} />
+              )}
               <UserMenu user={user} />
             </div>
           </header>
@@ -233,6 +242,7 @@ function ViewSwitcher({
   onChange: (v: View) => void;
 }>) {
   const views: { key: View; label: string; shortLabel: string }[] = [
+    { key: "overview", label: "General", shortLabel: "Gen" },
     { key: "usage", label: "Uso", shortLabel: "Uso" },
     { key: "rag-quality", label: "RAG", shortLabel: "RAG" },
     { key: "performance", label: "Rendimiento", shortLabel: "Perf" },
