@@ -61,9 +61,7 @@ multidict==6.7.0
 murmurhash==1.0.15
 mypy_extensions==1.1.0
 narwhals==2.11.0
-numpy==2.2.6
-nvidia-cublas-cu12==12.9.1.4
-nvidia-cuda-runtime-cu12==12.9.79
+numpy==2.0.2
 oauthlib==3.3.1
 openai==1.109.1
 orjson==3.11.4
@@ -92,6 +90,9 @@ PyPDF2==3.0.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
 pytz==2025.2
+rank_bm25==0.2.2
+bm25s==0.2.12
+PyStemmer==2.2.0.3
 PyYAML==6.0.3
 referencing==0.37.0
 regex==2025.11.3
@@ -130,3 +131,6 @@ watchdog==6.0.0
 weasel==0.4.3
 wrapt==2.0.1
 yarl==1.22.0
+torch==2.4.0
+transformers==4.44.0
+sentence-transformers==3.0.1
