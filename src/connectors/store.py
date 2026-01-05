@@ -18,7 +18,7 @@ INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 
-CALCULATE_TOPICS = bool(os.getenv("CALCULATE_TOPICS", False))
+CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
 TOPIC_MIN_SIZE = os.getenv("TOPIC_MIN_SIZE", 20000)
 
 def setup_faiss_gpu(vectorstore):
