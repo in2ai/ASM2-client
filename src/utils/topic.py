@@ -58,7 +58,7 @@ def extract_initial_topics(vdb: FAISS):
     # Calculate representative docs
     topics = {}
 
-    for t_id, members in enumerate(communities):
+    for members in communities:
         if not members or len(members) < 100:
             continue
 
@@ -72,7 +72,12 @@ def extract_initial_topics(vdb: FAISS):
             doc = vdb.docstore.search(sample)
             texts.append(doc.page_content)
 
-        topic_name = get_topic(texts)['Tema']
+        topic_json = get_topic(texts)
+
+        if topic_json is None:
+            continue
+
+        topic_name = topic_json['Tema']
 
         print(f'Topic: {topic_name}')
 
@@ -183,9 +188,11 @@ def get_topic(texts):
     user = '\n\n-----------------------\n\n'.join(texts)
 
     res = None
+    tries = 0
 
-    while res is None:
+    while res is None and tries < 5:
         try:    
+            tries += 1
             llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
             ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
             res = json.loads(ans)
