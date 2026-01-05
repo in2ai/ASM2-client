@@ -134,10 +134,11 @@ def assign_topics(vdb: FAISS, ids):
     D, I = vdb.index.search(embs, k=200)
 
     for row_idx, (distances, neighbors) in enumerate(zip(D, I)):
+        abs_idx = num_vectors - qsize + row_idx
         n_topics = []
 
         for dist, c in zip(distances, neighbors):
-            if c == row_idx:
+            if c == abs_idx:
                 continue  # skip self-loops
             if dist < min_cosine:
                 continue  # skip neighbors beyond threshold
@@ -162,7 +163,7 @@ def assign_topics(vdb: FAISS, ids):
                 topics[t] += weight * contrib
 
         # Assign topics to chunk
-        doc = vdb.docstore.search(vdb.index_to_docstore_id[row_idx])
+        doc = vdb.docstore.search(vdb.index_to_docstore_id[abs_idx])
         doc.metadata['topics'] = {}
 
         for t, weight in topics.items():
