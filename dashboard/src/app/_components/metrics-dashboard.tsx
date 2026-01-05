@@ -21,7 +21,6 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { useChartVisibility } from "@/contexts/chart-visibility-context";
-import { Metrics } from "@/lib/metrics-constants";
 import { api, type RouterOutputs } from "@/trpc/react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -407,14 +406,18 @@ function StatCard({
   helper,
 }: Readonly<{ label: string; value: string; helper?: string }>) {
   return (
-    <Card className="rounded-xl transition-shadow hover:shadow-md">
-      <CardHeader className="pb-2">
-        <CardDescription className="text-xs">{label}</CardDescription>
-        <CardTitle className="text-3xl md:text-4xl">{value}</CardTitle>
+    <Card className="rounded-xl transition-shadow hover:shadow-sm">
+      <CardHeader className="p-3 pb-1">
+        <CardDescription className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+          {label}
+        </CardDescription>
+        <CardTitle className="text-xl font-bold tracking-tight md:text-2xl">
+          {value}
+        </CardTitle>
       </CardHeader>
       {helper ? (
-        <CardContent className="pt-0">
-          <p className="text-muted-foreground text-xs">{helper}</p>
+        <CardContent className="p-3 pt-0">
+          <p className="text-muted-foreground text-[10px]">{helper}</p>
         </CardContent>
       ) : null}
     </Card>
@@ -424,8 +427,10 @@ function StatCard({
 function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
   const userActivity = metrics.user_activity;
   const requestStats = metrics.request_stats;
+  const metricsData = metrics.metrics;
 
   const uniqueUsers = userActivity.unique_users.toLocaleString("es-ES");
+  const totalEvents = userActivity.total_events.toLocaleString("es-ES");
   const avgSession = userActivity.mean_session_length_seconds
     ? (userActivity.mean_session_length_seconds / 60).toFixed(1)
     : "0.0";
@@ -433,28 +438,53 @@ function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
     ? requestStats.avg_latency.toFixed(0)
     : "0";
   const totalRequests = requestStats.total_requests.toLocaleString("es-ES");
+  const errorRate = metrics.error_rate.toFixed(1);
+  const ragLatency = metricsData.response_time
+    ? metricsData.response_time.toFixed(0)
+    : "0";
+  const totalMetrics = metricsData.total_count.toLocaleString("es-ES");
 
   return (
-    <div className="mb-6 grid grid-cols-1 gap-4 sm:mb-8 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4">
+    <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 md:grid-cols-4 lg:grid-cols-8">
       <StatCard
         label="Usuarios únicos"
         value={uniqueUsers}
-        helper="Total en el período"
+        helper="En el período"
       />
       <StatCard
-        label="Duración media de sesión"
+        label="Eventos totales"
+        value={totalEvents}
+        helper="Interacciones"
+      />
+      <StatCard
+        label="Sesión media"
         value={`${avgSession} min`}
-        helper="Promedio agregado"
+        helper="Tiempo de uso"
       />
       <StatCard
-        label="Latencia promedio"
+        label="Latencia red"
         value={`${avgLatency} ms`}
-        helper="Tiempo de respuesta"
+        helper="Respuesta servidor"
       />
       <StatCard
-        label="Total de peticiones"
+        label="Peticiones"
         value={totalRequests}
-        helper="Desde el inicio"
+        helper="Total sistema"
+      />
+      <StatCard
+        label="Tasa de error"
+        value={`${errorRate}%`}
+        helper="Respuestas fallidas"
+      />
+      <StatCard
+        label="Latencia RAG"
+        value={`${ragLatency} ms`}
+        helper="Respuesta LLM"
+      />
+      <StatCard
+        label="Métricas RAG"
+        value={totalMetrics}
+        helper="Registros totales"
       />
     </div>
   );
@@ -463,15 +493,15 @@ function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
 function LoadingState() {
   return (
     <div className="space-y-6 sm:space-y-8">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4">
-        {[1, 2, 3, 4].map((id) => (
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((id) => (
           <Card key={`kpi-${id}`} className="rounded-xl">
-            <CardHeader className="pb-2">
-              <CardDescription className="bg-muted h-3 w-24 animate-pulse rounded" />
-              <CardTitle className="bg-muted mt-2 h-8 w-32 animate-pulse rounded" />
+            <CardHeader className="p-3 pb-1">
+              <CardDescription className="bg-muted h-2 w-16 animate-pulse rounded" />
+              <CardTitle className="bg-muted mt-2 h-6 w-20 animate-pulse rounded" />
             </CardHeader>
-            <CardContent className="pt-0">
-              <div className="bg-muted h-3 w-20 animate-pulse rounded" />
+            <CardContent className="p-3 pt-0">
+              <div className="bg-muted h-2 w-12 animate-pulse rounded" />
             </CardContent>
           </Card>
         ))}
@@ -521,75 +551,6 @@ function UsageMetrics({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        {visibility.usageBarChart && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Usuarios únicos</CardTitle>
-              <CardDescription>
-                Total en el período seleccionado
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center" aria-live="polite">
-                  <p className="text-primary text-6xl font-bold">
-                    {userActivity.unique_users}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Usuarios únicos
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.activeSessions && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Eventos de actividad</CardTitle>
-              <CardDescription>Total de eventos registrados</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center" aria-live="polite">
-                  <p className="text-primary text-6xl font-bold">
-                    {userActivity.total_events.toLocaleString("es-ES")}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Eventos totales
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.sessionDuration && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Duración media de sesión</CardTitle>
-              <CardDescription>Calculado desde user_activity</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {userActivity.mean_session_length_seconds
-                      ? (userActivity.mean_session_length_seconds / 60).toFixed(
-                          1,
-                        )
-                      : "0.0"}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Minutos promedio
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {visibility.departmentPieChart && roleDistributionData.length > 0 && (
           <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
@@ -639,11 +600,9 @@ function UsageMetrics({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
 }
 
 function RAGQualityMetrics({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   metrics,
 }: Readonly<{ metrics: MetricsResponse }>) {
-  const { visibility } = useChartVisibility();
-  const metricsData = metrics.metrics;
-
   return (
     <div className="space-y-6">
       <div>
@@ -657,49 +616,9 @@ function RAGQualityMetrics({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        {visibility.modelLatency && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Tiempo de respuesta promedio</CardTitle>
-              <CardDescription>
-                Métrica: {Metrics.LLM_RESPONSE_TIME}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {metricsData.response_time?.toFixed(0) ?? "N/A"}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Milisegundos
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.retrievalRate && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Total de métricas registradas</CardTitle>
-              <CardDescription>Conteo total en tabla metrics</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {metricsData.total_count.toLocaleString("es-ES")}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Registros totales
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <div className="text-muted-foreground flex h-[100px] items-center justify-center rounded-xl border border-dashed text-sm lg:col-span-2">
+          Métricas de calidad detalladas en las tarjetas superiores
+        </div>
       </div>
     </div>
   );
@@ -768,75 +687,6 @@ function PerformanceMetrics({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-        {visibility.responseTimeChart && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Latencia promedio de peticiones</CardTitle>
-              <CardDescription>
-                Tiempo de respuesta del servidor
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {requestStats.avg_latency?.toFixed(0) ?? "N/A"}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Milisegundos
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.requestsPerUser && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Total de peticiones</CardTitle>
-              <CardDescription>
-                Registradas en la tabla requests
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {requestStats.total_requests.toLocaleString("es-ES")}
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Peticiones totales
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.errorsChart && (
-          <Card className="rounded-xl transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardTitle>Tasa de errores</CardTitle>
-              <CardDescription>
-                Porcentaje de respuestas 4xx y 5xx
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex h-[320px] items-center justify-center">
-                <div className="text-center">
-                  <p className="text-primary text-6xl font-bold">
-                    {metrics.error_rate.toFixed(2)}%
-                  </p>
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    Tasa de error
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {visibility.tokenUsageChart && methodChartData.length > 0 && (
           <Card className="overflow-hidden rounded-xl transition-shadow hover:shadow-md">
             <CardHeader>
