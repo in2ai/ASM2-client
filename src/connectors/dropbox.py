@@ -1,8 +1,5 @@
-import io
-
 import dropbox
 from dropbox.exceptions import ApiError
-from PyPDF2 import PdfReader
 
 from src.config.config import *
 from src.connectors.faiss_file import DropboxFile
@@ -137,22 +134,6 @@ def guess_mime_from_name(name: str) -> str:
     if n.endswith(".xlsx"):
         return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return "application/octet-stream"
-
-
-def dropbox_read_text(dbx, file_id=None, path_lower=None, mime=None):
-    path_or_id = file_id or path_lower
-    try:
-        meta, resp = dbx.files_download(path_or_id)
-        data = resp.content
-        if mime == "application/pdf":
-            fh = io.BytesIO(data)
-            reader = PdfReader(fh)
-            return "\n".join([(p.extract_text() or "") for p in reader.pages]).strip()
-        elif mime in ("text/plain", "text/markdown"):
-            return data.decode("utf-8", errors="ignore")
-    except ApiError:
-        return None
-    return None
 
 
 def dropbox_can_read(dbx, file_id: str) -> bool:
