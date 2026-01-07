@@ -704,7 +704,10 @@ with st.sidebar:
 # UI PRINCIPAL (chat)
 # ─────────────────────────────────────────────────────────────────────────────
 
-st.title("Asistente Conversacional Multisectorial Multiempresa (ASM2)")
+st.markdown(
+    '<h1 style="font-size: 1.6rem; margin-bottom: 0.5rem;">Asistente Conversacional Multisectorial Multiempresa (ASM2)</h1>',
+    unsafe_allow_html=True
+)
 
 # Inicializar historial de mensajes
 if "messages" not in st.session_state:
