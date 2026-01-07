@@ -1,5 +1,7 @@
 # GPU override configuration for the app service
-# Usage: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+# Usage:
+#   - Via COMPOSE_FILE env var (recommended): Set COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml in .env
+#   - Via command line: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
 services:
   app:
     deploy:
