@@ -309,9 +309,9 @@ class OnedriveFile(FaissFile):
         elif mime == "text/csv":
             return extract_csv_text(data)
 
-        # Texto plano, Markdown y otros formatos de texto
-        else:
-            try:
-                return data.decode("utf-8", errors="ignore")
-            except Exception:
-                return None
+        # Texto plano y Markdown
+        elif mime in ("text/plain", "text/markdown"):
+            return data.decode("utf-8", errors="ignore")
+
+        # Tipo no soportado
+        return None
