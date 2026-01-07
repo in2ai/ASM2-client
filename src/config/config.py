@@ -17,9 +17,10 @@ DROPBOX_APP_KEY    = (os.getenv("DROPBOX_APP_KEY") or "").strip().strip('"').str
 DROPBOX_APP_SECRET = (os.getenv("DROPBOX_APP_SECRET") or "").strip().strip('"').strip("'")
 DROPBOX_ROOT       = (os.getenv("DROPBOX_ROOT") or "/").strip()  # carpeta a indexar
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGO_IN2AI = os.path.join(BASE_DIR, "img", "in2ai.png")
-LOGO_IGAPE = os.path.join(BASE_DIR, "img", "igape.png")
+# Rutas de imágenes (relativas a la raíz del proyecto)
+LOGO_IN2AI = "img/in2ai.png"
+LOGO_IGAPE = "img/igape.png"
+LOGO_FINANCIACION = "img/logos_financiacion.png"
 
 if not OPENAI_API_KEY:
     st.error("❌ Falta OPENAI_API_KEY en .env"); st.stop()

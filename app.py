@@ -57,6 +57,26 @@ from src.metrics.metrics import (
 # Utils
 from src.utils.nlp import extract_search_terms
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def load_image_base64(path: str) -> Optional[str]:
+    """
+    Carga una imagen y la devuelve como string base64.
+    Retorna None si el archivo no existe o hay error al leerlo.
+    """
+    try:
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                return base64.b64encode(f.read()).decode()
+    except Exception:
+        pass
+    return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic models for structured LLM output
 # ─────────────────────────────────────────────────────────────────────────────
@@ -549,9 +569,8 @@ get_vectordb()
 
 with st.sidebar:
     # Logo In2AI en la parte superior del sidebar (centrado con HTML)
-    if os.path.exists("img/in2ai.png"):
-        with open("img/in2ai.png", "rb") as f:
-            logo_in2ai_data = base64.b64encode(f.read()).decode()
+    logo_in2ai_data = load_image_base64(LOGO_IN2AI)
+    if logo_in2ai_data:
         st.markdown(
             f'<div style="display:flex;justify-content:center;width:100%;padding:10px 0;">'
             f'<img src="data:image/png;base64,{logo_in2ai_data}" style="max-width:140px;">'
@@ -770,11 +789,9 @@ if prompt:
 # FOOTER (logos de financiación - fijo en la parte inferior de la pantalla)
 # ─────────────────────────────────────────────────────────────────────────────
 
-logo_financiacion = "img/logos_financiacion.png"
-if os.path.exists(logo_financiacion):
-    with open(logo_financiacion, "rb") as f:
-        img_data = base64.b64encode(f.read()).decode()
+logo_financiacion_data = load_image_base64(LOGO_FINANCIACION)
+if logo_financiacion_data:
     st.markdown(
-        f'<div class="footer-financiacion"><img src="data:image/png;base64,{img_data}" alt="Logos de financiación"></div>',
+        f'<div class="footer-financiacion"><img src="data:image/png;base64,{logo_financiacion_data}" alt="Logos de financiación"></div>',
         unsafe_allow_html=True
     )
