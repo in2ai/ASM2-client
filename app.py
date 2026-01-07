@@ -480,8 +480,43 @@ padding:6px 10px;border-bottom:1px solid #eaeaea;margin-bottom:8px;}
 .chat-row.user{justify-content:flex-end;}
 .chat-row.bot{justify-content:flex-start;}
 section[data-testid="stSidebar"] .block-container { display:flex; flex-direction:column; align-items:center; text-align:center; }
-section[data-testid="stSidebar"] img { display:block; margin-left:auto; margin-right:auto; }
 section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px; margin:0 auto; }
+/* Logo In2AI en sidebar: esquinas cuadradas y centrado */
+section[data-testid="stSidebar"] img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 0 !important;
+}
+section[data-testid="stSidebar"] [data-testid="stImage"] {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+section[data-testid="stSidebar"] [data-testid="stImage"] img {
+    border-radius: 0 !important;
+}
+/* Footer fijo para logos de financiación */
+.footer-financiacion {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 10px 20px;
+    border-top: 1px solid #eaeaea;
+    z-index: 998;
+}
+.footer-financiacion img { max-height: 60px; width: 100%; object-fit: contain; }
+/* Asegurar que el chat input esté siempre por encima del footer */
+.main .block-container { padding-bottom: 100px !important; }
+[data-testid="stChatInput"] {
+    position: relative;
+    z-index: 1000;
+    background: white;
+    padding-bottom: 80px !important;
+}
+.stChatInput { margin-bottom: 80px !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -533,10 +568,9 @@ get_vectordb()
 # ─────────────────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    if os.path.exists(LOGO_IN2AI):
-        st.image(LOGO_IN2AI, width=140)
-    if os.path.exists(LOGO_IGAPE):
-        st.image(LOGO_IGAPE, width=140)
+    # Logo In2AI en la parte superior del sidebar
+    if os.path.exists("img/in2ai.png"):
+        st.image("img/in2ai.png", width=140)
 
     st.markdown("### 🔐 Google Drive")
 
@@ -741,3 +775,18 @@ if prompt:
 
     # Guardar en historial
     st.session_state.messages.append({"role": "assistant", "content": ans})
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FOOTER (logos de financiación - fijo en la parte inferior de la pantalla)
+# ─────────────────────────────────────────────────────────────────────────────
+
+import base64
+
+logo_financiacion = "img/logos_financiacion.png"
+if os.path.exists(logo_financiacion):
+    with open(logo_financiacion, "rb") as f:
+        img_data = base64.b64encode(f.read()).decode()
+    st.markdown(
+        f'<div class="footer-financiacion"><img src="data:image/png;base64,{img_data}" alt="Logos de financiación"></div>',
+        unsafe_allow_html=True
+    )
