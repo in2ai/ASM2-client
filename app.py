@@ -515,8 +515,8 @@ section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px;
 }
 .footer-financiacion img { max-height: 50px; width: 100%; object-fit: contain; }
 /* Asegurar que el chat input esté por encima del footer */
-.main .block-container { padding-bottom: 70px !important; }
-[data-testid="stBottom"] { padding-bottom: 70px !important; }
+.main .block-container { padding-bottom: 55px !important; }
+[data-testid="stBottom"] { padding-bottom: 55px !important; }
 </style>
 """,
     unsafe_allow_html=True,
