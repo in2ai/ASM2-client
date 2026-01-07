@@ -1,6 +1,7 @@
 import csv
 import io
 
+import chardet
 import requests
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
@@ -84,7 +85,11 @@ def extract_html_text(data: bytes) -> str:
 def extract_csv_text(data: bytes) -> str:
     """Extraer texto de archivo CSV"""
     try:
-        text = data.decode("utf-8", errors="ignore")
+        # Detectar encoding automáticamente (soporta UTF-8, Latin-1, Windows-1252, etc.)
+        detected = chardet.detect(data)
+        encoding = detected.get("encoding") or "utf-8"
+        text = data.decode(encoding, errors="ignore")
+
         reader = csv.reader(io.StringIO(text))
         rows = []
         for row in reader:
