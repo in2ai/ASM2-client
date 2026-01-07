@@ -433,11 +433,6 @@ def responder_streaming(
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
     structured_llm = llm.with_structured_output(RAGResponse)
 
-    # Mostrar indicador de carga mientras procesa
-    placeholder.markdown(
-        f'<div class="chat-bubble-bot">Procesando...</div>', unsafe_allow_html=True
-    )
-
     with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
         response: RAGResponse = structured_llm.invoke(messages)
 
