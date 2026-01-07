@@ -13,9 +13,9 @@ import { redirect } from "next/navigation";
 
 export default async function SignInPage({
   searchParams,
-}: {
+}: Readonly<{
   searchParams: Promise<{ returnTo?: string }>;
-}) {
+}>) {
   const { user } = await withAuth();
 
   if (user) {
@@ -35,7 +35,7 @@ export default async function SignInPage({
           <div className="bg-primary mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
             <BarChart3 className="text-primary-foreground h-6 w-6" />
           </div>
-          <CardTitle className="text-2xl font-bold">ACM2 Central</CardTitle>
+          <CardTitle className="text-2xl font-bold">ASM2 Central</CardTitle>
           <CardDescription>
             Inicia sesión para acceder al dashboard de métricas
           </CardDescription>

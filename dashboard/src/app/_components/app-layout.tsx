@@ -76,7 +76,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
             {sidebarOpen ? (
               <span className="ml-3 truncate text-lg font-black tracking-tighter">
-                ACM2<span className="text-primary">METRICS</span>
+                ASM2<span className="text-primary">METRICS</span>
               </span>
             ) : null}
             <Button

@@ -1,4 +1,4 @@
-# ACM2 Central
+# ASM2 Central
 
 Multi-tenant analytics dashboard for RAG metrics with WorkOS authentication and role-based access control.
 
@@ -28,7 +28,7 @@ Multi-tenant analytics dashboard for RAG metrics with WorkOS authentication and 
 
 2. Create a new application in the WorkOS dashboard:
    - Click "Create Application"
-   - Enter your application name (e.g., "ACM2 Central")
+   - Enter your application name (e.g., "ASM2 Central")
    - Select your application type
 
 #### Step 2: Configure Authentication Methods
@@ -109,31 +109,31 @@ Choose the appropriate MongoDB connection string for your setup:
 **Local MongoDB:**
 
 ```bash
-MONGODB_URI=mongodb://localhost:27017/acm2-central
+MONGODB_URI=mongodb://localhost:27017/asm2-central
 ```
 
 **MongoDB Atlas (Cloud):**
 
 ```bash
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/acm2-central?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/asm2-central?retryWrites=true&w=majority
 ```
 
 **Docker Compose:**
 
 ```bash
-MONGODB_URI=mongodb://mongodb:27017/acm2-central
+MONGODB_URI=mongodb://mongodb:27017/asm2-central
 ```
 
 **MongoDB with Authentication:**
 
 ```bash
-MONGODB_URI=mongodb://username:password@localhost:27017/acm2-central?authSource=admin
+MONGODB_URI=mongodb://username:password@localhost:27017/asm2-central?authSource=admin
 ```
 
 **MongoDB Replica Set:**
 
 ```bash
-MONGODB_URI=mongodb://host1:27017,host2:27017,host3:27017/acm2-central?replicaSet=rs0
+MONGODB_URI=mongodb://host1:27017,host2:27017,host3:27017/asm2-central?replicaSet=rs0
 ```
 
 #### Step 3: Configure WorkOS Credentials
@@ -438,26 +438,26 @@ NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3001/api/auth/callback
 
 ```bash
 # Test local MongoDB
-mongosh mongodb://localhost:27017/acm2-central
+mongosh mongodb://localhost:27017/asm2-central
 
 # Test MongoDB Atlas
-mongosh "mongodb+srv://cluster.mongodb.net/acm2-central" --username youruser
+mongosh "mongodb+srv://cluster.mongodb.net/asm2-central" --username youruser
 ```
 
 **Common connection string issues**:
 
 ```bash
 # ❌ Wrong - missing protocol
-MONGODB_URI=localhost:27017/acm2-central
+MONGODB_URI=localhost:27017/asm2-central
 
 # ✅ Correct - includes protocol
-MONGODB_URI=mongodb://localhost:27017/acm2-central
+MONGODB_URI=mongodb://localhost:27017/asm2-central
 
 # ❌ Wrong - incorrect Atlas format
-MONGODB_URI=mongodb://cluster.mongodb.net/acm2-central
+MONGODB_URI=mongodb://cluster.mongodb.net/asm2-central
 
 # ✅ Correct - Atlas uses mongodb+srv
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/acm2-central
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/asm2-central
 ```
 
 #### Database Index Errors
@@ -475,7 +475,7 @@ MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/acm2-central
 
 ```javascript
 // Connect to MongoDB shell
-use acm2-central
+use asm2-central
 
 // Create required indexes
 db.ragmetrics.createIndex({ nodeId: 1, timestamp: -1 })
@@ -504,7 +504,7 @@ db.nodes.getIndexes()
 
 ```javascript
 // Connect to MongoDB shell
-use acm2-central
+use asm2-central
 
 // Check if metrics exist
 db.ragmetrics.countDocuments()
@@ -552,7 +552,7 @@ console.log("Mapped application role:", role);
 
 ```javascript
 // In MongoDB shell
-use acm2-central
+use asm2-central
 
 // Find user's organization ID from WorkOS dashboard
 // Then check if node exists
