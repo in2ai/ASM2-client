@@ -481,20 +481,26 @@ padding:6px 10px;border-bottom:1px solid #eaeaea;margin-bottom:8px;}
 .chat-row.bot{justify-content:flex-start;}
 section[data-testid="stSidebar"] .block-container { display:flex; flex-direction:column; align-items:center; text-align:center; }
 section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px; margin:0 auto; }
-/* Logo In2AI en sidebar: esquinas cuadradas y centrado */
+/* Logo In2AI en sidebar: esquinas cuadradas, centrado, sin botón de expandir */
+section[data-testid="stSidebar"] [data-testid="stImage"] {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+section[data-testid="stSidebar"] [data-testid="stImage"] > div {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+}
 section[data-testid="stSidebar"] img {
     display: block;
-    margin-left: auto;
-    margin-right: auto;
+    margin: 0 auto !important;
     border-radius: 0 !important;
 }
-section[data-testid="stSidebar"] [data-testid="stImage"] {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-}
-section[data-testid="stSidebar"] [data-testid="stImage"] img {
-    border-radius: 0 !important;
+/* Ocultar botón de expandir imagen en sidebar */
+section[data-testid="stSidebar"] [data-testid="stImage"] button {
+    display: none !important;
 }
 /* Footer fijo para logos de financiación */
 .footer-financiacion {
@@ -503,20 +509,14 @@ section[data-testid="stSidebar"] [data-testid="stImage"] img {
     left: 0;
     right: 0;
     background: white;
-    padding: 10px 20px;
+    padding: 8px 20px;
     border-top: 1px solid #eaeaea;
     z-index: 998;
 }
-.footer-financiacion img { max-height: 60px; width: 100%; object-fit: contain; }
-/* Asegurar que el chat input esté siempre por encima del footer */
-.main .block-container { padding-bottom: 100px !important; }
-[data-testid="stChatInput"] {
-    position: relative;
-    z-index: 1000;
-    background: white;
-    padding-bottom: 80px !important;
-}
-.stChatInput { margin-bottom: 80px !important; }
+.footer-financiacion img { max-height: 50px; width: 100%; object-fit: contain; }
+/* Asegurar que el chat input esté por encima del footer */
+.main .block-container { padding-bottom: 70px !important; }
+[data-testid="stBottom"] { padding-bottom: 70px !important; }
 </style>
 """,
     unsafe_allow_html=True,
