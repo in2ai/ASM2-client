@@ -9,6 +9,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Main imports
+import base64
 import os
 import threading
 import time
@@ -481,27 +482,6 @@ padding:6px 10px;border-bottom:1px solid #eaeaea;margin-bottom:8px;}
 .chat-row.bot{justify-content:flex-start;}
 section[data-testid="stSidebar"] .block-container { display:flex; flex-direction:column; align-items:center; text-align:center; }
 section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px; margin:0 auto; }
-/* Logo In2AI en sidebar: esquinas cuadradas, centrado, sin botón de expandir */
-section[data-testid="stSidebar"] [data-testid="stImage"] {
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    width: 100% !important;
-}
-section[data-testid="stSidebar"] [data-testid="stImage"] > div {
-    display: flex !important;
-    justify-content: center !important;
-    width: 100% !important;
-}
-section[data-testid="stSidebar"] img {
-    display: block;
-    margin: 0 auto !important;
-    border-radius: 0 !important;
-}
-/* Ocultar botón de expandir imagen en sidebar */
-section[data-testid="stSidebar"] [data-testid="stImage"] button {
-    display: none !important;
-}
 /* Footer fijo para logos de financiación */
 .footer-financiacion {
     position: fixed;
@@ -568,9 +548,16 @@ get_vectordb()
 # ─────────────────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    # Logo In2AI en la parte superior del sidebar
+    # Logo In2AI en la parte superior del sidebar (centrado con HTML)
     if os.path.exists("img/in2ai.png"):
-        st.image("img/in2ai.png", width=140)
+        with open("img/in2ai.png", "rb") as f:
+            logo_in2ai_data = base64.b64encode(f.read()).decode()
+        st.markdown(
+            f'<div style="display:flex;justify-content:center;width:100%;padding:10px 0;">'
+            f'<img src="data:image/png;base64,{logo_in2ai_data}" style="max-width:140px;">'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
     st.markdown("### 🔐 Google Drive")
 
@@ -782,8 +769,6 @@ if prompt:
 # ─────────────────────────────────────────────────────────────────────────────
 # FOOTER (logos de financiación - fijo en la parte inferior de la pantalla)
 # ─────────────────────────────────────────────────────────────────────────────
-
-import base64
 
 logo_financiacion = "img/logos_financiacion.png"
 if os.path.exists(logo_financiacion):
