@@ -32,7 +32,7 @@ import {
 import { useState, type ElementType, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
-type View = "overview" | "usage" | "rag-quality" | "performance" | "insights";
+type View = "overview" | "usage" | "rag-quality" | "insights";
 
 interface AppLayoutProps {
   readonly children: (view: View) => ReactNode;
@@ -110,13 +110,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                 label="Calidad del RAG"
                 active={currentView === "rag-quality"}
                 onClick={() => handleViewChange("rag-quality")}
-                collapsed={!sidebarOpen}
-              />
-              <NavItem
-                icon={Shield}
-                label="Rendimiento"
-                active={currentView === "performance"}
-                onClick={() => handleViewChange("performance")}
                 collapsed={!sidebarOpen}
               />
               <NavItem
@@ -245,7 +238,6 @@ function ViewSwitcher({
     { key: "overview", label: "General", shortLabel: "Gen" },
     { key: "usage", label: "Uso", shortLabel: "Uso" },
     { key: "rag-quality", label: "RAG", shortLabel: "RAG" },
-    { key: "performance", label: "Rendimiento", shortLabel: "Perf" },
     { key: "insights", label: "Insights", shortLabel: "Ins" },
   ];
 

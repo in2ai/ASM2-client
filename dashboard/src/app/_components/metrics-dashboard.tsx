@@ -27,8 +27,6 @@ import { api, type RouterOutputs } from "@/trpc/react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import {
   Activity,
-  AlertCircle,
-  ArrowUpRight,
   BarChart3,
   Clock,
   Database,
@@ -37,7 +35,6 @@ import {
   Sparkles,
   TrendingUp,
   User,
-  Zap,
 } from "lucide-react";
 import { useMemo, useState, type ElementType } from "react";
 import { type DateRange } from "react-day-picker";
@@ -48,8 +45,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   XAxis,
@@ -65,34 +60,9 @@ const roleChartConfig: ChartConfig = {
   other: { label: "Other", color: "hsl(215 20% 65%)" },
 };
 
-const methodChartConfig: ChartConfig = {
-  GET: { label: "GET", color: "hsl(142 70% 45%)" },
-  POST: { label: "POST", color: "hsl(221 83% 53%)" },
-  PUT: { label: "PUT", color: "hsl(43 92% 58%)" },
-  DELETE: { label: "DELETE", color: "hsl(0 84% 60%)" },
-  PATCH: { label: "PATCH", color: "hsl(262 83% 68%)" },
-  other: { label: "Other", color: "hsl(215 20% 65%)" },
-};
-
-const statusChartConfig: ChartConfig = {
-  "2xx": { label: "Success (2xx)", color: "hsl(142 70% 45%)" },
-  "3xx": { label: "Redirect (3xx)", color: "hsl(199 89% 62%)" },
-  "4xx": { label: "Client Error (4xx)", color: "hsl(43 92% 58%)" },
-  "5xx": { label: "Server Error (5xx)", color: "hsl(0 84% 60%)" },
-};
-
 const activityChartConfig: ChartConfig = {
   event_count: { label: "Eventos", color: "oklch(0.6 0.25 250)" },
   unique_users: { label: "Usuarios únicos", color: "oklch(0.7 0.2 150)" },
-};
-
-const requestsChartConfig: ChartConfig = {
-  request_count: { label: "Peticiones", color: "oklch(0.6 0.25 250)" },
-  error_count: { label: "Errores", color: "oklch(0.6 0.25 20)" },
-};
-
-const latencyChartConfig: ChartConfig = {
-  count: { label: "Peticiones", color: "oklch(0.7 0.2 300)" },
 };
 
 const hourlyChartConfig: ChartConfig = {
@@ -172,7 +142,6 @@ function StatCard({
 
 function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
   const userActivity = metrics.user_activity;
-  const requestStats = metrics.request_stats;
   const metricsData = metrics.metrics;
 
   const uniqueUsers = userActivity.unique_users.toLocaleString("es-ES");
@@ -180,18 +149,13 @@ function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
   const avgSession = userActivity.mean_session_length_seconds
     ? (userActivity.mean_session_length_seconds / 60).toFixed(1)
     : "0.0";
-  const avgLatency = requestStats.avg_latency
-    ? requestStats.avg_latency.toFixed(0)
-    : "0";
-  const totalRequests = requestStats.total_requests.toLocaleString("es-ES");
-  const errorRate = metrics.error_rate.toFixed(1);
   const ragLatency = metricsData.response_time
     ? metricsData.response_time.toFixed(0)
     : "0";
   const totalMetrics = metricsData.total_count.toLocaleString("es-ES");
 
   return (
-    <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+    <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <StatCard
         label="Usuarios únicos"
         value={uniqueUsers}
@@ -209,28 +173,6 @@ function StatsRow({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
         value={`${avgSession}m`}
         helper="Tiempo de uso"
         icon={Clock}
-      />
-      <StatCard
-        label="Latencia red"
-        value={`${avgLatency}ms`}
-        helper="Respuesta servidor"
-        icon={Zap}
-      />
-      <StatCard
-        label="Peticiones"
-        value={totalRequests}
-        helper="Total sistema"
-        icon={TrendingUp}
-      />
-      <StatCard
-        label="Tasa de error"
-        value={`${errorRate}%`}
-        helper="Respuestas fallidas"
-        icon={AlertCircle}
-        trend={{
-          value: `${errorRate}%`,
-          positive: Number.parseFloat(errorRate) < 5,
-        }}
       />
       <StatCard
         label="Latencia RAG"
@@ -263,7 +205,7 @@ function OverviewHighlights({
 
       <StatsRow metrics={metrics} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6">
         <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
@@ -346,80 +288,6 @@ function OverviewHighlights({
             </ChartContainer>
           </CardContent>
         </Card>
-
-        <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div className="space-y-1">
-              <CardTitle className="text-lg font-bold">
-                Rendimiento Sistema
-              </CardTitle>
-              <CardDescription>Peticiones y errores recientes</CardDescription>
-            </div>
-            <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-              <Zap size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="h-[300px] p-0 pt-4">
-            <ChartContainer
-              config={{
-                request_count: {
-                  label: "Peticiones",
-                  color: "oklch(0.6 0.25 250)",
-                },
-                error_count: { label: "Errores", color: "oklch(0.6 0.25 20)" },
-              }}
-              className="h-full w-full"
-            >
-              <LineChart
-                data={metrics.request_stats.by_day.slice(-7).map((item) => ({
-                  ...item,
-                  date: new Date(item.date).toLocaleDateString("es-ES", {
-                    day: "2-digit",
-                    month: "short",
-                  }),
-                }))}
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="hsl(var(--border))"
-                  opacity={0.5}
-                />
-                <XAxis
-                  dataKey="date"
-                  tickLine={false}
-                  axisLine={false}
-                  style={{ fontSize: 10 }}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  style={{ fontSize: 10 }}
-                />
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
-                  }
-                />
-                <Line
-                  type="monotone"
-                  dataKey="request_count"
-                  stroke="var(--color-request_count)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="error_count"
-                  stroke="var(--color-error_count)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
@@ -428,8 +296,7 @@ function OverviewHighlights({
 function isEmptyData(data: MetricsResponse): boolean {
   return (
     data?.user_activity?.total_events === 0 &&
-    data?.user_activity?.unique_users === 0 &&
-    data?.request_stats?.total_requests === 0
+    data?.user_activity?.unique_users === 0
   );
 }
 
@@ -734,7 +601,6 @@ export function MetricsDashboard() {
               {view === "overview" && <OverviewHighlights metrics={data} />}
               {view === "usage" && <UsageMetrics metrics={data} />}
               {view === "rag-quality" && <RAGQualityMetrics metrics={data} />}
-              {view === "performance" && <PerformanceMetrics metrics={data} />}
               {view === "insights" && <InsightsView metrics={data} />}
             </div>
           )}
@@ -1226,669 +1092,6 @@ function RAGQualityMetrics({
   );
 }
 
-function PerformanceMetrics({
-  metrics,
-}: Readonly<{ metrics: MetricsResponse }>) {
-  const { visibility } = useChartVisibility();
-  const requestStats = metrics.request_stats;
-
-  const methodChartData = useMemo(
-    () =>
-      Object.entries(requestStats.method_breakdown).map(([method, count]) => ({
-        method,
-        value: count,
-        fill: `var(--color-${method})`,
-      })),
-    [requestStats.method_breakdown],
-  );
-
-  const statusChartData = useMemo(() => {
-    const grouped: Record<string, number> = {};
-    Object.entries(requestStats.status_breakdown).forEach(([status, count]) => {
-      const statusNum = Number.parseInt(status);
-      if (statusNum >= 200 && statusNum < 300) {
-        grouped["2xx"] = (grouped["2xx"] ?? 0) + count;
-      } else if (statusNum >= 300 && statusNum < 400) {
-        grouped["3xx"] = (grouped["3xx"] ?? 0) + count;
-      } else if (statusNum >= 400 && statusNum < 500) {
-        grouped["4xx"] = (grouped["4xx"] ?? 0) + count;
-      } else if (statusNum >= 500) {
-        grouped["5xx"] = (grouped["5xx"] ?? 0) + count;
-      }
-    });
-    return Object.entries(grouped).map(([status, count]) => ({
-      status,
-      value: count,
-      fill: `var(--color-${status})`,
-    }));
-  }, [requestStats.status_breakdown]);
-
-  const endpointChartData = useMemo(
-    () =>
-      Object.entries(requestStats.endpoint_breakdown)
-        .slice(0, 10)
-        .map(([endpoint, count]) => ({
-          endpoint:
-            endpoint.length > 30 ? endpoint.substring(0, 30) + "..." : endpoint,
-          fullEndpoint: endpoint,
-          count,
-        })),
-    [requestStats.endpoint_breakdown],
-  );
-
-  const requestsByDayData = useMemo(
-    () =>
-      requestStats.by_day.map((item) => ({
-        ...item,
-        date: new Date(item.date).toLocaleDateString("es-ES", {
-          day: "2-digit",
-          month: "short",
-        }),
-      })),
-    [requestStats.by_day],
-  );
-
-  const latencyDistributionData = useMemo(
-    () => requestStats.latency_distribution,
-    [requestStats.latency_distribution],
-  );
-
-  const latencyByEndpointData = useMemo(
-    () =>
-      requestStats.latency_by_endpoint.map((item) => ({
-        ...item,
-        endpoint:
-          item.endpoint.length > 25
-            ? item.endpoint.substring(0, 25) + "..."
-            : item.endpoint,
-        fullEndpoint: item.endpoint,
-        avg_latency: Number(item.avg_latency.toFixed(0)),
-      })),
-    [requestStats.latency_by_endpoint],
-  );
-
-  const errorByEndpointData = useMemo(
-    () =>
-      requestStats.error_by_endpoint.map((item) => ({
-        ...item,
-        endpoint:
-          item.endpoint.length > 25
-            ? item.endpoint.substring(0, 25) + "..."
-            : item.endpoint,
-        fullEndpoint: item.endpoint,
-        error_rate: Number(item.error_rate.toFixed(1)),
-      })),
-    [requestStats.error_by_endpoint],
-  );
-
-  const detailedStatusData = useMemo(
-    () =>
-      requestStats.detailed_status_codes.map((item) => ({
-        status: item.status.toString(),
-        count: item.count,
-        fill:
-          item.status >= 500
-            ? "hsl(0 84% 60%)"
-            : item.status >= 400
-              ? "hsl(43 92% 58%)"
-              : item.status >= 300
-                ? "hsl(199 89% 62%)"
-                : "hsl(142 70% 45%)",
-      })),
-    [requestStats.detailed_status_codes],
-  );
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold sm:text-2xl">
-          3. Métricas de rendimiento e infraestructura
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          Datos de la tabla requests
-        </p>
-        <div className="bg-border mt-3 h-px" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {visibility.tokenUsageChart && methodChartData.length > 0 && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-bold">
-                  Por método HTTP
-                </CardTitle>
-                <CardDescription>Distribución de peticiones</CardDescription>
-              </div>
-              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                <Zap size={18} />
-              </div>
-            </CardHeader>
-            <CardContent className="overflow-hidden">
-              <ChartContainer
-                config={methodChartConfig}
-                className="mx-auto h-[300px] w-full"
-              >
-                <PieChart>
-                  <Pie
-                    data={methodChartData}
-                    dataKey="value"
-                    nameKey="method"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={5}
-                    cornerRadius={6}
-                  >
-                    {methodChartData.map((entry) => (
-                      <Cell
-                        key={`cell-${entry.method}`}
-                        fill={entry.fill}
-                        stroke="none"
-                      />
-                    ))}
-                  </Pie>
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        nameKey="method"
-                        labelKey="method"
-                        hideIndicator
-                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
-                      />
-                    }
-                  />
-                  <ChartLegend
-                    content={<ChartLegendContent nameKey="method" />}
-                    className="flex-wrap gap-x-4 gap-y-2 pt-4"
-                  />
-                </PieChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.resourceConsumption && statusChartData.length > 0 && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-bold">Por estado</CardTitle>
-                <CardDescription>Códigos de respuesta</CardDescription>
-              </div>
-              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                <AlertCircle size={18} />
-              </div>
-            </CardHeader>
-            <CardContent className="overflow-hidden">
-              <ChartContainer
-                config={statusChartConfig}
-                className="mx-auto h-[300px] w-full"
-              >
-                <PieChart>
-                  <Pie
-                    data={statusChartData}
-                    dataKey="value"
-                    nameKey="status"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={5}
-                    cornerRadius={6}
-                  >
-                    {statusChartData.map((entry) => (
-                      <Cell
-                        key={`cell-${entry.status}`}
-                        fill={entry.fill}
-                        stroke="none"
-                      />
-                    ))}
-                  </Pie>
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        nameKey="status"
-                        labelKey="status"
-                        hideIndicator
-                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
-                      />
-                    }
-                  />
-                  <ChartLegend
-                    content={<ChartLegendContent nameKey="status" />}
-                    className="flex-wrap gap-x-4 gap-y-2 pt-4"
-                  />
-                </PieChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.requestsTrend && requestsByDayData.length > 0 && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-xl font-bold tracking-tight">
-                  Tendencia de peticiones
-                </CardTitle>
-                <CardDescription>Peticiones y errores por día</CardDescription>
-              </div>
-              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                <TrendingUp size={20} />
-              </div>
-            </CardHeader>
-            <CardContent className="overflow-hidden p-0 pt-4">
-              <ChartContainer
-                config={requestsChartConfig}
-                className="h-[350px] w-full"
-              >
-                <LineChart
-                  data={requestsByDayData}
-                  margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="hsl(var(--border))"
-                    opacity={0.5}
-                  />
-                  <XAxis
-                    dataKey="date"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={12}
-                    style={{ fontSize: 11, fontWeight: 500 }}
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={12}
-                    style={{ fontSize: 11, fontWeight: 500 }}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
-                    }
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="request_count"
-                    stroke="var(--color-request_count)"
-                    strokeWidth={3}
-                    dot={{
-                      r: 4,
-                      fill: "var(--color-request_count)",
-                      strokeWidth: 2,
-                      stroke: "white",
-                    }}
-                    activeDot={{ r: 6, strokeWidth: 0 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="error_count"
-                    stroke="var(--color-error_count)"
-                    strokeWidth={3}
-                    dot={{
-                      r: 4,
-                      fill: "var(--color-error_count)",
-                      strokeWidth: 2,
-                      stroke: "white",
-                    }}
-                    activeDot={{ r: 6, strokeWidth: 0 }}
-                  />
-                  <ChartLegend
-                    content={<ChartLegendContent />}
-                    className="pt-4"
-                  />
-                </LineChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.costPerQuery && endpointChartData.length > 0 && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-xl font-bold tracking-tight">
-                  Top endpoints
-                </CardTitle>
-                <CardDescription>Endpoints más utilizados</CardDescription>
-              </div>
-              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                <ArrowUpRight size={20} />
-              </div>
-            </CardHeader>
-            <CardContent className="overflow-hidden p-0 pt-4">
-              <ChartContainer
-                config={{
-                  count: { label: "Peticiones", color: "oklch(0.6 0.25 250)" },
-                }}
-                className="h-[350px] w-full"
-              >
-                <BarChart
-                  data={endpointChartData}
-                  layout="vertical"
-                  margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient
-                      id="barEndpointGradient"
-                      x1="0"
-                      y1="0"
-                      x2="1"
-                      y2="0"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="var(--color-count)"
-                        stopOpacity={0.8}
-                      />
-                      <stop
-                        offset="100%"
-                        stopColor="var(--color-count)"
-                        stopOpacity={1}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    horizontal={false}
-                    strokeDasharray="3 3"
-                    stroke="hsl(var(--border))"
-                    opacity={0.5}
-                  />
-                  <XAxis
-                    type="number"
-                    allowDecimals={false}
-                    tickLine={false}
-                    axisLine={false}
-                    style={{ fontSize: 11 }}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="endpoint"
-                    tickLine={false}
-                    axisLine={false}
-                    width={180}
-                    style={{ fontSize: 11, fontWeight: 600 }}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        labelKey="fullEndpoint"
-                        nameKey="endpoint"
-                        hideIndicator
-                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
-                      />
-                    }
-                  />
-                  <Bar
-                    dataKey="count"
-                    fill="url(#barEndpointGradient)"
-                    radius={[0, 6, 6, 0]}
-                    barSize={24}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.latencyDistribution &&
-          latencyDistributionData.length > 0 && (
-            <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="space-y-1">
-                  <CardTitle className="text-lg font-bold">
-                    Distribución de latencia
-                  </CardTitle>
-                  <CardDescription>
-                    Peticiones por rango de tiempo
-                  </CardDescription>
-                </div>
-                <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                  <Zap size={18} />
-                </div>
-              </CardHeader>
-              <CardContent className="overflow-hidden p-0 pt-4">
-                <ChartContainer
-                  config={latencyChartConfig}
-                  className="h-[280px] w-full"
-                >
-                  <BarChart
-                    data={latencyDistributionData}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="hsl(var(--border))"
-                      opacity={0.5}
-                    />
-                    <XAxis
-                      dataKey="range"
-                      tickLine={false}
-                      axisLine={false}
-                      style={{ fontSize: 10 }}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      style={{ fontSize: 10 }}
-                    />
-                    <ChartTooltip
-                      content={
-                        <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
-                      }
-                    />
-                    <Bar
-                      dataKey="count"
-                      fill="var(--color-count)"
-                      radius={[6, 6, 0, 0]}
-                      barSize={40}
-                    />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          )}
-
-        {visibility.detailedStatusCodes && detailedStatusData.length > 0 && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-bold">
-                  Estados detallados
-                </CardTitle>
-                <CardDescription>Desglose completo de códigos</CardDescription>
-              </div>
-              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                <AlertCircle size={18} />
-              </div>
-            </CardHeader>
-            <CardContent className="overflow-hidden p-0 pt-4">
-              <ChartContainer
-                config={{
-                  count: { label: "Peticiones", color: "oklch(0.6 0.25 250)" },
-                }}
-                className="h-[280px] w-full"
-              >
-                <BarChart
-                  data={detailedStatusData}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="hsl(var(--border))"
-                    opacity={0.5}
-                  />
-                  <XAxis
-                    dataKey="status"
-                    tickLine={false}
-                    axisLine={false}
-                    style={{ fontSize: 10 }}
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    style={{ fontSize: 10 }}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
-                    }
-                  />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={40}>
-                    {detailedStatusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.latencyByEndpoint && latencyByEndpointData.length > 0 && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-bold">
-                  Latencia por endpoint
-                </CardTitle>
-                <CardDescription>Promedios más altos</CardDescription>
-              </div>
-              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                <Zap size={18} />
-              </div>
-            </CardHeader>
-            <CardContent className="overflow-hidden p-0 pt-4">
-              <ChartContainer
-                config={{
-                  avg_latency: {
-                    label: "Latencia (ms)",
-                    color: "oklch(0.7 0.2 60)",
-                  },
-                }}
-                className="h-[280px] w-full"
-              >
-                <BarChart
-                  data={latencyByEndpointData}
-                  layout="vertical"
-                  margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    horizontal={false}
-                    strokeDasharray="3 3"
-                    stroke="hsl(var(--border))"
-                    opacity={0.5}
-                  />
-                  <XAxis
-                    type="number"
-                    tickLine={false}
-                    axisLine={false}
-                    style={{ fontSize: 10 }}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="endpoint"
-                    tickLine={false}
-                    axisLine={false}
-                    width={100}
-                    style={{ fontSize: 10, fontWeight: 600 }}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        labelKey="fullEndpoint"
-                        hideIndicator
-                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
-                      />
-                    }
-                  />
-                  <Bar
-                    dataKey="avg_latency"
-                    fill="var(--color-avg_latency)"
-                    radius={[0, 4, 4, 0]}
-                    barSize={20}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.errorsByEndpoint && errorByEndpointData.length > 0 && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-bold">
-                  Errores por endpoint
-                </CardTitle>
-                <CardDescription>Endpoints con más fallos</CardDescription>
-              </div>
-              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                <AlertCircle size={18} />
-              </div>
-            </CardHeader>
-            <CardContent className="overflow-hidden p-0 pt-4">
-              <ChartContainer
-                config={{
-                  error_count: {
-                    label: "Errores",
-                    color: "oklch(0.6 0.25 20)",
-                  },
-                }}
-                className="h-[280px] w-full"
-              >
-                <BarChart
-                  data={errorByEndpointData}
-                  layout="vertical"
-                  margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    horizontal={false}
-                    strokeDasharray="3 3"
-                    stroke="hsl(var(--border))"
-                    opacity={0.5}
-                  />
-                  <XAxis
-                    type="number"
-                    tickLine={false}
-                    axisLine={false}
-                    style={{ fontSize: 10 }}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="endpoint"
-                    tickLine={false}
-                    axisLine={false}
-                    width={100}
-                    style={{ fontSize: 10, fontWeight: 600 }}
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        labelKey="fullEndpoint"
-                        hideIndicator
-                        className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
-                      />
-                    }
-                  />
-                  <Bar
-                    dataKey="error_count"
-                    fill="var(--color-error_count)"
-                    radius={[0, 4, 4, 0]}
-                    barSize={20}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
   const { visibility } = useChartVisibility();
   const topWords = metrics.top_words;
@@ -2131,88 +1334,6 @@ function InsightsView({ metrics }: Readonly<{ metrics: MetricsResponse }>) {
                   />
                 </BarChart>
               </ChartContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {visibility.alerts && (
-          <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="space-y-1">
-                <CardTitle className="text-xl font-bold tracking-tight">
-                  Estado del sistema
-                </CardTitle>
-                <CardDescription>
-                  Resumen de salud y performance
-                </CardDescription>
-              </div>
-              <div
-                className={cn(
-                  "rounded-xl p-2.5",
-                  metrics.error_rate < 5
-                    ? "bg-emerald-500/10 text-emerald-500"
-                    : metrics.error_rate < 10
-                      ? "bg-yellow-500/10 text-yellow-500"
-                      : "bg-red-500/10 text-red-500",
-                )}
-              >
-                <Activity size={20} />
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div
-                className={cn(
-                  "rounded-2xl border p-6 transition-all",
-                  metrics.error_rate < 5
-                    ? "border-emerald-500/20 bg-emerald-500/5 shadow-inner shadow-emerald-500/5"
-                    : metrics.error_rate < 10
-                      ? "border-yellow-500/20 bg-yellow-500/5 shadow-inner shadow-yellow-500/5"
-                      : "border-red-500/20 bg-red-500/5 shadow-inner shadow-red-500/5",
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "flex h-12 w-12 items-center justify-center rounded-2xl",
-                      metrics.error_rate < 5
-                        ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                        : metrics.error_rate < 10
-                          ? "bg-yellow-500 text-white shadow-lg shadow-yellow-500/20"
-                          : "bg-red-500 text-white shadow-lg shadow-red-500/20",
-                    )}
-                  >
-                    {metrics.error_rate < 5 ? (
-                      <TrendingUp size={24} />
-                    ) : (
-                      <AlertCircle size={24} />
-                    )}
-                  </div>
-                  <div>
-                    <p
-                      className={cn(
-                        "text-lg font-black tracking-tight",
-                        metrics.error_rate < 5
-                          ? "text-emerald-700 dark:text-emerald-300"
-                          : metrics.error_rate < 10
-                            ? "text-yellow-700 dark:text-yellow-300"
-                            : "text-red-700 dark:text-red-300",
-                      )}
-                    >
-                      {metrics.error_rate < 5
-                        ? "SISTEMA SEGURO"
-                        : metrics.error_rate < 10
-                          ? "ATENCIÓN NECESARIA"
-                          : "SISTEMA INSTABLE"}
-                    </p>
-                    <p className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
-                      Tasa de error: {metrics.error_rate.toFixed(2)}% ·
-                      Latencia:{" "}
-                      {metrics.request_stats.avg_latency?.toFixed(0) ?? "N/A"}{" "}
-                      ms
-                    </p>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         )}

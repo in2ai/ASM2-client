@@ -13,7 +13,7 @@ import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { Eye, EyeOff, Settings } from "lucide-react";
 
 interface ChartControlsProps {
-  view: "overview" | "usage" | "rag-quality" | "performance" | "insights";
+  view: "overview" | "usage" | "rag-quality" | "insights";
 }
 
 export function ChartVisibilityControls({
@@ -32,30 +32,12 @@ export function ChartVisibilityControls({
         ];
       case "rag-quality":
         return [{ id: "metricsByTag" as const, label: "Métricas por tipo" }];
-      case "performance":
-        return [
-          { id: "tokenUsageChart" as const, label: "Distribución por método" },
-          {
-            id: "resourceConsumption" as const,
-            label: "Distribución por estado",
-          },
-          { id: "requestsTrend" as const, label: "Tendencia de peticiones" },
-          { id: "costPerQuery" as const, label: "Top endpoints" },
-          {
-            id: "latencyDistribution" as const,
-            label: "Distribución de latencia",
-          },
-          { id: "detailedStatusCodes" as const, label: "Estados detallados" },
-          { id: "latencyByEndpoint" as const, label: "Latencia por endpoint" },
-          { id: "errorsByEndpoint" as const, label: "Errores por endpoint" },
-        ];
       case "insights":
         return [
           { id: "commonWords" as const, label: "Palabras más buscadas" },
           { id: "topQueries" as const, label: "Temas más frecuentes" },
           { id: "topWordsBarChart" as const, label: "Gráfico de palabras" },
           { id: "topicsBarChart" as const, label: "Gráfico de temas" },
-          { id: "alerts" as const, label: "Estado del sistema" },
           {
             id: "thematicDistribution" as const,
             label: "Distribución de roles",
