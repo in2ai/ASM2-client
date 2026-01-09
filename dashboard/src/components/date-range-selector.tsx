@@ -10,7 +10,8 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Check, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { type DateRange } from "react-day-picker";
 
 interface DateRangeSelectorProps {
@@ -25,6 +26,17 @@ const presets = [
 ];
 
 export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
+  // Internal draft state for pending date selection
+  const [draftRange, setDraftRange] = useState<DateRange | undefined>(value);
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Sync draft with external value when popover opens or value changes externally
+  useEffect(() => {
+    if (isOpen) {
+      setDraftRange(value);
+    }
+  }, [isOpen, value]);
+
   const handlePresetClick = (days: number) => {
     const to = new Date();
     const from = new Date();
@@ -35,6 +47,19 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
   const handleClearFilter = () => {
     onChange(undefined);
   };
+
+  const handleApply = () => {
+    onChange(draftRange);
+    setIsOpen(false);
+  };
+
+  const handleCancel = () => {
+    setDraftRange(value); // Reset to current value
+    setIsOpen(false);
+  };
+
+  // Check if the draft range is valid (has both from and to dates)
+  const isDraftValid = draftRange?.from && draftRange?.to;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -58,7 +83,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
           <span className="sm:hidden">{preset.days}d</span>
         </Button>
       ))}
-      <Popover>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -95,24 +120,37 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="range"
-            defaultMonth={value?.from}
-            selected={value}
-            onSelect={onChange}
-            numberOfMonths={1}
-            className="sm:hidden"
-            locale={es}
-          />
-          <Calendar
-            mode="range"
-            defaultMonth={value?.from}
-            selected={value}
-            onSelect={onChange}
-            numberOfMonths={2}
-            className="hidden sm:block"
-            locale={es}
-          />
+          <div className="flex flex-col">
+            <Calendar
+              mode="range"
+              defaultMonth={draftRange?.from ?? value?.from}
+              selected={draftRange}
+              onSelect={setDraftRange}
+              numberOfMonths={2}
+              className="rounded-t-lg border-b-0 shadow-sm"
+              locale={es}
+            />
+            <div className="bg-muted/50 flex items-center justify-end gap-2 border-t p-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancel}
+                className="h-8"
+              >
+                <X className="mr-1 h-4 w-4" />
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleApply}
+                disabled={!isDraftValid}
+                className="h-8"
+              >
+                <Check className="mr-1 h-4 w-4" />
+                Aplicar
+              </Button>
+            </div>
+          </div>
         </PopoverContent>
       </Popover>
     </div>
