@@ -1,6 +1,6 @@
 # app.py
 # ─────────────────────────────────────────────────────────────────────────────
-# RAG sobre Google Drive ,Dropbox y One Drive con ACL:
+# Asistente Conversacional Multisectorial Multiempresa (ASM2)
 # - El índice puede crearlo un “superusuario”.
 # - Cada consulta se valida con las credenciales del usuario actual (Drive/Dropbox).
 # - Drive guarda ACL (permissionIds/domains/anyone) y valida en vivo.
@@ -10,11 +10,14 @@
 
 # Main imports
 import os
+import re
 import threading
 import time
+from typing import Optional, List
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from pydantic import BaseModel, Field
 
 import streamlit as st
 
@@ -25,12 +28,31 @@ from src.config.config import *
 from src.connectors.drive import drive_can_read, get_current_user_drive, oauth_login_drive, construir_vectorstore_drive
 from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_vectorstore_dropbox
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
+from src.connectors.store import create_hybrid_retriever
 
 # Metrics
-from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words, register_topics
 
 # Utils
 from src.utils.nlp import extract_search_terms
+
+# Reranker
+from sentence_transformers import CrossEncoder
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pydantic models for structured LLM output
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Source(BaseModel):
+    """A source document cited in the response."""
+    title: str = Field(description="The title or filename of the source document")
+    source_type: str = Field(description="The type of source: 'Drive', 'Dropbox', or 'OneDrive'")
+    link: Optional[str] = Field(default=None, description="The webViewLink URL to the document (only available for Drive)")
+
+class RAGResponse(BaseModel):
+    """Structured response from the RAG system."""
+    answer: str = Field(description="The answer to the user's question based on the context provided")
+    sources: List[Source] = Field(description="List of sources cited in the answer")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Hardware usage metrics
@@ -65,6 +87,95 @@ def start_usage_metrics_thread():
 
 
 start_usage_metrics_thread()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RERANKER (Cross-Encoder para reordenar resultados de búsqueda)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Modelo anterior (más preciso pero más lento, ~560M params):
+# RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+
+
+# Modelo multilingüe ligero (~117M params, soporta ES y 13 idiomas más):
+RERANKER_MODEL = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+
+@st.cache_resource(show_spinner=False)
+def get_reranker():
+    """Carga el modelo de reranking (cross-encoder)."""
+    # print(f"🔄 Cargando modelo de reranking: {RERANKER_MODEL}")
+    return CrossEncoder(RERANKER_MODEL)
+
+def rerank_documents(query: str, documents: list, top_k: int = None) -> list:
+    """
+    Reordena documentos usando un cross-encoder para mejor precisión.
+    
+    Args:
+        query: La query del usuario
+        documents: Lista de documentos (LangChain Document objects)
+        top_k: Número máximo de documentos a retornar (None = todos)
+    
+    Returns:
+        Lista de documentos reordenados por relevancia
+    """
+    if not documents:
+        return documents
+    
+    reranker = get_reranker()
+    
+    # Preparar tuplas (query, documento) para el cross-encoder
+    pairs = [(query, doc.page_content) for doc in documents]
+    
+    # Obtener scores del cross-encoder
+    scores = reranker.predict(pairs)
+    print(f"DEBUG Raw scores: {scores}")
+    
+    # Combinar documentos con scores y ordenar por score descendente
+    scored_docs = list(zip(documents, scores))
+    scored_docs.sort(key=lambda x: x[1], reverse=True)
+    
+    # Extraer documentos ordenados
+    reranked_docs = [doc for doc, score in scored_docs]
+    
+    if top_k is not None:
+        reranked_docs = reranked_docs[:top_k]
+    
+    return reranked_docs
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REFORMATEADOR DE CONSULTAS (con memoria conversacional)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def rewrite_query_with_context(query: str, history: list) -> str:
+    """
+    Reescribe la query para clarificar pronombres y referencias usando el historial de conversación.
+    """
+    if not history or len(history) < 2:
+        return query
+    
+    # Coger los últimos 4 mensajes como contexto
+    recent = history[-4:]
+    history_text = "\n".join(
+        f"{'Usuario' if m['role']=='user' else 'Asistente'}: {m['content'][:300]}"
+        for m in recent
+    )
+    
+    rewriter_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    prompt = f"""Dado este historial de conversación:
+{history_text}
+
+Tu tarea: Si la siguiente consulta contiene pronombres o referencias ambiguas (como "eso", "ese documento", "lo mismo", "más sobre eso"), reescríbela para que sea autocontenida.
+Si la consulta ya es clara y autocontenida, devuélvela tal cual.
+
+
+Consulta original: {query}
+
+Responde SOLO con la consulta reescrita, sin explicaciones:"""
+    
+    try:
+        rewritten = rewriter_llm.invoke([HumanMessage(content=prompt)]).content.strip()
+        return rewritten if rewritten else query
+    except Exception:
+        return query
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PERMISOS UNIFICADOS
@@ -116,7 +227,11 @@ def reindex_all_sources():
 # RESPONDER (multi-origen)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=1600):
+def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=1600):
+    """
+    Prepara el contexto RAG: busca documentos, filtra por permisos, reordena.
+    Retorna (messages, available_sources, allowed_chunks) o None si no hay resultados.
+    """
     # Register that the user is still active
     register_user_activity()
 
@@ -128,16 +243,23 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
 
     allowed_chunks = []
 
-    # 1) Recuperar candidatos de cada origen y filtrar por permisos
-    insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(query))
+    # 0) Reescribir consulta con historial conversacional (clarifica pronombres/referencias)
+    history = st.session_state.get("messages", [])
+    expanded_query = rewrite_query_with_context(query, history)
+    print(f"DEBUG Reescrita: {expanded_query}")
+
+    # 1) Obtener chunks usando búsqueda híbrida (BM25 + Vector)
+    insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(expanded_query))
 
     with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
+        drive_user = None
         if 'drive' in services:
             drive_user = get_current_user_drive(services["drive"])
         
-        search = vectordb.similarity_search_with_score(query, k=256)
+        search_results = hybrid_retriever.invoke(expanded_query)
 
-        for f, s in search:   
+        # 1.5) Filtrar por permisos
+        for f in search_results:
             source = f.metadata['source']
 
             if source == "Drive" and "drive" in services and has_access(services["drive"], f.metadata, drive_user):
@@ -149,43 +271,143 @@ def responder_multi(query, vectordb, services, threshold=0.50, k=6, chunk_chars=
             elif source == "Onedrive" and "onedrive_token" in services and has_access(services["onedrive_token"], f.metadata):
                 allowed_chunks.append(f)
 
-            # We stop iterating when we have k docs or the score is too low
-            if len(allowed_chunks) == k or s < threshold:
-                break
+        # 2) Reranking
+        if allowed_chunks:
+            allowed_chunks = rerank_documents(expanded_query, allowed_chunks, top_k=k)
+            print(f"🎯 Reranking aplicado: {len(allowed_chunks)} documentos")
 
     if not allowed_chunks:
-        return "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
+        return None
+
+    topics = {t for d in allowed_chunks for t, _ in d.metadata.get('topics', {}).items()}
+    register_topics(topics)
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
     # 2) Contexto
+    SOURCE_TAGS = {"Drive": "Drive", "Dropbox": "Dropbox", "Onedrive": "OneDrive"}
+    
+    def get_doc_info(d):
+        """Extrae info común de un documento: tag, título y enlace."""
+        src = d.metadata.get("source", "Drive")
+        tag = SOURCE_TAGS.get(src, src)
+        title = d.metadata.get("title") or d.metadata.get("name") or "(sin título)"
+        link = d.metadata.get("webViewLink")
+        return tag, title, link
+
     def cite(d):
-        src = d.metadata.get("source","drive")
-        tag = "Drive" if src == "drive" else "Dropbox"
-        t = d.metadata.get("title","(sin título)")
-        return f"[{tag}:{t}] {(d.page_content or '')[:chunk_chars]}"
+        tag, title, link = get_doc_info(d)
+        link_info = f" (Link: {link})" if link else ""
+        return f"[{tag}:{title}{link_info}] {(d.page_content or '')[:chunk_chars]}"
+
+    # Construir lista de fuentes disponibles para el LLM
+    available_sources = []
+    seen_ids = set()
+    for d in allowed_chunks:
+        doc_id = d.metadata.get("id")
+        if doc_id not in seen_ids:
+            seen_ids.add(doc_id)
+            tag, title, link = get_doc_info(d)
+            available_sources.append({"title": title, "source_type": tag, "link": link})
     
     contexto = "\n\n".join(cite(d) for d in allowed_chunks)
+    print(contexto)
 
     insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
-    # 3) LLM
-    system = ("Eres un asistente RAG en ESPAÑOL. Responde SOLO con el CONTEXTO. "
-              "Redacta en lenguaje natural, claro y directo. Cita los títulos entre corchetes.")
-    user = f"CONTEXTO:\n{contexto}\n\nPREGUNTA:\n{query}"
+    # 3) Preparar mensajes para el LLM
+    system = ("Eres un asistente conversacional RAG en ESPAÑOL. Responde SOLO con el CONTEXTO proporcionado. "
+              "No improvises si no tienes información en el contexto. "
+              "En tu respuesta, no uses la palabra \"CONTEXTO\", sino usa \"las fuentes\". "
+              "Redacta en lenguaje natural, claro y directo. "
+              "NO incluyas las fuentes en tu respuesta, se añadirán automáticamente al final. "
+              "Usa el historial de conversación para seguir el hilo.")
+    
+    sources_info = "\n".join([
+        f"- {s['title']} ({s['source_type']})"
+        for s in available_sources
+    ])
+    print(sources_info)
+    
+    # Construir lista de mensajes para el LLM desde st.session_state.messages
+    messages = [SystemMessage(content=system)]
+    for m in history[:-1][-10:]:  # Últimos 10 mensajes excluyendo el actual
+        if m["role"] == "user":
+            messages.append(HumanMessage(content=m["content"]))
+        else:
+            messages.append(AIMessage(content=m["content"]))
+    
+    user_message = f"""CONTEXTO:
+{contexto}
 
-    insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user))
+FUENTES DISPONIBLES:
+{sources_info}
 
+PREGUNTA:
+{query}"""
+    
+    messages.append(HumanMessage(content=user_message))
+
+    insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user_message))
+
+    return messages, available_sources, allowed_chunks
+
+
+def responder_streaming(query, hybrid_retriever, services, placeholder, k=6, chunk_chars=1600):
+    """
+    Genera respuesta con streaming. Actualiza el placeholder progresivamente.
+    Retorna la respuesta completa al final.
+    """
+    # Preparar contexto
+    result = preparar_contexto_rag(query, hybrid_retriever, services, k, chunk_chars)
+    
+    if result is None:
+        msg = "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
+        placeholder.markdown(f'<div class="chat-bubble-bot">{msg}</div>', unsafe_allow_html=True)
+        return msg
+    
+    messages, available_sources, allowed_chunks = result
+    
+    # LLM con streaming
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2, streaming=True)
+    
+    full_response = ""
+    
     with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
-        ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
-
-    insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, llm.get_num_tokens(ans))
-
-    if not ans or not ans.strip():
-        t = allowed_chunks[0].metadata.get("title", "(sin título)")
-        ans = f"Según [{t}]: {(allowed_chunks[0].page_content or '')[:chunk_chars]}"
-
-    return ans
+        for chunk in llm.stream(messages):
+            if chunk.content:
+                full_response += chunk.content
+                # Actualizar placeholder con el texto acumulado
+                placeholder.markdown(
+                    f'<div class="chat-bubble-bot">{full_response}▌</div>', 
+                    unsafe_allow_html=True
+                )
+    
+    insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, len(full_response.split()))
+    
+    # Limpiar cualquier sección de fuentes que el LLM haya añadido (evita duplicados)
+    # Captura variaciones: **Fuentes:**, <b>Fuentes:</b>, Fuentes:, con <br>, \n, etc.
+    fuentes_pattern = r'[\n\r]*(?:<br\s*/?>)*\s*(?:\*\*|<b>)?fuentes\s*:?(?:\*\*|</b>)?.*$'
+    full_response = re.sub(fuentes_pattern, '', full_response, flags=re.IGNORECASE | re.DOTALL).strip()
+    
+    # Añadir fuentes al final
+    if available_sources:
+        sources_html = "<br><br><b>Fuentes:</b><ul>"
+        for src in available_sources:
+            if src.get("link"):
+                sources_html += f'<li><a href="{src["link"]}" target="_blank">{src["title"]}</a> ({src["source_type"]})</li>'
+            else:
+                sources_html += f"<li>{src['title']} ({src['source_type']})</li>"
+        sources_html += "</ul>"
+        full_response += sources_html
+    
+    # Renderizar respuesta final sin cursor
+    placeholder.markdown(
+        f'<div class="chat-bubble-bot">{full_response}</div>', 
+        unsafe_allow_html=True
+    )
+    
+    return full_response
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ESTILOS
@@ -217,7 +439,7 @@ section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px;
 # CARGA / CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_vectordb():
     vectordb = None
 
@@ -234,9 +456,17 @@ def get_vectordb():
             with st.spinner(f"Construyendo / Cargando índice de OneDrive ({ONEDRIVE_ROOT or '/'})…"):
                 vectordb = construir_vectorstore_onedrive()
         except Exception as e:
-            pass
+            print(f"[OneDrive ERROR] {type(e).__name__}: {e}")
+            st.error(f"❌ Error indexando OneDrive: {e}")
 
-    return vectordb
+    # Crear retriever híbrido (BM25 + Vector)
+    hybrid_retriever = None
+    if vectordb is not None:
+        with st.spinner("Construyendo índice híbrido BM25…"):
+            # Reducido de k=50 a k=25 para mejor rendimiento en reranking
+            hybrid_retriever, _ = create_hybrid_retriever(vectordb, k=25)
+
+    return vectordb, hybrid_retriever
 
 get_vectordb()
 
@@ -353,10 +583,6 @@ with st.sidebar:
 
     st.session_state.sources_selected = sel
 
-    st.markdown("### 🎚️ Umbral de relevancia")
-    threshold = st.slider("Umbral (0.0 = permisivo · 0.90 = estricto)", 0.0, 0.90, 0.45, 0.01)
-    st.session_state.threshold = threshold
-
     st.markdown("### 🔄 Reindexar contenidos")
     st.caption("Pulsa para detectar e indexar nuevos ficheros en las fuentes conectadas.")
 
@@ -367,8 +593,9 @@ with st.sidebar:
 # UI PRINCIPAL (chat)
 # ─────────────────────────────────────────────────────────────────────────────
 
-st.title("ACM2 - RAG con ACL (Drive + Dropbox)")
+st.title("Asistente Conversacional Multisectorial Multiempresa (ASM2)")
 
+# Inicializar historial de mensajes
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -383,35 +610,45 @@ prompt = st.chat_input("Escribe tu mensaje…")
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.markdown(f'<div class="chat-row user"><div class="chat-bubble-user">{prompt}</div></div>', unsafe_allow_html=True)
-    with st.spinner("Pensando…"):
-        try:
-            # Add the connectors
-            sel = st.session_state.get("sources_selected") or []                
-            services = {}
-            
-            if "Drive" in sel and "service" in st.session_state:
-                services["drive"] = st.session_state.service
+    
+    # Crear placeholder para streaming
+    response_container = st.container()
+    with response_container:
+        st.markdown('<div class="chat-row bot">', unsafe_allow_html=True)
+        response_placeholder = st.empty()
+        
+    try:
+        # Add the connectors
+        sel = st.session_state.get("sources_selected") or []                
+        services = {}
+        
+        if "Drive" in sel and "service" in st.session_state:
+            services["drive"] = st.session_state.service
 
-            if "Dropbox" in sel and "dbx" in st.session_state:
-                services["dropbox"] = st.session_state.dbx
+        if "Dropbox" in sel and "dbx" in st.session_state:
+            services["dropbox"] = st.session_state.dbx
 
-            if "OneDrive" in sel and "onedrive_token" in st.session_state:
-                services["onedrive_token"] = st.session_state.onedrive_token
+        if "OneDrive" in sel and "onedrive_token" in st.session_state:
+            services["onedrive_token"] = st.session_state.onedrive_token
 
-            vectordb = get_vectordb()
+        vectordb, hybrid_retriever = get_vectordb()
 
-            # Check the vector DB
-            if vectordb is None:
-                ans = "Conecta al menos una fuente (Drive/Dropbox) en la barra lateral."
+        # Check the vector DB
+        if vectordb is None:
+            ans = "Conecta al menos una fuente (Drive/OneDrive/Dropbox) en la barra lateral."
+            response_placeholder.markdown(f'<div class="chat-bubble-bot">{ans}</div>', unsafe_allow_html=True)
+        else:
+            # Mostrar spinner mientras prepara el contexto, luego streaming
+            with st.spinner("Pensando…"):
+                ans = responder_streaming(prompt, hybrid_retriever, services, response_placeholder, k=6)
 
-            else:
-                ans = responder_multi(
-                    prompt, vectordb, services,
-                    threshold=st.session_state.get("threshold", 0.45), k=6
-                )
+    except Exception as e:
+        ans = f"Error: {e}"
+        response_placeholder.markdown(f'<div class="chat-bubble-bot">{ans}</div>', unsafe_allow_html=True)
 
-        except Exception as e:
-            ans = f"Error: {e}"
-
-    st.markdown(f'<div class="chat-row bot"><div class="chat-bubble-bot">{ans}</div></div>', unsafe_allow_html=True)
+    # Cerrar div del chat-row
+    with response_container:
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Guardar en historial
     st.session_state.messages.append({"role": "assistant", "content": ans})

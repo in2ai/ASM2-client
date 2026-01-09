@@ -24,7 +24,7 @@ def oauth_dropbox():
             consumer_key=DROPBOX_APP_KEY,
             consumer_secret=DROPBOX_APP_SECRET,
             token_access_type="offline",
-            scope=["files.metadata.read", "files.content.read"],
+            scope=["files.metadata.read", "files.content.read", "account_info.read", "sharing.read", "sharing.write"],
             include_granted_scopes="user",
             use_pkce=True,
         )
@@ -133,6 +133,24 @@ def dropbox_can_read(dbx, file_id: str) -> bool:
         return True
     except ApiError:
         return False
+
+def get_dropbox_link(dbx, path_lower):
+    """Obtiene o crea un enlace compartido para un archivo de Dropbox."""
+    try:
+        # Primero, intentar obtener enlaces compartidos existentes
+        links = dbx.sharing_list_shared_links(path=path_lower, direct_only=True)
+        if links.links:
+            return links.links[0].url
+        
+        # Si no existe ningún enlace, crear uno
+        shared_link = dbx.sharing_create_shared_link_with_settings(path_lower)
+        return shared_link.url
+    except ApiError as e:
+        if hasattr(e.error, 'is_shared_link_already_exists') and e.error.is_shared_link_already_exists():
+            links = dbx.sharing_list_shared_links(path=path_lower, direct_only=True)
+            if links.links:
+                return links.links[0].url
+        return None
     
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTRUCCIÓN ÍNDICES
@@ -150,7 +168,8 @@ def construir_vectorstore_dropbox():
             "name": f.name, 
             "path_lower": f.path_lower, 
             "modifiedTime": f.client_modified.isoformat(),
-            "mimeType": guess_mime_from_name(f.name)
+            "mimeType": guess_mime_from_name(f.name),
+            "webViewLink": get_dropbox_link(dbx, f.path_lower)
         } 
         for f in files
     ]

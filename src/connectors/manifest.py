@@ -16,7 +16,9 @@ def load_manifest(path):
     return {
         "processed_ids": {}, 
         "total_chunks": 0, 
-        "completed": {}, 
+        "completed": {},
+        "topics": False,
+        "config_hash": None
     }
 
 
@@ -51,6 +53,10 @@ class FaissManifest:
             self.manifest['processed_ids'][source][id] = time
 
 
+    def num_chunks(self):
+        return self.manifest['total_chunks']
+
+
     def add_chunks(self, chunks):
         self.manifest['total_chunks'] += chunks
 
@@ -73,3 +79,30 @@ class FaissManifest:
         self.manifest['processed_ids'].setdefault(source, {})
 
         return file.metadata['id'] in self.manifest['processed_ids'][source]
+
+
+    def has_topics(self):
+        return self.manifest['topics']
+    
+
+    def set_topics(self):
+        self.manifest['topics'] = True
+
+
+    def get_config_hash(self) -> str:
+        """Obtiene el hash de configuración guardado."""
+        return self.manifest.get("config_hash")
+    
+
+    def set_config_hash(self, config_hash: str) -> None:
+        """Guarda el hash de configuración."""
+        self.manifest["config_hash"] = config_hash
+        self.save()
+        
+
+    def needs_config_rebuild(self, current_hash: str) -> bool:
+        """Verifica si la configuración de chunking cambió."""
+        stored_hash = self.get_config_hash()
+        if stored_hash is None:
+            return False  # Primera vez, no hay hash anterior
+        return stored_hash != current_hash
