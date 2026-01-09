@@ -1,4 +1,5 @@
-import streamlit as st
+from typing import List
+import os
 
 from typing import List, Tuple, Optional
 import faiss
@@ -22,6 +23,7 @@ from pydantic import Field
 
 from src.connectors.faiss_file import FaissFile
 from src.connectors.manifest import FaissManifest
+from src.utils.topic import assign_topics, extract_initial_topics
 
 FAISS_PATH = "faiss_index"
 BM25_PATH = "bm25_index"
@@ -129,6 +131,9 @@ class BM25Retriever(BaseRetriever):
         except Exception:
             return True
 
+CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
+TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
+
 def setup_faiss_gpu(vectorstore):
     try:
         gpu_res = faiss.StandardGpuResources()
@@ -214,7 +219,11 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
         for i in range(0, len(docs_batch), batch_size):
             sub_docs = docs_batch[i:i + batch_size]
-            vectorstore.add_documents(sub_docs)
+            new_ids = vectorstore.add_documents(sub_docs)
+
+            if CALCULATE_TOPICS and manifest.has_topics():
+                assign_topics(vectorstore, new_ids)
+
             vectorstore.save_local(FAISS_PATH)
 
         manifest.add_processed_ids(source, pending_ids)
@@ -247,6 +256,17 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
     if docs_batch: 
         flush("final")
+
+    # Add topics if needed
+    if CALCULATE_TOPICS and not manifest.has_topics():
+        if manifest.num_chunks() > TOPIC_MIN_SIZE:
+            print(f"💾 ({source}) Detectando temas...")
+            extract_initial_topics(vectorstore)
+            manifest.set_topics()
+            vectorstore.save_local(FAISS_PATH)
+            
+        else:
+            print(f"({source}) El índice es demasiado pequeño para detectar temas")
 
     # Update status manifest con el hash de configuración actual
     manifest.add_completed_source(source)
