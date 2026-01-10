@@ -19,6 +19,16 @@ interface StatCardProps {
   trend?: { value: string; positive: boolean };
 }
 
+/**
+ * Render a stylized statistic card with an icon, a prominent value, a label, and optional trend badge and helper text.
+ *
+ * @param label - The uppercase label text shown above the main value
+ * @param value - The primary statistic displayed prominently as the card title
+ * @param helper - Optional small helper text rendered below the card content
+ * @param icon - React component type used for the card icons (rendered at two sizes)
+ * @param trend - Optional trend indicator with shape `{ value: string; positive: boolean }`; `value` is displayed inside the badge and `positive` controls its styling
+ * @returns The rendered statistic card element
+ */
 export function StatCard({
   label,
   value,

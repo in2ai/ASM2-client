@@ -28,6 +28,13 @@ const toggleVariants = cva(
   }
 )
 
+/**
+ * Render a styled toggle root that applies variant- and size-based classes and forwards remaining props.
+ *
+ * @param variant - Visual variant of the toggle; one of `"default"` (transparent background) or `"outline"` (bordered background).
+ * @param size - Size of the toggle; one of `"default"`, `"sm"`, or `"lg"`.
+ * @returns The Radix `TogglePrimitive.Root` element with computed classes and forwarded props.
+ */
 function Toggle({
   className,
   variant,

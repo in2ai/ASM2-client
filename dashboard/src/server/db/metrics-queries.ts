@@ -385,7 +385,12 @@ export async function getTotalActivityEvents(
 }
 
 /**
- * Get distribution of users by role from user_activity table
+ * Return a mapping of user roles to the number of distinct users with that role from the user_activity table.
+ *
+ * Filters by the optional `startDate` and `endDate` in `params` when provided; rows with a null `user_role` are excluded.
+ *
+ * @param params - Optional query filters; recognized keys include `startDate` and `endDate` to restrict the time range (inclusive).
+ * @returns A record where keys are user roles and values are the count of distinct users for that role.
  */
 export async function getUserRoleDistribution(
   params: MetricsQueryParams = {},
@@ -436,7 +441,18 @@ export interface ActivityByDay {
 }
 
 /**
- * Get user activity aggregated by day
+ * Retrieve daily user activity for up to 30 days.
+ *
+ * @param params - Optional filters:
+ *   - `startDate`: include events occurring at or after this timestamp
+ *   - `endDate`: include events occurring at or before this timestamp
+ *   - `userId`: restrict to events for the specified user
+ *   - `userRole`: restrict to events for users with the specified role
+ * @returns An array of ActivityByDay objects with properties:
+ *   - `date`: date string for the day
+ *   - `event_count`: total events on that day
+ *   - `unique_users`: number of distinct users who had events that day
+ *   The array is ordered from oldest to newest.
  */
 export async function getActivityByDay(
   params: MetricsQueryParams = {},
@@ -502,7 +518,12 @@ export interface HourlyActivity {
 }
 
 /**
- * Get activity distribution by hour of day
+ * Compute activity counts for each hour of the day using optional time and user filters.
+ *
+ * The result always contains 24 entries (hours 0 through 23); hours with no events are included with `event_count` set to `0`.
+ *
+ * @param params - Optional filters: `startDate`, `endDate`, `userId`, and `userRole`
+ * @returns An array of `HourlyActivity` objects for hours 0–23 where `event_count` is the number of events in that hour
  */
 export async function getHourlyActivityPattern(
   params: MetricsQueryParams = {},
@@ -574,7 +595,10 @@ export interface MetricsByTag {
 }
 
 /**
- * Get metrics aggregated by tag
+ * Retrieve up to 20 metric aggregates grouped by tag, ordered by frequency.
+ *
+ * @param params - Optional filters to restrict the metrics by `startDate`, `endDate`, `userId`, or `userRole`
+ * @returns An array of `MetricsByTag` objects each containing `tag`, `avg_value` (average metric value, 0 if absent), and `count` (number of samples)
  */
 export async function getMetricsByTag(
   params: MetricsQueryParams = {},

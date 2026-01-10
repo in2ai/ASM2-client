@@ -40,6 +40,14 @@ interface UsageMetricsProps {
   metrics: MetricsResponse;
 }
 
+/**
+ * Render usage and interaction metrics as a set of responsive cards and charts.
+ *
+ * Renders an activity trend area chart, a role distribution pie chart, and an hourly activity bar chart when corresponding visibility flags are enabled and data is present. Data transformation for chart inputs is memoized.
+ *
+ * @param metrics - MetricsResponse containing `user_activity` (including `role_distribution`, `by_day`, and `hourly_pattern`) used to build the charts
+ * @returns A React element containing the metrics section with cards and charts, conditionally rendered based on chart visibility and available data
+ */
 export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
   const { visibility } = useChartVisibility();
   const userActivity = metrics.user_activity;

@@ -25,6 +25,16 @@ const presets = [
   { label: "Últimos 90 días", days: 90 },
 ];
 
+/**
+ * Render a date range selector with quick presets, a clear option, and a popover calendar for selecting a custom range.
+ *
+ * The component is controlled by `value` and reports changes via `onChange`. It supports applying or canceling a drafted selection
+ * and provides preset ranges (7, 30, 90 days) and a "Todos" (clear) action.
+ *
+ * @param value - The currently selected `DateRange` (may be `undefined` for no selection)
+ * @param onChange - Callback invoked with a new `DateRange` or `undefined` when the selection is applied or cleared
+ * @returns The rendered DateRangeSelector element
+ */
 export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
   // Internal draft state for pending date selection
   const [draftRange, setDraftRange] = useState<DateRange | undefined>(value);

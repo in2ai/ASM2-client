@@ -8,6 +8,12 @@ interface StatsRowProps {
   metrics: MetricsResponse;
 }
 
+/**
+ * Render a responsive row of five metric summary cards derived from a MetricsResponse.
+ *
+ * @param metrics - MetricsResponse containing `user_activity` and `metrics` used to populate the cards
+ * @returns A JSX element: a responsive grid of StatCard components showing unique users, total events, average session (minutes), RAG latency (ms), and total RAG metrics
+ */
 export function StatsRow({ metrics }: Readonly<StatsRowProps>) {
   const userActivity = metrics.user_activity;
   const metricsData = metrics.metrics;

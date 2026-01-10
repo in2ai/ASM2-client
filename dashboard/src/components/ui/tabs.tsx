@@ -5,6 +5,12 @@ import * as TabsPrimitive from "@radix-ui/react-tabs"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Root container for a tabbed interface that establishes a vertical layout and common spacing.
+ *
+ * @param className - Additional CSS class names appended to the default "flex flex-col gap-2" container classes
+ * @returns The Tabs root element configured as a vertical container with the combined `className` and forwarded props
+ */
 function Tabs({
   className,
   ...props
@@ -18,6 +24,14 @@ function Tabs({
   )
 }
 
+/**
+ * Renders a styled container for tab triggers.
+ *
+ * Applies default layout and visual styles, adds a `data-slot="tabs-list"` attribute,
+ * and forwards any provided props to the underlying Radix Tabs List element.
+ *
+ * @returns A Tabs list element with the default styling and any provided props applied.
+ */
 function TabsList({
   className,
   ...props
@@ -34,6 +48,12 @@ function TabsList({
   )
 }
 
+/**
+ * Renders a styled tab trigger element for use within the Tabs component.
+ *
+ * @param className - Additional class names to merge with the component's default styles
+ * @returns The tab trigger element with applied styling and a `data-slot="tabs-trigger"` attribute
+ */
 function TabsTrigger({
   className,
   ...props
@@ -50,6 +70,12 @@ function TabsTrigger({
   )
 }
 
+/**
+ * Renders a tab panel container, wrapping Radix's Tabs.Content with default layout styling and a data-slot attribute.
+ *
+ * @param className - Additional class names to merge with the component's default classes
+ * @returns The rendered tab content element
+ */
 function TabsContent({
   className,
   ...props
