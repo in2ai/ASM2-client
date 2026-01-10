@@ -51,7 +51,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
     const to = new Date();
     const from = new Date();
     from.setDate(from.getDate() - days);
-    onChange({ from, to });
+    setDraftRange({ from, to });
   };
 
   const handleClearFilter = () => {
