@@ -23,6 +23,16 @@ interface InsightsViewProps {
   metrics: MetricsResponse;
 }
 
+/**
+ * Render a set of dashboard insight cards driven by the provided metrics.
+ *
+ * The component displays top words, top topics, bar charts for words and topics,
+ * and a user-role distribution panel, each shown conditionally based on chart
+ * visibility settings from context and the presence of corresponding data.
+ *
+ * @param metrics - MetricsResponse containing `top_words`, `top_topics`, and `user_activity.role_distribution` used to populate badges, lists, and charts
+ * @returns A React element that renders insight cards (top words, top topics, word/topics bar charts, and role distribution) according to visibility flags and available data
+ */
 export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
   const { visibility } = useChartVisibility();
   const topWords = metrics.top_words;

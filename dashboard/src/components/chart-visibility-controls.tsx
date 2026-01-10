@@ -16,6 +16,12 @@ interface ChartControlsProps {
   view: "overview" | "usage" | "rag-quality" | "insights";
 }
 
+/**
+ * Render a dropdown control for showing and hiding the charts relevant to the provided view.
+ *
+ * @param view - The current dashboard view that determines the available charts. One of `"overview"`, `"usage"`, `"rag-quality"`, or `"insights"`.
+ * @returns A JSX element containing a dropdown menu with controls to toggle individual chart visibility and to show or hide all charts for the given view.
+ */
 export function ChartVisibilityControls({
   view,
 }: Readonly<ChartControlsProps>) {

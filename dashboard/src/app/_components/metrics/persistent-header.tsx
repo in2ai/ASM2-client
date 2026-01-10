@@ -18,6 +18,21 @@ interface PersistentHeaderProps {
   onRefresh: () => void;
 }
 
+/**
+ * Render a persistent header containing a metrics overview title, update status, and action controls.
+ *
+ * Displays a loading badge when fetching, shows last-updated text (or a fallback), and optionally the total
+ * metrics records when available. Provides a date-range selector, an export button, and a refresh button whose
+ * disabled and spinning states reflect the `isFetching` prop.
+ *
+ * @param dateRange - Currently selected date range for filtering metrics; may be undefined for default scope
+ * @param onDateRangeChange - Callback invoked when the date range selection changes
+ * @param lastUpdated - Human-readable timestamp of the last update; when omitted, displays a fallback indicating "now"
+ * @param stats - Optional metrics summary containing `totalMetricsRecords` used to display total record count
+ * @param isFetching - Whether metrics data is currently being fetched; controls loading visuals and refresh button state
+ * @param onRefresh - Callback invoked when the refresh action is triggered
+ * @returns A React element that renders the metrics header and its controls
+ */
 export function PersistentHeader({
   dateRange,
   onDateRangeChange,

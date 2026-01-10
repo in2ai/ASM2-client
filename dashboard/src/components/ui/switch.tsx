@@ -5,6 +5,12 @@ import * as SwitchPrimitive from "@radix-ui/react-switch"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Renders a styled toggle switch using Radix UI's Switch primitives.
+ *
+ * @param className - Optional additional CSS classes to merge with the component's base styles
+ * @returns A `SwitchPrimitive.Root` element with composed styling and a nested `SwitchPrimitive.Thumb` child
+ */
 function Switch({
   className,
   ...props

@@ -6,6 +6,12 @@ export const getDateFormatter = () =>
     timeStyle: "short",
   });
 
+/**
+ * Determines whether the provided metrics response contains no user activity.
+ *
+ * @param data - The metrics response to inspect. If `data` or its `user_activity` is missing, the function returns `false`.
+ * @returns `true` if both `user_activity.total_events` and `user_activity.unique_users` are 0, `false` otherwise.
+ */
 export function isEmptyData(data: MetricsResponse): boolean {
   return (
     data?.user_activity?.total_events === 0 &&
@@ -13,6 +19,13 @@ export function isEmptyData(data: MetricsResponse): boolean {
   );
 }
 
+/**
+ * Produce a user-facing title for a metrics-related error.
+ *
+ * @param error - The error to interpret; may be an `Error` object, a string, or any other value.
+ * @returns A short title describing the error, one of:
+ * `"Unauthorized Access"`, `"Access Denied"`, `"Data Not Found"`, `"Request Timeout"`, `"Server Error"`, or `"Error Loading Metrics"`.
+ */
 export function getErrorTitle(error: unknown): string {
   if (!error) return "Error Loading Metrics";
 
@@ -60,6 +73,15 @@ export function getErrorTitle(error: unknown): string {
   return "Error Loading Metrics";
 }
 
+/**
+ * Generates a user-facing Spanish error message from an Error object or string.
+ *
+ * Inspects the provided value (Error or string) and returns a localized Spanish message for common cases:
+ * authorization issues, permission denials, resource not found, timeouts, network/fetch failures, and server errors.
+ * If the error is an Error with a message, that message is returned; otherwise a generic recovery message is returned.
+ *
+ * @param error - An Error instance or a string describing the error; other types are treated as unknown.
+ * @returns A Spanish user-facing message describing the error.
 export function getErrorMessage(error: unknown): string {
   if (!error)
     return "No se pudieron recuperar los datos. Por favor, intenta nuevamente.";
@@ -119,6 +141,12 @@ export function getErrorMessage(error: unknown): string {
   return "No se pudieron recuperar los datos. Por favor, intenta nuevamente.";
 }
 
+/**
+ * Determines whether an error is recoverable — i.e., not caused by authorization or permission issues.
+ *
+ * @param error - The error to evaluate; may be an `Error`, a string, or any other value.
+ * @returns `true` if the error is considered recoverable; `false` if it indicates an authorization or permission failure.
+ */
 export function isRecoverableError(error: unknown): boolean {
   if (!error) return true;
 
