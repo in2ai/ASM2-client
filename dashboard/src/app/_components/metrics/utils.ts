@@ -110,7 +110,7 @@ export function getErrorMessage(error: unknown): string {
   }
 
   if (errorMessage.includes("NOT_FOUND")) {
-    return errorMessage;
+    return "No se encontraron datos para la selección actual.";
   }
 
   if (
