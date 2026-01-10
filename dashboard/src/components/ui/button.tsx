@@ -36,6 +36,16 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * Renders a configurable, variant-driven button element.
+ *
+ * @param variant - Visual style variant to apply (e.g., "default", "destructive", "outline", "secondary", "ghost", "link")
+ * @param size - Size preset to apply (e.g., "default", "sm", "lg", "icon", "icon-sm", "icon-lg")
+ * @param asChild - If true, renders the provided child element in place of a native `button` while preserving styles and attributes
+ * @param className - Additional class names to merge with the component's variant classes
+ * @param props - Additional props are forwarded to the rendered element
+ * @returns A React element for a styled button with the selected variant and size
+ */
 function Button({
   className,
   variant = "default",

@@ -2,6 +2,11 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Root container for empty-state UIs.
+ *
+ * @returns A div element with `data-slot="empty"` that serves as the root empty-state container.
+ */
 function Empty({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -15,6 +20,11 @@ function Empty({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Renders the header slot for an empty-state layout.
+ *
+ * @returns A `div` element with `data-slot="empty-header"` and centered layout classes suitable for header content
+ */
 function EmptyHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -43,6 +53,13 @@ const emptyMediaVariants = cva(
   }
 )
 
+/**
+ * Renders the empty-state media container used for icons or other illustrative media.
+ *
+ * @param variant - Visual variant to apply; `"default"` uses a transparent base, `"icon"` adds a muted, rounded background and responsive sizing for icon presentation.
+ * @param className - Additional CSS classes to merge with the component's base styles.
+ * @returns A div element configured as the empty-state media slot with the selected variant and merged classes.
+ */
 function EmptyMedia({
   className,
   variant = "default",
@@ -58,6 +75,11 @@ function EmptyMedia({
   )
 }
 
+/**
+ * Renders the empty-state title element.
+ *
+ * @returns A `div` element for the empty-state title with preset typography classes and any provided props
+ */
 function EmptyTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -68,6 +90,14 @@ function EmptyTitle({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Renders the empty-state description slot with muted text and consistent link styling.
+ *
+ * Applies underline, underline offset, and hover color to child links and sets `data-slot="empty-description"`.
+ *
+ * @param className - Additional CSS classes to merge with the component's default styles
+ * @returns A div element containing descriptive text for an empty state
+ */
 function EmptyDescription({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <div
@@ -81,6 +111,12 @@ function EmptyDescription({ className, ...props }: React.ComponentProps<"p">) {
   )
 }
 
+/**
+ * Wrapper for empty-state content that vertically stacks and centers children.
+ *
+ * @param className - Additional CSS classes to merge with the component's default styling
+ * @returns A div element used as the empty-state content container
+ */
 function EmptyContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

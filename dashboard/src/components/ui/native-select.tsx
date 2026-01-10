@@ -3,6 +3,13 @@ import { ChevronDownIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Renders a styled native HTML <select> with a right-aligned chevron icon and size variants.
+ *
+ * @param className - Additional CSS classes merged into the underlying <select> element's class list
+ * @param size - Visual size variant; `"default"` applies the normal height and padding, `"sm"` applies reduced height and padding
+ * @returns A JSX element containing the styled native select and its chevron icon
+ */
 function NativeSelect({
   className,
   size = "default",
@@ -33,10 +40,22 @@ function NativeSelect({
   )
 }
 
+/**
+ * Renders an HTML `option` element with a `data-slot="native-select-option"` attribute for tooling and styling hooks.
+ *
+ * @param props - Props forwarded to the underlying `option` element
+ * @returns The rendered `option` element
+ */
 function NativeSelectOption({ ...props }: React.ComponentProps<"option">) {
   return <option data-slot="native-select-option" {...props} />
 }
 
+/**
+ * Renders an HTML optgroup with a `data-slot` attribute for tooling and forwards all provided props.
+ *
+ * @param className - Optional CSS class names to apply to the optgroup element.
+ * @returns The optgroup element with `data-slot="native-select-optgroup"` and all other props forwarded.
+ */
 function NativeSelectOptGroup({
   className,
   ...props
