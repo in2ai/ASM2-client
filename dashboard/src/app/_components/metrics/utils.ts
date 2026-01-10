@@ -82,6 +82,7 @@ export function getErrorTitle(error: unknown): string {
  *
  * @param error - An Error instance or a string describing the error; other types are treated as unknown.
  * @returns A Spanish user-facing message describing the error.
+ */
 export function getErrorMessage(error: unknown): string {
   if (!error)
     return "No se pudieron recuperar los datos. Por favor, intenta nuevamente.";
