@@ -100,7 +100,9 @@ class RAGResponse(BaseModel):
     answer: str = Field(
         description="The answer to the user's question based on the context provided"
     )
-    sources: List[Source] = Field(description="List of sources cited in the answer")
+    sources: List[Source] = Field(
+        description="List of thhe relevant sources used to craft the answer"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -516,6 +518,8 @@ section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px;
 /* Asegurar que el chat input esté por encima del footer */
 .main .block-container { padding-top: 1rem !important; padding-bottom: 55px !important; }
 [data-testid="stBottom"] { padding-bottom: 55px !important; }
+/* Ocultar el indicador de carga de Streamlit en la esquina superior derecha */
+[data-testid="stStatusWidget"] { display: none !important; }
 </style>
 """,
     unsafe_allow_html=True,
