@@ -518,8 +518,6 @@ section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px;
 /* Asegurar que el chat input esté por encima del footer */
 .main .block-container { padding-top: 1rem !important; padding-bottom: 55px !important; }
 [data-testid="stBottom"] { padding-bottom: 55px !important; }
-/* Ocultar el indicador de carga de Streamlit en la esquina superior derecha */
-[data-testid="stStatusWidget"] { display: none !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -571,6 +569,12 @@ _reranker = get_reranker()
 
 # Pre-calentar el modelo de embeddings (primera llamada a OpenAI establece conexión)
 EMBEDDINGS.embed_query("warmup")
+
+# Ocultar el indicador de carga después de que todo esté listo
+st.markdown(
+    "<style>[data-testid='stStatusWidget'] { display: none !important; }</style>",
+    unsafe_allow_html=True,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR (sesiones y fuentes)
