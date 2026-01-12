@@ -233,7 +233,7 @@ export async function meanSessionLength(
     throw new Error("sessionGapMinutes must be > 0");
   }
 
-  const gapMs = sessionGapMinutes * 60 * 1000;
+  const gapMicros = sessionGapMinutes * 60 * 1000 * 1000;
   const queryParams: (string | number)[] = [];
   const whereClauses: string[] = [];
   let paramIndex = 1;
@@ -278,12 +278,12 @@ export async function meanSessionLength(
         SELECT
             user_id,
             ts,
-            SUM(CASE WHEN prev_ts IS NULL OR (ts - prev_ts) >= ${gapMs} THEN 1 ELSE 0 END)
+            SUM(CASE WHEN prev_ts IS NULL OR (ts - prev_ts) >= ${gapMicros} THEN 1 ELSE 0 END)
                 OVER (PARTITION BY user_id ORDER BY ts ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS session_id
         FROM user_events
     )
     SELECT
-        AVG(session_length) / 1000.0 AS mean_session_seconds
+        AVG(session_length) / 1000000.0 AS mean_session_seconds
     FROM (
         SELECT
             user_id,
