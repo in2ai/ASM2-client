@@ -3,8 +3,12 @@ import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import {
   countMetrics,
   getActivityByDay,
+  getAvgDocsPerQuery,
   getHourlyActivityPattern,
   getMetricsByTag,
+  getResponseTimeTrend,
+  getSystemHealthStats,
+  getTokenUsageStats,
   getTotalActivityEvents,
   getUniqueUsers,
   getUserRoleDistribution,
@@ -16,7 +20,10 @@ import {
   type HourlyActivity,
   type MetricsByTag,
   type MetricsQueryParams,
+  type ResponseTimeTrend,
   type SearchTerm,
+  type SystemHealthStats,
+  type TokenUsageStats,
   type TopicCount,
 } from "@/server/db";
 import { TRPCError } from "@trpc/server";
@@ -49,6 +56,13 @@ interface DashboardMetrics {
     role_distribution: Record<string, number>;
     by_day: ActivityByDay[];
     hourly_pattern: HourlyActivity[];
+  };
+
+  rag_quality: {
+    response_time_trend: ResponseTimeTrend[];
+    token_usage: TokenUsageStats;
+    system_health: SystemHealthStats;
+    avg_docs_per_query: number;
   };
 
   metadata: {
@@ -96,6 +110,10 @@ export const metricsRouter = createTRPCRouter({
           roleDistribution,
           activityByDay,
           hourlyPattern,
+          responseTimeTrend,
+          tokenUsage,
+          systemHealth,
+          avgDocsPerQuery,
         ] = await Promise.all([
           meanMetric(Metrics.LLM_RESPONSE_TIME, params),
           countMetrics(params),
@@ -108,6 +126,10 @@ export const metricsRouter = createTRPCRouter({
           getUserRoleDistribution(params),
           getActivityByDay(params),
           getHourlyActivityPattern(params),
+          getResponseTimeTrend(params),
+          getTokenUsageStats(params),
+          getSystemHealthStats(params),
+          getAvgDocsPerQuery(params),
         ]);
 
         return {
@@ -125,6 +147,12 @@ export const metricsRouter = createTRPCRouter({
             role_distribution: roleDistribution,
             by_day: activityByDay,
             hourly_pattern: hourlyPattern,
+          },
+          rag_quality: {
+            response_time_trend: responseTimeTrend,
+            token_usage: tokenUsage,
+            system_health: systemHealth,
+            avg_docs_per_query: avgDocsPerQuery,
           },
           metadata: {
             updatedAt: new Date().toISOString(),

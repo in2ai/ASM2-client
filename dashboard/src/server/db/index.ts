@@ -2,8 +2,12 @@ export { closePool, executeQuery } from "./connection";
 export {
   countMetrics,
   getActivityByDay,
+  getAvgDocsPerQuery,
   getHourlyActivityPattern,
   getMetricsByTag,
+  getResponseTimeTrend,
+  getSystemHealthStats,
+  getTokenUsageStats,
   getTotalActivityEvents,
   getUniqueUsers,
   getUserRoleDistribution,
@@ -15,6 +19,10 @@ export {
   type HourlyActivity,
   type MetricsByTag,
   type MetricsQueryParams,
+  type ResponseTimeTrend,
   type SearchTerm,
-  type TopicCount,
+  type SystemHealthStats,
+  type TokenUsageStats,
+  type TopicCount
 } from "./metrics-queries";
+

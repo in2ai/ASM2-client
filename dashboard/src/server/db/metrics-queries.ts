@@ -655,3 +655,224 @@ export async function getMetricsByTag(
     count: Number.parseInt(row.cnt, 10),
   }));
 }
+
+// =================================
+// Response Time Trend Queries
+// =================================
+
+export interface ResponseTimeTrend {
+  date: string;
+  llm_response_time: number;
+  doc_response_time: number;
+}
+
+/**
+ * Get response time trends (LLM and DOC) aggregated by day
+ */
+export async function getResponseTimeTrend(
+  params: MetricsQueryParams = {},
+): Promise<ResponseTimeTrend[]> {
+  const queryParams: (string | number)[] = [];
+  let whereClause = "WHERE tag IN ('LLM_RESPONSE_TIME', 'DOC_RESPONSE_TIME')";
+  let paramIndex = 1;
+
+  if (params.startDate) {
+    whereClause += ` AND ts >= $${paramIndex}`;
+    queryParams.push(params.startDate);
+    paramIndex++;
+  }
+
+  if (params.endDate) {
+    whereClause += ` AND ts <= $${paramIndex}`;
+    queryParams.push(params.endDate);
+    paramIndex++;
+  }
+
+  const query = `
+    SELECT 
+      to_str(ts, 'yyyy-MM-dd') as date,
+      AVG(CASE WHEN tag = 'LLM_RESPONSE_TIME' THEN value ELSE NULL END) as llm_response_time,
+      AVG(CASE WHEN tag = 'DOC_RESPONSE_TIME' THEN value ELSE NULL END) as doc_response_time
+    FROM metrics
+    ${whereClause}
+    GROUP BY to_str(ts, 'yyyy-MM-dd')
+    ORDER BY date DESC
+    LIMIT 30
+  `;
+
+  const rows = await executeQuery<{
+    date: string;
+    llm_response_time: number | null;
+    doc_response_time: number | null;
+  }>(query, queryParams);
+
+  return rows
+    .map((row) => ({
+      date: row.date,
+      llm_response_time: row.llm_response_time ?? 0,
+      doc_response_time: row.doc_response_time ?? 0,
+    }))
+    .reverse();
+}
+
+// =================================
+// Token Usage Queries
+// =================================
+
+export interface TokenUsageStats {
+  llm_tokens_in: number;
+  llm_tokens_out: number;
+  rag_tokens_in: number;
+  rag_tokens_out: number;
+}
+
+/**
+ * Get total token usage statistics
+ */
+export async function getTokenUsageStats(
+  params: MetricsQueryParams = {},
+): Promise<TokenUsageStats> {
+  const queryParams: (string | number)[] = [];
+  let whereClause =
+    "WHERE tag IN ('NUM_LLM_TOKENS_IN', 'NUM_LLM_TOKENS_OUT', 'NUM_RAG_TOKENS_IN', 'NUM_RAG_TOKENS_OUT')";
+  let paramIndex = 1;
+
+  if (params.startDate) {
+    whereClause += ` AND ts >= $${paramIndex}`;
+    queryParams.push(params.startDate);
+    paramIndex++;
+  }
+
+  if (params.endDate) {
+    whereClause += ` AND ts <= $${paramIndex}`;
+    queryParams.push(params.endDate);
+    paramIndex++;
+  }
+
+  const query = `
+    SELECT 
+      SUM(CASE WHEN tag = 'NUM_LLM_TOKENS_IN' THEN value ELSE 0 END) as llm_tokens_in,
+      SUM(CASE WHEN tag = 'NUM_LLM_TOKENS_OUT' THEN value ELSE 0 END) as llm_tokens_out,
+      SUM(CASE WHEN tag = 'NUM_RAG_TOKENS_IN' THEN value ELSE 0 END) as rag_tokens_in,
+      SUM(CASE WHEN tag = 'NUM_RAG_TOKENS_OUT' THEN value ELSE 0 END) as rag_tokens_out
+    FROM metrics
+    ${whereClause}
+  `;
+
+  const rows = await executeQuery<{
+    llm_tokens_in: number | null;
+    llm_tokens_out: number | null;
+    rag_tokens_in: number | null;
+    rag_tokens_out: number | null;
+  }>(query, queryParams);
+
+  const row = rows[0];
+  return {
+    llm_tokens_in: row?.llm_tokens_in ?? 0,
+    llm_tokens_out: row?.llm_tokens_out ?? 0,
+    rag_tokens_in: row?.rag_tokens_in ?? 0,
+    rag_tokens_out: row?.rag_tokens_out ?? 0,
+  };
+}
+
+// =================================
+// System Health Queries
+// =================================
+
+export interface SystemHealthStats {
+  avg_cpu: number;
+  avg_ram: number;
+  avg_gpu: number;
+  max_cpu: number;
+  max_ram: number;
+  max_gpu: number;
+}
+
+/**
+ * Get system health statistics (CPU, RAM, GPU usage)
+ */
+export async function getSystemHealthStats(
+  params: MetricsQueryParams = {},
+): Promise<SystemHealthStats> {
+  const queryParams: (string | number)[] = [];
+  let whereClause = "WHERE tag IN ('CPU_USAGE', 'RAM_USAGE', 'GPU_USAGE')";
+  let paramIndex = 1;
+
+  if (params.startDate) {
+    whereClause += ` AND ts >= $${paramIndex}`;
+    queryParams.push(params.startDate);
+    paramIndex++;
+  }
+
+  if (params.endDate) {
+    whereClause += ` AND ts <= $${paramIndex}`;
+    queryParams.push(params.endDate);
+    paramIndex++;
+  }
+
+  const query = `
+    SELECT 
+      AVG(CASE WHEN tag = 'CPU_USAGE' THEN value ELSE NULL END) as avg_cpu,
+      AVG(CASE WHEN tag = 'RAM_USAGE' THEN value ELSE NULL END) as avg_ram,
+      AVG(CASE WHEN tag = 'GPU_USAGE' THEN value ELSE NULL END) as avg_gpu,
+      MAX(CASE WHEN tag = 'CPU_USAGE' THEN value ELSE NULL END) as max_cpu,
+      MAX(CASE WHEN tag = 'RAM_USAGE' THEN value ELSE NULL END) as max_ram,
+      MAX(CASE WHEN tag = 'GPU_USAGE' THEN value ELSE NULL END) as max_gpu
+    FROM metrics
+    ${whereClause}
+  `;
+
+  const rows = await executeQuery<{
+    avg_cpu: number | null;
+    avg_ram: number | null;
+    avg_gpu: number | null;
+    max_cpu: number | null;
+    max_ram: number | null;
+    max_gpu: number | null;
+  }>(query, queryParams);
+
+  const row = rows[0];
+  return {
+    avg_cpu: row?.avg_cpu ?? 0,
+    avg_ram: row?.avg_ram ?? 0,
+    avg_gpu: row?.avg_gpu ?? 0,
+    max_cpu: row?.max_cpu ?? 0,
+    max_ram: row?.max_ram ?? 0,
+    max_gpu: row?.max_gpu ?? 0,
+  };
+}
+
+/**
+ * Get average documents retrieved per RAG query
+ */
+export async function getAvgDocsPerQuery(
+  params: MetricsQueryParams = {},
+): Promise<number> {
+  const queryParams: (string | number)[] = [];
+  let whereClause = "WHERE tag = 'NUM_DOCS_RAG'";
+  let paramIndex = 1;
+
+  if (params.startDate) {
+    whereClause += ` AND ts >= $${paramIndex}`;
+    queryParams.push(params.startDate);
+    paramIndex++;
+  }
+
+  if (params.endDate) {
+    whereClause += ` AND ts <= $${paramIndex}`;
+    queryParams.push(params.endDate);
+    paramIndex++;
+  }
+
+  const query = `
+    SELECT AVG(value) as avg_docs
+    FROM metrics
+    ${whereClause}
+  `;
+
+  const rows = await executeQuery<{ avg_docs: number | null }>(
+    query,
+    queryParams,
+  );
+  return rows[0]?.avg_docs ?? 0;
+}
