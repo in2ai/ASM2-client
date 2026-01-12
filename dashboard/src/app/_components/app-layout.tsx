@@ -38,6 +38,14 @@ interface AppLayoutProps {
   readonly children: (view: View) => ReactNode;
 }
 
+/**
+ * Renders the dashboard application layout containing a responsive sidebar, topbar, and main content area.
+ *
+ * The component manages the active dashboard view and UI state for the sidebar and mobile menu, and provides chart-visibility context to its children.
+ *
+ * @param children - Render prop that receives the current view (`"overview" | "usage" | "rag-quality" | "insights"`) and returns the content to display in the main area.
+ * @returns The composed layout element that wraps the provided content with navigation, controls, and user menu.
+ */
 export function AppLayout({ children }: AppLayoutProps) {
   const [currentView, setCurrentView] = useState<View>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -189,6 +197,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 }
 
+/**
+ * Renders a sidebar navigation item as a button with an icon and optional label, supporting active and collapsed states.
+ *
+ * @param icon - Icon component to display at the start of the item.
+ * @param label - Text label shown when not collapsed.
+ * @param active - If `true`, highlights the item and shows an active indicator.
+ * @param onClick - Click handler invoked when the item is activated.
+ * @param collapsed - If `true`, hides the label and active indicator to render a compact item.
+ * @returns The JSX element for the navigation item.
+ */
 function NavItem({
   icon: Icon,
   label,
@@ -227,6 +245,15 @@ function NavItem({
   );
 }
 
+/**
+ * Renders a compact segmented control for selecting one of the dashboard views.
+ *
+ * Renders a rounded group of buttons for each view; the active view is styled as selected and tapping a button selects that view.
+ *
+ * @param value - The currently selected view key
+ * @param onChange - Callback invoked with the newly selected view when a button is clicked
+ * @returns The view switcher React element
+ */
 function ViewSwitcher({
   value,
   onChange,

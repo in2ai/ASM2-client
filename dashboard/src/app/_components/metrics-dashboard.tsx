@@ -22,6 +22,13 @@ import {
   isRecoverableError,
 } from "./metrics/utils";
 
+/**
+ * Display the metrics dashboard UI with date-range controls, header, and view-specific metric panels.
+ *
+ * Manages date-range state, fetches metrics and stats for the authenticated user, and shows loading, authentication, error, or empty states as appropriate. When data is available it renders the selected view's metrics panel (overview, usage, rag-quality, or insights).
+ *
+ * @returns The rendered dashboard element containing the header, controls, and the current metrics view or state screen.
+ */
 export function MetricsDashboard() {
   const { user: authUser } = useAuth();
   const user = authUser as WorkOSUser | null;

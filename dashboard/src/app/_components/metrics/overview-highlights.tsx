@@ -21,6 +21,12 @@ interface OverviewHighlightsProps {
   metrics: MetricsResponse;
 }
 
+/**
+ * Renders a dashboard overview section with key performance highlights and a recent activity chart.
+ *
+ * @param metrics - MetricsResponse used to populate the stats row and the "Actividad Reciente" area chart; must include `user_activity.by_day`.
+ * @returns A React element containing a header with title and subtitle, a StatsRow, and a card with a seven-day recent activity area chart.
+ */
 export function OverviewHighlights({
   metrics,
 }: Readonly<OverviewHighlightsProps>) {

@@ -17,6 +17,17 @@ const ToggleGroupContext = React.createContext<
   spacing: 0,
 })
 
+/**
+ * Render a styled toggle group that provides variant, size, and spacing values to its child items.
+ *
+ * The component wraps Radix UI's ToggleGroup.Root, applies data attributes and CSS variables for styling,
+ * composes a base className with any provided `className`, and supplies a ToggleGroupContext to descendants.
+ *
+ * @param variant - Visual variant to apply to the group and propagate to items (used by `toggleVariants`)
+ * @param size - Size key to apply to the group and propagate to items (used by `toggleVariants`)
+ * @param spacing - Gap value (numeric) between items; also set as a CSS variable `--gap`. Defaults to 0.
+ * @returns The rendered ToggleGroup.Root element with context provided to child ToggleGroupItem components.
+ */
 function ToggleGroup({
   className,
   variant,
@@ -48,6 +59,14 @@ function ToggleGroup({
   )
 }
 
+/**
+ * Renders a toggle group item that uses the ToggleGroupContext values when available and falls back to explicit props.
+ *
+ * Resolves the effective `variant` and `size` from context or props, exposes `spacing` via a `data-spacing` attribute,
+ * and attaches data attributes (`data-slot`, `data-variant`, `data-size`, `data-spacing`) and spacing-aware styling.
+ *
+ * @returns A Radix `ToggleGroup.Item` element with the resolved variant/size, spacing-aware classes, and data attributes.
+ */
 function ToggleGroupItem({
   className,
   children,

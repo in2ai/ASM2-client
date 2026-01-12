@@ -50,6 +50,15 @@ function SelectTrigger({
   )
 }
 
+/**
+ * Renders the Select dropdown content inside a Portal, applying positioning, alignment, animations, and built-in scroll buttons.
+ *
+ * @param className - Additional class names applied to the content container.
+ * @param children - Items or elements to render inside the content viewport.
+ * @param position - Controls content positioning and sizing behavior; `"item-aligned"` positions relative to menu items, `"popper"` aligns and sizes the content to the trigger.
+ * @param align - Alignment of the content relative to the trigger (e.g., `"start"`, `"center"`, `"end"`).
+ * @returns The rendered Select content element.
+ */
 function SelectContent({
   className,
   children,
@@ -100,6 +109,13 @@ function SelectLabel({
   )
 }
 
+/**
+ * A selectable item for the Select component that renders a text label and a right-aligned check indicator.
+ *
+ * @param className - Additional class names applied to the root item element
+ * @param children - Content to display as the item's label
+ * @returns The rendered Select item element with an integrated check indicator and text slot
+ */
 function SelectItem({
   className,
   children,

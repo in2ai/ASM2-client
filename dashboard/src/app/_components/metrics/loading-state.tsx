@@ -2,6 +2,13 @@
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
+/**
+ * Renders a skeleton loading UI for dashboard metric cards and larger metric panels.
+ *
+ * The component outputs two responsive grid sections of animated placeholders: eight small KPI cards and three larger metric cards, preserving layout and spacing while data is loading.
+ *
+ * @returns The JSX element containing the skeleton loading state for the dashboard metrics.
+ */
 export function LoadingState() {
   return (
     <div className="animate-in fade-in space-y-6 duration-500 sm:space-y-8">

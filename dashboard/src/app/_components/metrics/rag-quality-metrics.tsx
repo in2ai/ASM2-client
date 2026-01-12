@@ -22,6 +22,14 @@ interface RAGQualityMetricsProps {
   metrics: MetricsResponse;
 }
 
+/**
+ * Render a RAG quality metrics section that displays average value and count per tag.
+ *
+ * The component builds chart data from `metrics.metrics.by_tag`, truncating tag labels to 20 characters (preserving the full tag for tooltips) and rounding `avg_value` to two decimal places. It respects chart visibility from context and renders either a vertical bar chart card (when visible and data exists) or a centered empty-state message.
+ *
+ * @param metrics - The metrics response used to derive per-tag statistics (`metrics.metrics.by_tag`).
+ * @returns The rendered React element containing the metrics chart card or an empty-state placeholder.
+ */
 export function RAGQualityMetrics({
   metrics,
 }: Readonly<RAGQualityMetricsProps>) {

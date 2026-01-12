@@ -5,6 +5,14 @@ import * as ProgressPrimitive from "@radix-ui/react-progress"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Renders a styled progress bar whose indicator reflects the provided value.
+ *
+ * Additional props are forwarded to the root progress element.
+ *
+ * @param value - Progress percentage in the range 0–100; if `undefined`, it is treated as `0`
+ * @returns The rendered Progress React element
+ */
 function Progress({
   className,
   value,

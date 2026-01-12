@@ -46,6 +46,12 @@ function DialogOverlay({
   )
 }
 
+/**
+ * Renders dialog content inside a portal with its overlay and an optional close button.
+ *
+ * @param showCloseButton - If `true`, renders a close button in the top-right of the dialog (default: `true`).
+ * @returns A JSX element containing the dialog portal, overlay, and content element.
+ */
 function DialogContent({
   className,
   children,
