@@ -102,7 +102,7 @@ class RAGResponse(BaseModel):
         description="The answer to the user's question based on the context provided"
     )
     sources: List[Source] = Field(
-        description="List of thhe relevant sources used to craft the answer"
+        description="List of the relevant sources used to craft the answer"
     )
 
 
