@@ -714,6 +714,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FOOTER (logos de financiación - fijo en la parte inferior de la pantalla)
+# Renderizado temprano para que siempre esté visible, incluso durante el spinner
+# ─────────────────────────────────────────────────────────────────────────────
+
+logo_financiacion_data = load_image_base64(LOGO_FINANCIACION)
+if logo_financiacion_data:
+    st.markdown(
+        f'<div class="footer-financiacion"><img src="data:image/png;base64,{logo_financiacion_data}" alt="Logos de financiación"></div>',
+        unsafe_allow_html=True,
+    )
+
 # Inicializar historial de mensajes
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -783,14 +795,3 @@ if prompt:
 
     # Guardar en historial
     st.session_state.messages.append({"role": "assistant", "content": ans})
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FOOTER (logos de financiación - fijo en la parte inferior de la pantalla)
-# ─────────────────────────────────────────────────────────────────────────────
-
-logo_financiacion_data = load_image_base64(LOGO_FINANCIACION)
-if logo_financiacion_data:
-    st.markdown(
-        f'<div class="footer-financiacion"><img src="data:image/png;base64,{logo_financiacion_data}" alt="Logos de financiación"></div>',
-        unsafe_allow_html=True,
-    )
