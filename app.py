@@ -43,7 +43,7 @@ from src.connectors.onedrive import (
     onedrive_can_read,
     onedrive_device_login,
 )
-from src.connectors.store import create_hybrid_retriever
+from src.connectors.store import create_hybrid_retriever, EMBEDDINGS
 
 # Metrics
 from src.metrics.metrics import (
@@ -175,13 +175,13 @@ def rerank_documents(query: str, documents: list, top_k: int = None) -> list:
     if not documents:
         return documents
 
-    reranker = get_reranker()
+    global _reranker
 
     # Preparar tuplas (query, documento) para el cross-encoder
     pairs = [(query, doc.page_content) for doc in documents]
 
     # Obtener scores del cross-encoder
-    scores = reranker.predict(pairs)
+    scores = _reranker.predict(pairs)
     print(f"DEBUG Raw scores: {scores}")
 
     # Combinar documentos con scores y ordenar por score descendente
@@ -565,6 +565,12 @@ def get_vectordb():
 
 
 get_vectordb()
+
+# Pre-cargar el modelo de reranking durante el inicio de la app
+_reranker = get_reranker()
+
+# Pre-calentar el modelo de embeddings (primera llamada a OpenAI establece conexión)
+EMBEDDINGS.embed_query("warmup")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR (sesiones y fuentes)
