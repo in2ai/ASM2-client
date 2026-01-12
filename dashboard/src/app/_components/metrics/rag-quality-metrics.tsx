@@ -27,6 +27,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ChartHint } from "./chart-hint";
 import { type MetricsResponse } from "./types";
 
 interface RAGQualityMetricsProps {
@@ -103,8 +104,9 @@ export function RAGQualityMetrics({
           <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
-                <CardTitle className="text-xl font-bold tracking-tight">
+                <CardTitle className="flex items-center text-xl font-bold tracking-tight">
                   Tendencia de tiempos de respuesta
+                  <ChartHint hint="Muestra cómo evolucionan los tiempos de respuesta del LLM (modelo de lenguaje) y del RAG (recuperación de documentos) a lo largo del tiempo. Valores altos pueden indicar problemas de rendimiento." />
                 </CardTitle>
                 <CardDescription>
                   Latencia LLM y RAG por día (ms)
@@ -210,8 +212,9 @@ export function RAGQualityMetrics({
         <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
-              <CardTitle className="text-lg font-bold">
+              <CardTitle className="flex items-center text-lg font-bold">
                 Consumo de tokens
+                <ChartHint hint="Compara los tokens de entrada (lo que envía el usuario + contexto) vs salida (respuesta generada) para LLM y RAG. Más tokens = mayor coste y tiempo de procesamiento." />
               </CardTitle>
               <CardDescription>
                 Total: {totalTokens.toLocaleString("es-ES")} tokens
@@ -284,8 +287,9 @@ export function RAGQualityMetrics({
         <Card className="bg-card/40 rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
-              <CardTitle className="text-lg font-bold">
+              <CardTitle className="flex items-center text-lg font-bold">
                 Salud del sistema
+                <ChartHint hint="Monitoriza el uso de recursos del servidor. Un uso alto sostenido de CPU, RAM o GPU puede indicar la necesidad de escalar la infraestructura." />
               </CardTitle>
               <CardDescription>Uso promedio de recursos</CardDescription>
             </div>

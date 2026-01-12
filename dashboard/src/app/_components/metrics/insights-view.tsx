@@ -16,6 +16,7 @@ import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { BarChart3, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { ChartHint } from "./chart-hint";
 import { type MetricsResponse } from "./types";
 
 interface InsightsViewProps {
@@ -82,8 +83,9 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
             <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
-                  <CardTitle className="text-lg font-bold">
+                  <CardTitle className="flex items-center text-lg font-bold">
                     Palabras más buscadas
+                    <ChartHint hint="Muestra las palabras clave que los usuarios mencionan con más frecuencia en sus consultas. Ayuda a identificar los temas de mayor interés y posibles lagunas de información." />
                   </CardTitle>
                   <CardDescription>Top palabras por frecuencia</CardDescription>
                 </div>
@@ -140,8 +142,9 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
             <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
-                  <CardTitle className="text-lg font-bold">
+                  <CardTitle className="flex items-center text-lg font-bold">
                     Temas más frecuentes
+                    <ChartHint hint="Agrupa las consultas por temática detectada automáticamente. Permite entender qué áreas del conocimiento son más consultadas y priorizar la mejora del contenido." />
                   </CardTitle>
                   <CardDescription>Top temas por frecuencia</CardDescription>
                 </div>

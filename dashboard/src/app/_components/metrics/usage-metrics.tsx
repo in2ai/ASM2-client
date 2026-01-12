@@ -34,6 +34,7 @@ import {
   hourlyChartConfig,
   roleChartConfig,
 } from "./constants";
+import { ChartHint } from "./chart-hint";
 import { type MetricsResponse } from "./types";
 
 interface UsageMetricsProps {
@@ -100,8 +101,9 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
           <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
-                <CardTitle className="text-xl font-bold tracking-tight">
+                <CardTitle className="flex items-center text-xl font-bold tracking-tight">
                   Tendencia de actividad
+                  <ChartHint hint="Compara el número total de eventos (consultas) con la cantidad de usuarios únicos activos cada día. Si los eventos crecen más rápido que los usuarios, significa que cada usuario realiza más consultas." />
                 </CardTitle>
                 <CardDescription>Eventos y usuarios por día</CardDescription>
               </div>
@@ -211,8 +213,9 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
             <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
-                  <CardTitle className="text-lg font-bold">
+                  <CardTitle className="flex items-center text-lg font-bold">
                     Distribución por rol
+                    <ChartHint hint="Muestra cómo se distribuyen los usuarios activos según su rol en la organización. Útil para entender qué grupos usan más el asistente." />
                   </CardTitle>
                   <CardDescription>Usuarios por rol de acceso</CardDescription>
                 </div>
@@ -267,8 +270,9 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
             <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
-                  <CardTitle className="text-lg font-bold">
+                  <CardTitle className="flex items-center text-lg font-bold">
                     Patrón horario
+                    <ChartHint hint="Identifica las horas del día con mayor actividad. Útil para planificar mantenimientos o detectar picos de uso que podrían afectar el rendimiento." />
                   </CardTitle>
                   <CardDescription>Eventos por hora del día</CardDescription>
                 </div>

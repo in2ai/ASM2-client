@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/chart";
 import { Activity } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { ChartHint } from "./chart-hint";
 import { StatsRow } from "./stats-row";
 import { type MetricsResponse } from "./types";
 
@@ -23,9 +24,6 @@ interface OverviewHighlightsProps {
 
 /**
  * Renders a dashboard overview section with key performance highlights and a recent activity chart.
- *
- * @param metrics - MetricsResponse used to populate the stats row and the "Actividad Reciente" area chart; must include `user_activity.by_day`.
- * @returns A React element containing a header with title and subtitle, a StatsRow, and a card with a seven-day recent activity area chart.
  */
 export function OverviewHighlights({
   metrics,
@@ -46,8 +44,9 @@ export function OverviewHighlights({
         <Card className="bg-card/40 rounded-2xl border-none shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
-              <CardTitle className="text-lg font-bold">
+              <CardTitle className="flex items-center text-lg font-bold">
                 Actividad Reciente
+                <ChartHint hint="Muestra el número de consultas realizadas al asistente cada día. Cada vez que un usuario envía un mensaje, se registra un evento. Útil para identificar tendencias de uso." />
               </CardTitle>
               <CardDescription>Eventos en los últimos días</CardDescription>
             </div>
