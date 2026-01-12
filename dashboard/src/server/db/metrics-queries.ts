@@ -471,12 +471,12 @@ export async function getActivityByDay(
 
   const query = `
     SELECT 
-      CAST(ts AS DATE) as date,
+      to_str(ts, 'yyyy-MM-dd') as date,
       COUNT(*) as event_count,
       COUNT(DISTINCT user_id) as unique_users
     FROM user_activity
     ${whereClause}
-    GROUP BY CAST(ts AS DATE)
+    GROUP BY to_str(ts, 'yyyy-MM-dd')
     ORDER BY date DESC
     LIMIT 30
   `;
