@@ -220,49 +220,89 @@ export const metricsRouter = createTRPCRouter({
           topics,
           sessionLength,
           uniqueUsersCount,
+          totalEvents,
+          roleDistribution,
+          activityByDay,
+          hourlyPattern,
+          responseTimeTrend,
+          tokenUsage,
+          systemHealth,
+          avgDocsPerQuery,
         ] = await Promise.all([
           meanMetric(Metrics.LLM_RESPONSE_TIME, params),
           topKSearchTerms(100, params),
           topKTopics(100, params),
           meanSessionLength(10, params),
           getUniqueUsers(params),
+          getTotalActivityEvents(params),
+          getUserRoleDistribution(params),
+          getActivityByDay(params),
+          getHourlyActivityPattern(params),
+          getResponseTimeTrend(params),
+          getTokenUsageStats(params),
+          getSystemHealthStats(params),
+          getAvgDocsPerQuery(params),
         ]);
 
-        const metrics = [
-          {
-            metric_type: Metrics.LLM_RESPONSE_TIME,
-            value: meanResponseTime ?? 0,
-            unit: "ms",
+        // Build comprehensive export data with sections
+        const exportData = {
+          // Summary metrics
+          summary: {
+            unique_users: uniqueUsersCount,
+            total_events: totalEvents,
+            avg_session_length_seconds: sessionLength ?? 0,
+            avg_llm_response_time_ms: meanResponseTime ?? 0,
+            avg_docs_per_query: avgDocsPerQuery,
           },
-          {
-            metric_type: "session_length",
-            value: sessionLength ?? 0,
-            unit: "seconds",
+
+          // Token usage
+          token_usage: {
+            llm_tokens_in: tokenUsage.llm_tokens_in,
+            llm_tokens_out: tokenUsage.llm_tokens_out,
+            rag_tokens_in: tokenUsage.rag_tokens_in,
+            rag_tokens_out: tokenUsage.rag_tokens_out,
+            total_tokens:
+              tokenUsage.llm_tokens_in +
+              tokenUsage.llm_tokens_out +
+              tokenUsage.rag_tokens_in +
+              tokenUsage.rag_tokens_out,
           },
-          {
-            metric_type: "unique_users",
-            value: uniqueUsersCount,
-            unit: "count",
+
+          // System health
+          system_health: {
+            avg_cpu_percent: systemHealth.avg_cpu,
+            max_cpu_percent: systemHealth.max_cpu,
+            avg_ram_percent: systemHealth.avg_ram,
+            max_ram_percent: systemHealth.max_ram,
+            avg_gpu_percent: systemHealth.avg_gpu,
+            max_gpu_percent: systemHealth.max_gpu,
           },
-          ...searchTerms.map((term: SearchTerm) => ({
-            metric_type: "search_term",
-            value: term.count,
-            unit: term.word,
-          })),
-          ...topics.map((topic: TopicCount) => ({
-            metric_type: "topic",
-            value: topic.count,
-            unit: topic.topic,
-          })),
-        ];
+
+          // Role distribution
+          role_distribution: roleDistribution,
+
+          // Activity by day
+          activity_by_day: activityByDay,
+
+          // Hourly pattern
+          hourly_pattern: hourlyPattern,
+
+          // Response time trends
+          response_time_trend: responseTimeTrend,
+
+          // Search terms
+          search_terms: searchTerms,
+
+          // Topics
+          topics: topics,
+        };
 
         return {
-          metrics,
+          data: exportData,
           metadata: {
             startDate: input.startDate?.toISOString(),
             endDate: input.endDate?.toISOString(),
             exportTimestamp: new Date().toISOString(),
-            totalRecords: metrics.length,
             userId: ctx.userContext.userId,
           },
         };
