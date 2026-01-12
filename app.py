@@ -43,13 +43,14 @@ from src.connectors.onedrive import (
     onedrive_can_read,
     onedrive_device_login,
 )
-from src.connectors.store import create_hybrid_retriever, EMBEDDINGS
+from src.connectors.store import EMBEDDINGS, create_hybrid_retriever
 
 # Metrics
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
     insert_metric,
+    register_topics,
     register_user_activity,
     register_words,
 )
@@ -353,6 +354,11 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
 
     if not allowed_chunks:
         return None
+
+    topics = {
+        t for d in allowed_chunks for t, _ in d.metadata.get("topics", {}).items()
+    }
+    register_topics(topics)
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
