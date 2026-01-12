@@ -57,7 +57,6 @@ from src.metrics.metrics import (
 # Utils
 from src.utils.nlp import extract_search_terms
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -515,7 +514,7 @@ section[data-testid="stSidebar"] .stButton>button { width:100%; max-width:240px;
 }
 .footer-financiacion img { max-height: 50px; width: 100%; object-fit: contain; }
 /* Asegurar que el chat input esté por encima del footer */
-.main .block-container { padding-bottom: 55px !important; }
+.main .block-container { padding-top: 1rem !important; padding-bottom: 55px !important; }
 [data-testid="stBottom"] { padding-bottom: 55px !important; }
 </style>
 """,
@@ -574,8 +573,8 @@ with st.sidebar:
         st.markdown(
             f'<div style="display:flex;justify-content:center;width:100%;padding:10px 0;">'
             f'<img src="data:image/png;base64,{logo_in2ai_data}" style="max-width:140px;">'
-            f'</div>',
-            unsafe_allow_html=True
+            f"</div>",
+            unsafe_allow_html=True,
         )
 
     st.markdown("### 🔐 Google Drive")
@@ -711,8 +710,8 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────────────
 
 st.markdown(
-    '<h1 style="font-size: 1.6rem; margin-bottom: 0.5rem;">Asistente Conversacional Multisectorial Multiempresa (ASM2)</h1>',
-    unsafe_allow_html=True
+    '<h1 style="font-size: 1.6rem; margin-top: 0; margin-bottom: 0.5rem;">Asistente Conversacional Multisectorial Multiempresa (ASM2)</h1>',
+    unsafe_allow_html=True,
 )
 
 # Inicializar historial de mensajes
@@ -793,5 +792,5 @@ logo_financiacion_data = load_image_base64(LOGO_FINANCIACION)
 if logo_financiacion_data:
     st.markdown(
         f'<div class="footer-financiacion"><img src="data:image/png;base64,{logo_financiacion_data}" alt="Logos de financiación"></div>',
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
