@@ -1,14 +1,13 @@
-import os, io, time
+import io
+import os
+import time
 
 import streamlit as st
-
-from PyPDF2 import PdfReader
-
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google_auth_oauthlib.flow import Flow
-
-from google.oauth2.credentials import Credentials
+from PyPDF2 import PdfReader
 
 from src.config.config import *
 from src.connectors.faiss_file import GoogleDriveFile
@@ -18,6 +17,7 @@ from src.utils.helpers import safe_execute
 # ─────────────────────────────────────────────────────────────────────────────
 # GOOGLE DRIVE
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def oauth_login_drive():
     """
@@ -29,15 +29,19 @@ def oauth_login_drive():
     - Tras éxito: guarda service en sesión, limpia la URL y devuelve service.
     """
     if not os.path.exists(CLIENT_SECRET_FILE):
-        st.error(f"❌ No existe {CLIENT_SECRET_FILE}. Revisa el client web en Google Cloud.")
+        st.error(
+            f"❌ No existe {CLIENT_SECRET_FILE}. Revisa el client web en Google Cloud."
+        )
         st.stop()
     if not REDIRECT_URI:
-        st.error("❌ Falta REDIRECT_URI en .env (debe coincidir EXACTAMENTE con la registrada).")
+        st.error(
+            "❌ Falta REDIRECT_URI en .env (debe coincidir EXACTAMENTE con la registrada)."
+        )
         st.stop()
 
-    # ---------- Helpers (definidos DENTRO para que siempre existan) ----------
+    # ---------- Funciones auxiliares (definidas DENTRO para que siempre existan) ----------
     def _get_qp():
-        # Streamlit 1.33+ (st.query_params) y compatibilidad con anteriores
+        # Streamlit 1.33+ (st.query_params) y compatibilidad con versiones anteriores
         try:
             qp = st.query_params
             if hasattr(qp, "items"):
@@ -66,22 +70,25 @@ def oauth_login_drive():
 
     # ------------------------- Lógica principal ------------------------------
     qp = _get_qp()
-    incoming_code   = _first(qp.get("code"))   if qp.get("code")   else None
-    incoming_state  = _first(qp.get("state"))  if qp.get("state")  else None
-    incoming_scope  = _first(qp.get("scope"))  if qp.get("scope")  else None
+    incoming_code = _first(qp.get("code")) if qp.get("code") else None
+    incoming_state = _first(qp.get("state")) if qp.get("state") else None
+    incoming_scope = _first(qp.get("scope")) if qp.get("scope") else None
     scopes_callback = [s for s in (incoming_scope or "").split() if s] or None
 
-    # 1) Si ya tenemos ?code=..., intercambiar de inmediato (scope exacto)
+    # 1) Si ya tenemos ?code=..., intercambiar de inmediato (alcance exacto)
     if incoming_code:
         try:
             flow = Flow.from_client_secrets_file(
                 CLIENT_SECRET_FILE,
-                scopes=scopes_callback or SCOPES,   # ← usa los scopes de retorno si vienen
+                scopes=scopes_callback
+                or SCOPES,  # ← usa los alcances de retorno si vienen
                 redirect_uri=REDIRECT_URI,
             )
             sess_state = st.session_state.get("oauth_state")
             if sess_state and incoming_state and incoming_state != sess_state:
-                st.warning("Aviso: 'state' no coincide (posible reinicio de sesión). Continuamos…")
+                st.warning(
+                    "Aviso: 'state' no coincide (posible reinicio de sesión). Continuamos…"
+                )
 
             flow.fetch_token(code=incoming_code)
             creds = flow.credentials
@@ -95,9 +102,11 @@ def oauth_login_drive():
             return service
 
         except HttpError as e:
-            st.error(f"Error de Google API: {e}"); st.stop()
+            st.error(f"Error de Google API: {e}")
+            st.stop()
         except Exception as e:
-            st.error(f"Error en Web OAuth (intercambiando code): {e}"); st.stop()
+            st.error(f"Error en Web OAuth (intercambiando code): {e}")
+            st.stop()
 
     # 2) Sin code → inicia autorización y muestra URL
     try:
@@ -109,20 +118,24 @@ def oauth_login_drive():
         auth_url, state = flow.authorization_url(
             prompt="consent",
             access_type="offline",
-            include_granted_scopes="true",  # si te vuelve a mezclar scopes, el paso 1 ya lo maneja
+            include_granted_scopes="true",  # si vuelve a mezclar alcances, el paso 1 ya lo maneja
         )
         st.session_state["oauth_state"] = state
 
         st.markdown("### 🔑 Autenticación con Google Drive")
         st.markdown(f"[Autorizar con Google]({auth_url})")
         st.code(REDIRECT_URI, language="text")
-        st.info("Tras autorizar, Google te devolverá aquí con ?code=… y seguiremos automáticamente.")
+        st.info(
+            "Tras autorizar, Google te devolverá aquí con ?code=… y seguiremos automáticamente."
+        )
         st.stop()
 
     except HttpError as e:
-        st.error(f"Error de Google API: {e}"); st.stop()
+        st.error(f"Error de Google API: {e}")
+        st.stop()
     except Exception as e:
-        st.error(f"Error iniciando Web OAuth: {e}"); st.stop()
+        st.error(f"Error iniciando Web OAuth: {e}")
+        st.stop()
 
 
 def listar_bfs_drive(service, root_folder_id):
@@ -136,8 +149,10 @@ def listar_bfs_drive(service, root_folder_id):
                 service.files().list(
                     q=f"'{current}' in parents and trashed=false",
                     fields="nextPageToken, files(id,name,mimeType,modifiedTime,webViewLink)",
-                    pageSize=1000, pageToken=page_token,
-                    includeItemsFromAllDrives=True, supportsAllDrives=True
+                    pageSize=1000,
+                    pageToken=page_token,
+                    includeItemsFromAllDrives=True,
+                    supportsAllDrives=True,
                 )
             )
             for f in resp.get("files", []):
@@ -150,6 +165,7 @@ def listar_bfs_drive(service, root_folder_id):
                 break
     return files
 
+
 def extraer_texto_drive(service, file_id, mime_type):
     if mime_type == "application/pdf":
         data = safe_execute(service.files().get_media(fileId=file_id))
@@ -157,69 +173,105 @@ def extraer_texto_drive(service, file_id, mime_type):
         reader = PdfReader(fh)
         return "\n".join([(p.extract_text() or "") for p in reader.pages]).strip()
     elif mime_type == "application/vnd.google-apps.document":
-        data = safe_execute(service.files().export(fileId=file_id, mimeType="text/plain"))
+        data = safe_execute(
+            service.files().export(fileId=file_id, mimeType="text/plain")
+        )
         return data.decode("utf-8", errors="ignore")
     elif mime_type in ("text/plain", "text/markdown"):
         data = safe_execute(service.files().get_media(fileId=file_id))
         return data.decode("utf-8", errors="ignore")
     return None
 
+
 def get_acl_drive(service, file_id):
     try:
-        resp = safe_execute(service.permissions().list(
-            fileId=file_id, fields="permissions(id,type,domain)", supportsAllDrives=True
-        ))
+        resp = safe_execute(
+            service.permissions().list(
+                fileId=file_id,
+                fields="permissions(id,type,domain)",
+                supportsAllDrives=True,
+            )
+        )
         perms = resp.get("permissions", []) or []
         return {
-            "permissionIds": [p["id"] for p in perms if p.get("type") == "user" and "id" in p],
-            "domains": [p["domain"].lower() for p in perms if p.get("type") == "domain" and p.get("domain")],
+            "permissionIds": [
+                p["id"] for p in perms if p.get("type") == "user" and "id" in p
+            ],
+            "domains": [
+                p["domain"].lower()
+                for p in perms
+                if p.get("type") == "domain" and p.get("domain")
+            ],
             "anyone": any(p.get("type") == "anyone" for p in perms),
         }
     except Exception:
         return {"permissionIds": [], "domains": [], "anyone": False}
 
+
 def get_current_user_drive(service):
-    me = safe_execute(service.about().get(fields="user(emailAddress,permissionId)")) or {}
+    me = (
+        safe_execute(service.about().get(fields="user(emailAddress,permissionId)"))
+        or {}
+    )
     u = me.get("user", {}) or {}
     email = (u.get("emailAddress") or "").lower()
     domain = email.split("@")[-1] if "@" in email else ""
-    return {"email": email, "permissionId": u.get("permissionId"), "domain": domain.lower()}
+    return {
+        "email": email,
+        "permissionId": u.get("permissionId"),
+        "domain": domain.lower(),
+    }
 
-# cache de verificación en vivo (drive)
+
+# caché de verificación en vivo (drive)
 def _live_cache_get(key):
     cache = st.session_state.setdefault("drive_live_check", {})
     v = cache.get(key)
-    if not v: return None
-    if time.time() - v["ts"] > 300: return None
+    if not v:
+        return None
+    if time.time() - v["ts"] > 300:
+        return None
     return v["ok"]
+
 
 def _live_cache_set(key, ok):
     cache = st.session_state.setdefault("drive_live_check", {})
     cache[key] = {"ok": bool(ok), "ts": time.time()}
 
+
 def drive_can_read(service, file_id: str) -> bool:
-    if not file_id: return False
+    if not file_id:
+        return False
     ck = f"id:{file_id}"
     cached = _live_cache_get(ck)
-    if cached is not None: return cached
+    if cached is not None:
+        return cached
     try:
-        safe_execute(service.files().get(fileId=file_id, fields="id", supportsAllDrives=True))
-        _live_cache_set(ck, True); return True
+        safe_execute(
+            service.files().get(fileId=file_id, fields="id", supportsAllDrives=True)
+        )
+        _live_cache_set(ck, True)
+        return True
     except HttpError as e:
         if getattr(e, "resp", None) and e.resp.status in (403, 404):
-            _live_cache_set(ck, False); return False
-        _live_cache_set(ck, False); return False
+            _live_cache_set(ck, False)
+            return False
+        _live_cache_set(ck, False)
+        return False
     except Exception:
-        _live_cache_set(ck, False); return False
-    
+        _live_cache_set(ck, False)
+        return False
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def construir_vectorstore_drive():
     service = st.session_state.service
 
-    # Generate credentials
+    # Generar credenciales
     creds = service._http.credentials
     creds_dict = {
         "token": creds.token,
@@ -230,29 +282,46 @@ def construir_vectorstore_drive():
         "scopes": list(getattr(creds, "scopes", []) or SCOPES),
     }
 
-    # Create authenticated service
-    auth_service = build("drive", "v3", credentials=Credentials.from_authorized_user_info(creds_dict))
+    # Crear servicio autenticado
+    auth_service = build(
+        "drive", "v3", credentials=Credentials.from_authorized_user_info(creds_dict)
+    )
 
-    # Create file list
-    files = [f for f in listar_bfs_drive(service, FOLDER_ID) if f["mimeType"] in (
-        "application/pdf", "application/vnd.google-apps.document", "text/plain", "text/markdown"
-    )]
+    # Crear lista de archivos - tipos MIME soportados
+    supported_mimes = (
+        "application/pdf",
+        "application/vnd.google-apps.document",
+        "application/vnd.google-apps.spreadsheet",
+        "application/vnd.google-apps.presentation",
+        "text/plain",
+        "text/markdown",
+        "text/html",
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    files = [
+        f
+        for f in listar_bfs_drive(service, FOLDER_ID)
+        if f["mimeType"] in supported_mimes
+    ]
 
     # print(files)
 
     files = [
         {
-            "id": f["id"], 
-            "name": f["name"], 
-            "mimeType": f["mimeType"], 
+            "id": f["id"],
+            "name": f["name"],
+            "mimeType": f["mimeType"],
             "modifiedTime": f["modifiedTime"],
             "webViewLink": f.get("webViewLink"),
-            "acl": get_acl_drive(auth_service, f["id"])
-        } 
+            "acl": get_acl_drive(auth_service, f["id"]),
+        }
         for f in files
     ]
 
     files = [GoogleDriveFile(f, auth_service) for f in files]
 
-    # Populate vector DB
-    return build_vectorstore(files, 'Drive')
+    # Poblar base de datos vectorial
+    return build_vectorstore(files, "Drive")
