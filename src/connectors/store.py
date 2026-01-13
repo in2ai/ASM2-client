@@ -2,7 +2,6 @@ from typing import List
 import os
 
 from typing import List, Tuple, Optional
-import faiss
 import hashlib
 import os
 import json
@@ -11,8 +10,10 @@ import pickle
 import bm25s
 import Stemmer
 
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import VectorParams, Distance
+
+from langchain_community.vectorstores import Qdrant
 from langchain.retrievers.ensemble import EnsembleRetriever
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -25,12 +26,12 @@ from src.connectors.faiss_file import FaissFile
 from src.connectors.manifest import FaissManifest
 from src.utils.topic import assign_topics, extract_initial_topics
 
-FAISS_PATH = "faiss_index"
+QDRANT_PATH = "qdrant_index"
 BM25_PATH = "bm25_index"
 
-INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
-# chunk_overlap aumentado de 100 a 200 para mejor coherencia entre chunks
+QDRANT_COLL = "documents"
+
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 STEMMER = Stemmer.Stemmer("spanish")
 
@@ -39,6 +40,8 @@ STEMMER = Stemmer.Stemmer("spanish")
 BM25_WEIGHT = 0.4
 VECTOR_WEIGHT = 0.6
 
+TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
+CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
 
 def get_config_hash() -> str:
     """
@@ -131,49 +134,62 @@ class BM25Retriever(BaseRetriever):
         except Exception:
             return True
 
-CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
-TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
+def iterate_qdrant_docs(vectorstore: Qdrant, batch_size=100):
+    offset = None
 
-def setup_faiss_gpu(vectorstore):
-    try:
-        gpu_res = faiss.StandardGpuResources()
-        vectorstore.index = faiss.index_cpu_to_gpu(gpu_res, 0, vectorstore.index)
-        print('Set up FAISS GPU')
+    while True:
+        points, offset = vectorstore.client.scroll(
+            collection_name=QDRANT_COLL,
+            offset=offset,
+            limit=batch_size,
+            with_payload=True,
+            with_vectors=False,
+        )
 
-    except Exception as e:
-        print('Unable to set up FAISS GPU')
+        for p in points:
+            payload = p.payload or {}
+
+            page_content = payload.get("page_content", "")
+            metadata = payload.get("metadata", {})
+
+            yield p.id, Document(page_content=page_content, metadata=metadata)
+
+        if offset is None:
+            break
 
 def build_vectorstore(files: List[FaissFile], source, batch_size=200):
-    global FAISS_PATH, DOCUMENT_SPLITTER, EMBEDDINGS, INDEX
+    global QDRANT_PATH, DOCUMENT_SPLITTER, EMBEDDINGS
 
     # Read status manifest file
-    manifest = FaissManifest(FAISS_PATH)
+    manifest = FaissManifest(QDRANT_PATH)
     current_config_hash = get_config_hash()
     
     # Verificar si la configuración de chunking cambió
     config_changed = manifest.needs_config_rebuild(current_config_hash)
+    
     if config_changed:
         print(f"⚠️ FAISS ({source}): Configuración de chunking cambió, reconstruyendo índice completo...")
 
     # Check if the part for this source is already constructed
-    vectorstore = None
+    client = QdrantClient(
+        url="http://qdrant:6333",
+        grpc_port=6334,
+        prefer_grpc=True,
+    )
 
-    if not config_changed:
-        try:
-            print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
-            vectorstore = FAISS.load_local(FAISS_PATH, EMBEDDINGS, allow_dangerous_deserialization=True)
-            
-        except Exception:
-            pass
+    vectorstore = Qdrant(client, QDRANT_COLL, EMBEDDINGS)
 
-    # Construct a new DB if needed (or config changed)
-    if vectorstore is None:
-        vectorstore = FAISS(embedding_function=EMBEDDINGS, index=INDEX, docstore=InMemoryDocstore({}), index_to_docstore_id={})
-        # Limpiar manifest si config cambió
-        if config_changed:
-            manifest.manifest["processed_ids"] = {}
-            manifest.manifest["total_chunks"] = 0
-            manifest.manifest["completed"] = {}
+    # Limpiar manifest si config cambió
+    if config_changed:
+        manifest.manifest["processed_ids"] = {}
+        manifest.manifest["total_chunks"] = 0
+        manifest.manifest["completed"] = {}
+
+    if not vectorstore.client.collection_exists(QDRANT_COLL):
+        vectorstore.client.create_collection(
+            collection_name=QDRANT_COLL,
+            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),  # change size
+        )
 
     # Check files to update
     current = manifest.get_processed_ids(source)
@@ -193,22 +209,22 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     # Early return if no changes are needed
     if len(files_to_delete) == 0 and len(files_to_add) == 0:
         print(f"📂 ({source}) El índice no necesita cambios")
-        setup_faiss_gpu(vectorstore)
 
         return vectorstore
 
     # Delete chunks
     ids_to_delete = [
-        doc_id for doc_id, doc in vectorstore.docstore._dict.items()
+        doc_id for doc_id, doc in iterate_qdrant_docs(vectorstore)
         if doc.metadata['id'] in files_to_delete
     ]
 
     if len(ids_to_delete) > 0:
         manifest.remove_processed_ids(source, files_to_delete)
         manifest.remove_chunks(len(ids_to_delete))
-        
+
         vectorstore.delete(ids_to_delete)
-        vectorstore.save_local(FAISS_PATH)
+
+        manifest.save()
 
     # Read file chunks in batches
     docs_batch, pending_ids = [], []
@@ -221,13 +237,12 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
             sub_docs = docs_batch[i:i + batch_size]
             new_ids = vectorstore.add_documents(sub_docs)
 
-            if CALCULATE_TOPICS and manifest.has_topics():
+            if manifest.has_topics():
                 assign_topics(vectorstore, new_ids)
-
-            vectorstore.save_local(FAISS_PATH)
 
         manifest.add_processed_ids(source, pending_ids)
         manifest.add_chunks(len(docs_batch))
+        manifest.save()
 
         print(f"🧩 ({source}) Persistidos {len(docs_batch)} chunks [{reason}]")
 
@@ -244,6 +259,7 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
         if not txt: 
             # We add it to the manifest, since it has been already processed
             manifest.add_processed_ids(source, [(f.metadata['id'], f.metadata["modifiedTime"])])
+            manifest.save()
             continue
 
         base_doc = Document(page_content=txt, metadata=f.metadata)
@@ -257,38 +273,34 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     if docs_batch: 
         flush("final")
 
-    # Add topics if needed
-    if CALCULATE_TOPICS and not manifest.has_topics():
-        if manifest.num_chunks() > TOPIC_MIN_SIZE:
-            print(f"💾 ({source}) Detectando temas...")
-            extract_initial_topics(vectorstore)
-            manifest.set_topics()
-            vectorstore.save_local(FAISS_PATH)
-            
-        else:
-            print(f"({source}) El índice es demasiado pequeño para detectar temas")
-
     # Update status manifest con el hash de configuración actual
     manifest.add_completed_source(source)
     manifest.set_config_hash(current_config_hash)
     manifest.save()
 
-    print(f"💾 ({source}) Índice guardado en {FAISS_PATH} [config: {current_config_hash}]")
+    print(f"💾 ({source}) Índice guardado en {QDRANT_PATH} [config: {current_config_hash}]")
     
-    setup_faiss_gpu(vectorstore)
-
     return vectorstore
 
 
-def get_all_documents(vectorstore: FAISS) -> List[Document]:
-    """Extrae todos los documentos de un vectorstore FAISS para indexación BM25."""
-    if vectorstore is None:
-        return []
-    
-    return list(vectorstore.docstore._dict.values())
+def extract_topics(vectorstore: Qdrant):
+    manifest = FaissManifest(QDRANT_PATH)
+
+    # Add topics if needed
+    if not manifest.has_topics():
+        if manifest.num_chunks() > TOPIC_MIN_SIZE:
+            print(f"💾 Detectando temas...")
+            extract_initial_topics(vectorstore)
+
+            if CALCULATE_TOPICS:
+                manifest.set_topics()
+                manifest.save()
+            
+        else:
+            print(f"El índice es demasiado pequeño para detectar temas")
 
 
-def create_hybrid_retriever(vectorstore: FAISS, k: int = 256) -> Tuple[EnsembleRetriever, List[Document]]:
+def create_hybrid_retriever(vectorstore: Qdrant, k: int = 256) -> Tuple[EnsembleRetriever, List[Document]]:
     """
     Crea un retriever híbrido combinando BM25 (léxico) y FAISS (semántico).
     
@@ -300,7 +312,7 @@ def create_hybrid_retriever(vectorstore: FAISS, k: int = 256) -> Tuple[EnsembleR
         Tupla de (EnsembleRetriever, List[Document]) - el retriever y todos los documentos
     """
     # Obtener todos los documentos para BM25
-    all_docs = get_all_documents(vectorstore)
+    all_docs = list(i for _, i in iterate_qdrant_docs(vectorstore))
     
     if not all_docs:
         return None, []

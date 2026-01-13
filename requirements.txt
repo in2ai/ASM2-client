@@ -112,6 +112,7 @@ SQLAlchemy==2.0.44
 srsly==2.5.2
 stone==3.3.1
 streamlit==1.51.0
+qdrant-client==1.15.1
 tenacity==8.5.0
 texttable==1.7.0
 thinc==8.3.10

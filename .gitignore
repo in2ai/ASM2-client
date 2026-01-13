@@ -208,7 +208,7 @@ __marimo__/
 
 # Ours
 secrets/
-faiss_index/
+qdrant_index/
 bm25_index/
 questdb/
 

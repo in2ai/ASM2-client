@@ -1,56 +1,98 @@
 import igraph as ig
-import numpy as np
-import math
 import random
 import json
 import os
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Qdrant
+from langchain.schema import Document
+
+from qdrant_client.http import models
+
 
 TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
 TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
+CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
 
-def extract_initial_topics(vdb: FAISS):
+
+def get_doc_by_id(vdb: Qdrant, id):
+    point = vdb.client.retrieve(
+        collection_name=vdb.collection_name,
+        ids=[id],
+        with_payload=True,
+    )[0]
+
+    payload = point.payload or {}
+
+    return Document(
+        page_content=payload.get("page_content", ""),
+        metadata=payload.get("metadata", ""),
+    )
+    
+
+def extract_initial_topics(vdb: Qdrant):
+    if not CALCULATE_TOPICS:
+        print("La detección de temas está desactivada")
+        return
+
     # Iteration variables
-    num_vectors = vdb.index.ntotal
     batch_size = 1024
     min_cosine = 0.3
 
-    d = vdb.index.d
-    n_batches = math.ceil(num_vectors / batch_size)
+    ids = []
     edges = []
+    offset = None
 
-    for b in range(n_batches):
-        # Batch limits
-        start = b * batch_size
-        end = min(num_vectors, start + batch_size)
-        qsize = end - start
+    while True:
+        batch, offset = vdb.client.scroll(
+            collection_name=vdb.collection_name,
+            offset=offset,
+            limit=batch_size,
+            with_payload=False,
+            with_vectors=True
+        )
 
-        # Search vectors
-        queries = np.empty((qsize, d), dtype=np.float32)
-        vdb.index.reconstruct_n(start, qsize, queries)
-        D, I = vdb.index.search(queries, k=200)
+        requests = [
+            models.QueryRequest(
+                query=i.vector,
+                limit=200,
+                with_payload=False,
+                with_vector=False,
+                params=models.SearchParams(hnsw_ef=256, exact=False)
+            )
+            for i in batch
+        ]
 
-        # Add edges to list
-        for row_idx, (distances, neighbors) in enumerate(zip(D, I)):
-            src_idx = start + row_idx
-            for dist, c in zip(distances, neighbors):
-                if c == src_idx:
+        hits = vdb.client.query_batch_points(
+            vdb.collection_name, 
+            requests
+        )
+
+        for point, nearest in zip(batch, hits):
+            ids.append(point.id)
+
+            for n in nearest.points:
+                if n.id == point.id:
                     continue  # skip self-loops
-                if dist < min_cosine:
-                    continue  # skip neighbors beyond threshold
-                edges.append((int(src_idx), int(c)))
 
+                if n.score < min_cosine:
+                    continue  # skip neighbors beyond threshold
+
+                edges.append((point.id, n.id))
+
+        if offset is None:
+            break
 
     # Construct graph
+    num_vectors = vdb.client.count(vdb.collection_name).count
+    id_to_idx = {j: i for i, j in enumerate(ids)}
+
+    edges = [(id_to_idx[i], id_to_idx[j]) for i, j in edges]
     edges = list({(min(a, b), max(a, b)) for a, b in edges})
 
     g = ig.Graph(n=num_vectors, edges=edges, directed=False)
-
-    idx_to_doc = [vdb.index_to_docstore_id[i] for i in range(num_vectors)]
-    g.vs["name"] = idx_to_doc
+    g.vs["name"] = ids
 
     # Calculate communities
     communities = g.community_leiden(resolution=TOPIC_RESOLUTION)
@@ -64,12 +106,12 @@ def extract_initial_topics(vdb: FAISS):
 
         sample_count = 20
         sampled = random.sample(members, sample_count)
-        comm_samples = [idx_to_doc[int(i)] for i in sampled]
+        comm_samples = [ids[int(i)] for i in sampled]
 
         texts = []
 
         for sample in comm_samples:
-            doc = vdb.docstore.search(sample)
+            doc = get_doc_by_id(vdb, sample)
             texts.append(doc.page_content)
 
         topic_json = get_topic(texts)
@@ -82,7 +124,7 @@ def extract_initial_topics(vdb: FAISS):
         print(f'Topic: {topic_name}')
 
         for m in members:
-            m_id = idx_to_doc[m]
+            m_id = ids[m]
             topics.setdefault(m_id, [])
             topics[m_id].append(topic_name)
 
@@ -118,42 +160,57 @@ def extract_initial_topics(vdb: FAISS):
 
     # Update metadata
     for id, ts in aggregated_topics.items():
-        doc = vdb.docstore.search(id)
-        doc.metadata['topics'] = ts 
+        doc = get_doc_by_id(vdb, id)
+        doc.metadata['topics'] = ts
+
+        vdb.client.set_payload(
+            vdb.collection_name,
+            {
+                "page_content": doc.page_content,
+                "metadata": doc.metadata
+            },
+            [id]
+        )
 
     return communities
 
 
-def assign_topics(vdb: FAISS, ids):
-    print("Assigning topics...")
-    # Get embeddings
-    d = vdb.index.d
-    num_vectors = vdb.index.ntotal
-    qsize = len(ids)
-
-    embs = np.empty((qsize, d), dtype=np.float32)
-    vdb.index.reconstruct_n(num_vectors - qsize, qsize, embs)
-
-    # Get topic connections
+def assign_topics(vdb: Qdrant, ids):
+    if not CALCULATE_TOPICS:
+        print("La detección de temas está desactivada")
+        return
+    
     min_cosine = 0.3
 
-    D, I = vdb.index.search(embs, k=200)
+    requests = [
+        models.QueryRequest(
+            query=i,
+            limit=200,
+            with_payload=True,
+            with_vector=False,
+            params=models.SearchParams(hnsw_ef=256, exact=False)
+        )
+        for i in ids
+    ]        
 
-    for row_idx, (distances, neighbors) in enumerate(zip(D, I)):
-        abs_idx = num_vectors - qsize + row_idx
+    hits = vdb.client.query_batch_points(
+        vdb.collection_name, 
+        requests
+    )
+
+    # Get topic connections
+    for point, nearest in zip(ids, hits):
         n_topics = []
 
-        for dist, c in zip(distances, neighbors):
-            if c == abs_idx:
+        for n in nearest.points:
+            if n.id == point:
                 continue  # skip self-loops
-            if dist < min_cosine:
+
+            if n.score < min_cosine:
                 continue  # skip neighbors beyond threshold
 
-            n_id = vdb.index_to_docstore_id[c]
-            doc = vdb.docstore.search(n_id)
-
-            if 'topics' in doc.metadata:
-                n_topics.append(doc.metadata['topics'])
+            if 'topics' in n.payload['metadata']:
+                n_topics.append(n.payload['metadata']['topics'])
 
         # Ensure enough neighbors with topics
         if len(n_topics) < 20:
@@ -169,12 +226,22 @@ def assign_topics(vdb: FAISS, ids):
                 topics[t] += weight * contrib
 
         # Assign topics to chunk
-        doc = vdb.docstore.search(vdb.index_to_docstore_id[abs_idx])
+        doc = get_doc_by_id(vdb, point)
         doc.metadata['topics'] = {}
 
         for t, weight in topics.items():
             if weight >= TOPIC_MIN_CONTRIB:
                 doc.metadata['topics'][t] = weight
+
+        # Save chunk to VDB
+        vdb.client.set_payload(
+            vdb.collection_name,
+            {
+                "page_content": doc.page_content,
+                "metadata": doc.metadata
+            },
+            [point]
+        )
 
 
 def get_topic(texts):

@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./faiss_index:/app/faiss_index:rw
+      - ./qdrant_index:/app/qdrant_index:rw
       - ./secrets/client_secret.json:/app/client_secret.json:ro
       - ./secrets/client_secret_website.json:/app/client_secret_website.json:ro
       - ./img:/app/img:rw
@@ -66,6 +66,20 @@ services:
       - .env
     working_dir: /init
     entrypoint: ["sh", "/init/init.sh"]
+
+  qdrant:
+    image: qdrant/qdrant:gpu-nvidia-latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # HTTP / REST API
+      - "6334:6334"   # gRPC
+    environment:
+      # enable GPU indexing inside Qdrant
+      - QDRANT__GPU__INDEXING=1
+    volumes:
+      - ./qdrant_index:/qdrant/storage
+    gpus: all
 
   dashboard:
     build:

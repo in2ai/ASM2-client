@@ -28,7 +28,7 @@ from src.config.config import *
 from src.connectors.drive import drive_can_read, get_current_user_drive, oauth_login_drive, construir_vectorstore_drive
 from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_vectorstore_dropbox
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
-from src.connectors.store import create_hybrid_retriever
+from src.connectors.store import create_hybrid_retriever, extract_topics
 
 # Metrics
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words, register_topics
@@ -458,6 +458,9 @@ def get_vectordb():
         except Exception as e:
             print(f"[OneDrive ERROR] {type(e).__name__}: {e}")
             st.error(f"❌ Error indexando OneDrive: {e}")
+
+    # Extraer temas de chunks si es necesario
+    extract_topics(vectordb)
 
     # Crear retriever híbrido (BM25 + Vector)
     hybrid_retriever = None
