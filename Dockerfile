@@ -6,11 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     locales \
     curl \
- && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
 # Generar locales (es_ES.UTF-8)
 RUN sed -i 's/^# *\(es_ES.UTF-8 UTF-8\)/\1/' /etc/locale.gen \
- && locale-gen es_ES.UTF-8
+    && locale-gen es_ES.UTF-8
 ENV LANG=es_ES.UTF-8 \
     LANGUAGE=es_ES:es \
     LC_ALL=es_ES.UTF-8 \
@@ -45,8 +45,11 @@ RUN if ! grep -qi '^streamlit' requirements.txt; then echo 'streamlit' >> requir
 # Instalar deps Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Descargar modelos de Stanza (español, inglés, gallego)
-RUN python -c "import stanza; stanza.download('es'); stanza.download('en'); stanza.download('gl')"
+# Descargar modelos de Stanza
+# - es_ancora: Spanish AnCora
+# - en_eslspok: English ESLSpok
+# - gl_ctg: Galician CTG
+RUN python -c "import stanza; stanza.download('es', package='ancora'); stanza.download('en', package='eslspok'); stanza.download('gl', package='ctg')"
 
 # Crear directorio de modelos y pre-descargar modelo de reranking
 # chmod 755 asegura que cualquier usuario pueda leer los modelos (necesario para user: "${UID}:${GID}" en docker-compose)
