@@ -18,7 +18,7 @@ supported_languages = ["es", "en", "gl"]
 def detect_language(query: str):
     global DETECTOR
 
-    return DETECTOR.detect(query, k=1)["lang"]
+    return DETECTOR.detect(query, k=1)[0]["lang"]
 
 
 def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
