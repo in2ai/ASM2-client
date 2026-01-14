@@ -1,5 +1,9 @@
 import spacy_stanza
 import stanza
+from fast_langdetect import LangDetectConfig, LangDetector
+
+config = LangDetectConfig(cache_dir="/custom/cache", model="lite")
+DETECTOR = LangDetector(config)
 
 # Temporalmente a descargar aquí, luego se descargarán en build.
 stanza.download("en")
@@ -15,6 +19,12 @@ lang_model_dict = {
 }
 
 supported_languages = ["es", "en", "gl"]
+
+
+def detect_language(query: str):
+    global DETECTOR
+
+    return DETECTOR.detect(query, k=1)["lang"]
 
 
 def extract_search_terms(lang_code: str, text: str, min_length: int = 2):

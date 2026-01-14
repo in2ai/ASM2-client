@@ -56,7 +56,7 @@ from src.metrics.metrics import (
 )
 
 # Utils
-from src.utils.nlp import extract_search_terms
+from src.utils.nlp import detect_language, extract_search_terms
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -299,8 +299,11 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
     # Register that the user is still active
     register_user_activity()
 
+    # Detectar idioma
+    lang_code = detect_language(query)
+
     # Register search terms
-    search_terms = extract_search_terms(query)
+    search_terms = extract_search_terms(query, lang_code)
     register_words(search_terms)
 
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
