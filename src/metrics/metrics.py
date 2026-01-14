@@ -57,13 +57,25 @@ def register_words(words: set[str]):
     execute_query(query, tuple(params))
 
 
-def register_topic(topic: str):
-    query = """
-    INSERT INTO topic_counts (ts, user_id, user_role, word)
-    VALUES (NOW(), %s, %s, %s)
+def register_topics(topics: set[str]):
+    if not topics:
+        return
+
+    # Generate query with all value insertions
+    value_insertions = ", ".join(["(NOW(), %s, %s, %s)"] * len(topics))
+
+    query = f"""
+        INSERT INTO topic_counts (ts, user_id, user_role, word)
+        VALUES {value_insertions}
     """
 
-    execute_query(query, (USER_ID, USER_ROLE, topic))
+    # Flatten parameters (3 for each topic)
+    params = []
+    
+    for t in topics:
+        params.extend([USER_ID, USER_ROLE, t])
+
+    execute_query(query, tuple(params))
 
 
 def register_user_activity():

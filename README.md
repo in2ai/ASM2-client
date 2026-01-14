@@ -120,6 +120,26 @@ Esto iniciará:
 - **Cliente Streamlit**: [http://localhost:8501](http://localhost:8501)
 
 ### Opción 3: Desarrollo Local
+#### Soporte GPU (Opcional)
+
+El servicio `app` puede utilizar GPU para acelerar el procesamiento. Por defecto, la configuración está preparada para funcionar **sin GPU**.
+
+Para **habilitar GPU**, edita tu archivo `.env` y modifica la variable `COMPOSE_FILE`:
+
+```env
+# Sin GPU (por defecto):
+COMPOSE_FILE=docker-compose.yml
+
+# Con GPU (descomenta esta línea y comenta la anterior):
+# COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml
+```
+
+**Requisitos para GPU:**
+
+- Drivers NVIDIA instalados
+- [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+
+### Opción 2: Desarrollo Local
 
 #### Cliente Python
 
