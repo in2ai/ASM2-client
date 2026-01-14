@@ -1,14 +1,8 @@
 import spacy_stanza
-import stanza
 from fast_langdetect import LangDetectConfig, LangDetector
 
 config = LangDetectConfig(cache_dir="/custom/cache", model="lite")
 DETECTOR = LangDetector(config)
-
-# Temporalmente a descargar aquí, luego se descargarán en build.
-stanza.download("en")
-stanza.download("es")
-stanza.download("gl")
 
 # SPACY_MODEL = spacy.load("es_core_news_md")
 
