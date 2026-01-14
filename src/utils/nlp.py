@@ -8,7 +8,7 @@ DETECTOR = LangDetector(config)
 
 lang_model_dict = {
     "es": stanza.Pipeline("es", package="ancora"),
-    "en": stanza.Pipeline("en", package="eslspok"),
+    "en": stanza.Pipeline("en"),  # default (ewt)
     "gl": stanza.Pipeline("gl", package="ctg"),
 }
 
@@ -32,11 +32,9 @@ def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
 
     doc = nlp_model(text)
 
-    # Stanza API: doc.sentences -> sentence.words -> word.lemma, word.upos
     terms = set()
     for sentence in doc.sentences:
         for word in sentence.words:
-            # Skip punctuation (UPOS tag) and non-alphabetic tokens
             if word.upos == "PUNCT" or not word.text.isalpha():
                 continue
             if word.lemma and len(word.lemma) >= min_length:
