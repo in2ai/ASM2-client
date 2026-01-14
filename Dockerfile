@@ -45,11 +45,8 @@ RUN if ! grep -qi '^streamlit' requirements.txt; then echo 'streamlit' >> requir
 # Instalar deps Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Descargar modelos de NLP
-# - spaCy: español (solo para compatibilidad legacy)
-# - Stanza: español, inglés, gallego (para lemmatización multilingüe)
-RUN python -m spacy download es_core_news_md && \
-    python -c "import stanza; stanza.download('es'); stanza.download('en'); stanza.download('gl')"
+# Descargar modelos de Stanza (español, inglés, gallego)
+RUN python -c "import stanza; stanza.download('es'); stanza.download('en'); stanza.download('gl')"
 
 # Crear directorio de modelos y pre-descargar modelo de reranking
 # chmod 755 asegura que cualquier usuario pueda leer los modelos (necesario para user: "${UID}:${GID}" en docker-compose)
