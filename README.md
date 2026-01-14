@@ -83,6 +83,43 @@ Esto iniciará:
 - **Cliente Streamlit**: [http://localhost:8501](http://localhost:8501)
 - **Consola QuestDB**: [http://localhost:9000](http://localhost:9000)
 
+### Opción 2: Docker con QuestDB remoto (VPS)
+
+Si ya tienes QuestDB desplegado en un VPS, puedes utilizar el archivo `docker-compose.remote.yml` para ejecutar solo los servicios `app` y `dashboard` conectándose a la instancia remota:
+
+```bash
+# Modo normal
+docker-compose -f docker-compose.remote.yml up
+
+# Modo desacoplado (background)
+docker-compose -f docker-compose.remote.yml up -d
+
+# Reconstruir imágenes
+docker-compose -f docker-compose.remote.yml up --build
+```
+
+**Requisitos previos:**
+
+1. Actualiza tu archivo `.env` con la conexión a QuestDB del VPS:
+
+   ```env
+   QUESTDB_HOST=tu-ip-o-hostname-vps
+   QUESTDB_PORT=8812
+   QUESTDB_USER=admin
+   QUESTDB_PASSWORD=tu_contraseña
+   ```
+
+2. Asegúrate de que los puertos de QuestDB en el VPS sean accesibles:
+   - `8812` - Protocolo PostgreSQL wire (requerido)
+   - `9000` - Consola web/REST API (opcional, para debugging)
+   - `9009` - Protocolo InfluxDB Line (si es necesario)
+
+Esto iniciará:
+
+- **Dashboard**: [http://localhost:3001](http://localhost:3001)
+- **Cliente Streamlit**: [http://localhost:8501](http://localhost:8501)
+
+### Opción 3: Desarrollo Local
 #### Soporte GPU (Opcional)
 
 El servicio `app` puede utilizar GPU para acelerar el procesamiento. Por defecto, la configuración está preparada para funcionar **sin GPU**.
