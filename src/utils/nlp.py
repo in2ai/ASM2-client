@@ -27,7 +27,7 @@ def detect_language(query: str):
     return DETECTOR.detect(query, k=1)["lang"]
 
 
-def extract_search_terms(lang_code: str, text: str, min_length: int = 2):
+def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
     if lang_code in supported_languages:
         nlp_model = lang_model_dict[lang_code]
     else:

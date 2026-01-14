@@ -301,6 +301,7 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
 
     # Detectar idioma
     lang_code = detect_language(query)
+    print(lang_code)
 
     # Register search terms
     search_terms = extract_search_terms(query, lang_code)
