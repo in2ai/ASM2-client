@@ -19,6 +19,8 @@ export interface ChartVisibilityState extends Record<string, boolean> {
   departmentPieChart: boolean;
   requestsPerUser: boolean;
   responseTime: boolean;
+  activityTrend: boolean;
+  hourlyActivityPattern: boolean;
 
   // RAG quality metrics charts
   retrievalRate: boolean;
@@ -26,6 +28,7 @@ export interface ChartVisibilityState extends Record<string, boolean> {
   modelLatency: boolean;
   tokenUsage: boolean;
   documentsRetrieved: boolean;
+  metricsByTag: boolean;
 
   // Performance metrics charts
   responseTimeChart: boolean;
@@ -33,12 +36,19 @@ export interface ChartVisibilityState extends Record<string, boolean> {
   resourceConsumption: boolean;
   costPerQuery: boolean;
   errorsChart: boolean;
+  requestsTrend: boolean;
+  latencyDistribution: boolean;
+  latencyByEndpoint: boolean;
+  errorsByEndpoint: boolean;
+  detailedStatusCodes: boolean;
 
   // Insights charts
   topQueries: boolean;
   commonWords: boolean;
   thematicDistribution: boolean;
   alerts: boolean;
+  topWordsBarChart: boolean;
+  topicsBarChart: boolean;
 }
 
 interface ChartVisibilityContextType {
@@ -58,6 +68,8 @@ const defaultVisibility: ChartVisibilityState = {
   departmentPieChart: true,
   requestsPerUser: true,
   responseTime: true,
+  activityTrend: true,
+  hourlyActivityPattern: true,
 
   // RAG quality metrics - all visible by default
   retrievalRate: true,
@@ -65,6 +77,7 @@ const defaultVisibility: ChartVisibilityState = {
   modelLatency: true,
   tokenUsage: true,
   documentsRetrieved: true,
+  metricsByTag: true,
 
   // Performance metrics - all visible by default
   responseTimeChart: true,
@@ -72,12 +85,19 @@ const defaultVisibility: ChartVisibilityState = {
   resourceConsumption: true,
   costPerQuery: true,
   errorsChart: true,
+  requestsTrend: true,
+  latencyDistribution: true,
+  latencyByEndpoint: true,
+  errorsByEndpoint: true,
+  detailedStatusCodes: true,
 
   // Insights - all visible by default
   topQueries: true,
   commonWords: true,
   thematicDistribution: true,
   alerts: true,
+  topWordsBarChart: true,
+  topicsBarChart: true,
 };
 
 const ChartVisibilityContext = createContext<ChartVisibilityContextType | null>(

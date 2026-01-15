@@ -14,25 +14,21 @@ type ExportMetricsOutput = RouterOutputs["metrics"]["exportMetrics"];
 /**
  * ExportButton Component
  *
- * Provides CSV export functionality for metrics data.
- * Requirement 3.4: Removed nodeId parameter - single-node architecture
+ * Provides comprehensive CSV export functionality for all metrics data.
  */
 export function ExportButton({ dateRange }: ExportButtonProps) {
-  // Use TRPC query with manual trigger
-  // Requirement 3.4: Removed nodeId parameter
   const exportQuery = api.metrics.exportMetrics.useQuery(
     {
       startDate: dateRange?.from,
       endDate: dateRange?.to,
     },
     {
-      enabled: false, // Don't run automatically
+      enabled: false,
     },
   );
 
   const handleExport = async () => {
     try {
-      // Manually trigger the query
       const result = await exportQuery.refetch();
 
       if (!result.data) {
@@ -40,22 +36,18 @@ export function ExportButton({ dateRange }: ExportButtonProps) {
       }
 
       // Generate CSV content
-      const csv = generateCSV(result.data.metrics);
+      const csv = generateCSV(result.data);
 
-      // Create filename with node name, date range, and timestamp
+      // Create filename with date range and timestamp
       const filename = generateFilename(result.data.metadata);
 
       // Trigger download
       downloadCSV(csv, filename);
 
-      // Success feedback
-      console.log(
-        `Export completed: ${result.data.metadata.totalRecords} records exported`,
-      );
+      console.log("Export completed successfully");
     } catch (error) {
       console.error("Export error:", error);
 
-      // Show error alert
       alert(
         error instanceof Error
           ? `Error al exportar: ${error.message}`
@@ -88,37 +80,132 @@ export function ExportButton({ dateRange }: ExportButtonProps) {
 }
 
 /**
- * Generate CSV content from metrics data
- * Updated for new metrics_service data structure
+ * Generate comprehensive CSV content from metrics data
+ * Organizes data into clear sections for easy analysis
  */
-function generateCSV(metrics: ExportMetricsOutput["metrics"]): string {
-  if (metrics.length === 0) {
-    return "";
-  }
+function generateCSV(data: ExportMetricsOutput): string {
+  const { data: metricsData, metadata } = data;
 
-  // Define CSV headers - simplified for new data structure
-  const headers = [
-    "Metric Type",
-    "Value",
-    "Unit",
+  // Header section
+  const headerSection = [
+    "# ASM2 Metrics Export Report",
+    `# Exported: ${new Date(metadata.exportTimestamp).toLocaleString("es-ES")}`,
+    ...(metadata.startDate && metadata.endDate
+      ? [`# Date Range: ${metadata.startDate} to ${metadata.endDate}`]
+      : []),
+    "",
   ];
 
-  // Generate CSV rows from the new flat structure
-  const rows = metrics.map((metric) => {
-    return [
-      metric.metric_type,
-      metric.value,
-      metric.unit,
-    ];
-  });
+  // Section 1: Summary Metrics
+  const summarySection = [
+    "=== RESUMEN GENERAL ===",
+    "Métrica,Valor,Unidad",
+    `Usuarios únicos,${metricsData.summary.unique_users},usuarios`,
+    `Eventos totales,${metricsData.summary.total_events},eventos`,
+    `Sesión media,${metricsData.summary.avg_session_length_seconds.toFixed(1)},segundos`,
+    `Latencia LLM promedio,${metricsData.summary.avg_llm_response_time_ms.toFixed(2)},ms`,
+    `Documentos por consulta,${metricsData.summary.avg_docs_per_query.toFixed(1)},docs`,
+    "",
+  ];
 
-  // Combine headers and rows
-  const csvContent = [
-    headers.join(","),
-    ...rows.map((row) => row.map((cell) => escapeCSVCell(cell)).join(",")),
+  // Section 2: Token Usage
+  const tokenSection = [
+    "=== CONSUMO DE TOKENS ===",
+    "Tipo,Entrada,Salida,Total",
+    `LLM,${metricsData.token_usage.llm_tokens_in},${metricsData.token_usage.llm_tokens_out},${metricsData.token_usage.llm_tokens_in + metricsData.token_usage.llm_tokens_out}`,
+    `RAG,${metricsData.token_usage.rag_tokens_in},${metricsData.token_usage.rag_tokens_out},${metricsData.token_usage.rag_tokens_in + metricsData.token_usage.rag_tokens_out}`,
+    `Total,,${metricsData.token_usage.total_tokens}`,
+    "",
+  ];
+
+  // Section 3: System Health
+  const healthSection = [
+    "=== SALUD DEL SISTEMA ===",
+    "Recurso,Promedio (%),Máximo (%)",
+    `CPU,${metricsData.system_health.avg_cpu_percent.toFixed(1)},${metricsData.system_health.max_cpu_percent.toFixed(1)}`,
+    `RAM,${metricsData.system_health.avg_ram_percent.toFixed(1)},${metricsData.system_health.max_ram_percent.toFixed(1)}`,
+    `GPU,${metricsData.system_health.avg_gpu_percent.toFixed(1)},${metricsData.system_health.max_gpu_percent.toFixed(1)}`,
+    "",
+  ];
+
+  // Section 4: Role Distribution
+  const roles = Object.entries(metricsData.role_distribution);
+  const roleSection = [
+    "=== DISTRIBUCIÓN POR ROL ===",
+    "Rol,Usuarios",
+    ...(roles.length > 0
+      ? roles.map(([role, count]) => `${escapeCSVCell(role)},${count}`)
+      : ["Sin datos disponibles,0"]),
+    "",
+  ];
+
+  // Section 5: Activity by Day
+  const activitySection = [
+    "=== ACTIVIDAD DIARIA ===",
+    "Fecha,Eventos,Usuarios únicos",
+    ...metricsData.activity_by_day.map(
+      (day) => `${day.date},${day.event_count},${day.unique_users}`,
+    ),
+    "",
+  ];
+
+  // Section 6: Hourly Pattern
+  const hourlySection = [
+    "=== PATRÓN HORARIO ===",
+    "Hora,Eventos",
+    ...metricsData.hourly_pattern.map(
+      (hour) =>
+        `${hour.hour.toString().padStart(2, "0")}:00,${hour.event_count}`,
+    ),
+    "",
+  ];
+
+  // Section 7: Response Time Trends (conditional)
+  const responseTimeSection =
+    metricsData.response_time_trend.length > 0
+      ? [
+          "=== TENDENCIA DE TIEMPOS DE RESPUESTA ===",
+          "Fecha,LLM (ms),RAG (ms)",
+          ...metricsData.response_time_trend.map(
+            (trend) =>
+              `${trend.date},${(trend.llm_response_time * 1000).toFixed(2)},${(trend.doc_response_time * 1000).toFixed(2)}`,
+          ),
+          "",
+        ]
+      : [];
+
+  // Section 8: Search Terms
+  const searchTermsSection = [
+    "=== PALABRAS MÁS BUSCADAS ===",
+    "Palabra,Frecuencia",
+    ...metricsData.search_terms.map(
+      (term) => `${escapeCSVCell(term.word)},${term.count}`,
+    ),
+    "",
+  ];
+
+  // Section 9: Topics
+  const topicsSection = [
+    "=== TEMAS MÁS FRECUENTES ===",
+    "Tema,Frecuencia",
+    ...metricsData.topics.map(
+      (topic) => `${escapeCSVCell(topic.topic)},${topic.count}`,
+    ),
+  ];
+
+  // Combine all sections
+  return [
+    ...headerSection,
+    ...summarySection,
+    ...tokenSection,
+    ...healthSection,
+    ...roleSection,
+    ...activitySection,
+    ...hourlySection,
+    ...responseTimeSection,
+    ...searchTermsSection,
+    ...topicsSection,
   ].join("\n");
-
-  return csvContent;
 }
 
 /**
@@ -129,7 +216,6 @@ function escapeCSVCell(
 ): string {
   const value = String(cell ?? "");
 
-  // If the value contains comma, quote, or newline, wrap it in quotes
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
     return `"${value.replaceAll('"', '""')}"`;
   }
@@ -139,16 +225,14 @@ function escapeCSVCell(
 
 /**
  * Generate filename with date range and timestamp
- * Requirement 3.4: Removed nodeName - single-node architecture
  */
 function generateFilename(metadata: {
   startDate?: string;
   endDate?: string;
   exportTimestamp: string;
 }): string {
-  const parts = ["metrics"];
+  const parts = ["asm2_metrics"];
 
-  // Add date range if available
   if (metadata.startDate && metadata.endDate) {
     const start = new Date(metadata.startDate).toISOString().split("T")[0];
     const end = new Date(metadata.endDate).toISOString().split("T")[0];
@@ -161,7 +245,6 @@ function generateFilename(metadata: {
     parts.push(`until_${end}`);
   }
 
-  // Add export timestamp
   const timestamp = new Date(metadata.exportTimestamp)
     .toISOString()
     .replaceAll(/[:.]/g, "-")
@@ -183,7 +266,6 @@ function downloadCSV(csvContent: string, filename: string): void {
     type: "text/csv;charset=utf-8;",
   });
 
-  // Create download link
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
 
@@ -195,6 +277,5 @@ function downloadCSV(csvContent: string, filename: string): void {
   link.click();
   link.remove();
 
-  // Clean up
   URL.revokeObjectURL(url);
 }
