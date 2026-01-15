@@ -15,7 +15,7 @@ PyStemmer==2.2.0.3
 
 # NLP & Language Detection
 stanza
-fasttext-wheel
+fasttext-numpy2-wheel
 huggingface_hub
 
 # ML Models (reranking)
