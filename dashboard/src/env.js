@@ -41,6 +41,7 @@ export const env = createEnv({
         error:
           "NEXT_PUBLIC_WORKOS_REDIRECT_URI must end with '/api/auth/callback'",
       }),
+    NEXT_PUBLIC_APP_URL: z.url(),
   },
 
   /**
@@ -59,6 +60,7 @@ export const env = createEnv({
     WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD,
     NEXT_PUBLIC_WORKOS_REDIRECT_URI:
       process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
