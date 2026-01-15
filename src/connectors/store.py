@@ -6,12 +6,13 @@ import hashlib
 import os
 import json
 import pickle
+import uuid
 
 import bm25s
 import Stemmer
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import VectorParams, Distance
+from qdrant_client.http.models import VectorParams, SparseVectorParams, Modifier, Distance, PointStruct, Fusion, FusionQuery, SearchParams, Prefetch, Document as QDocument
 
 from langchain_community.vectorstores import Qdrant
 from langchain.retrievers.ensemble import EnsembleRetriever
@@ -33,12 +34,6 @@ EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 QDRANT_COLL = "documents"
 
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-STEMMER = Stemmer.Stemmer("spanish")
-
-# Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
-# BM25 funciona mejor en español, ajustado de 0.3/0.7 a 0.4/0.6
-BM25_WEIGHT = 0.4
-VECTOR_WEIGHT = 0.6
 
 TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
 CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
@@ -51,88 +46,6 @@ def get_config_hash() -> str:
     config = f"chunk_size={DOCUMENT_SPLITTER._chunk_size}_overlap={DOCUMENT_SPLITTER._chunk_overlap}"
     return hashlib.md5(config.encode()).hexdigest()[:8]
 
-
-class BM25Retriever(BaseRetriever):
-    """Retriever BM25"""
-    
-    index: Optional[bm25s.BM25] = None
-    documents: List[Document] = Field(default_factory=list)
-    k: int = 256
-    
-    class Config:
-        arbitrary_types_allowed = True
-    
-    @classmethod
-    def load_local(cls, path: str, k: int = 256) -> "BM25Retriever":
-        """Carga índice BM25 desde disco."""
-        instance = cls(k=k)
-        instance.index = bm25s.BM25.load(path, load_corpus=False)
-        
-        with open(os.path.join(path, "documents.pkl"), "rb") as f:
-            instance.documents = pickle.load(f)
-        
-        return instance
-    
-    def save_local(self, path: str) -> None:
-        """Guarda índice BM25 en disco."""
-        os.makedirs(path, exist_ok=True)
-        self.index.save(path, corpus=None)
-        
-        with open(os.path.join(path, "documents.pkl"), "wb") as f:
-            pickle.dump(self.documents, f)
-        
-        with open(os.path.join(path, "metadata.json"), "w") as f:
-            json.dump({
-                "num_documents": len(self.documents),
-                "config_hash": get_config_hash()
-            }, f)
-    
-    def add_documents(self, documents: List[Document]) -> None:
-        """Construye índice BM25 a partir de documentos."""
-        if not documents:
-            return
-        
-        self.documents = documents
-        corpus = [doc.page_content for doc in documents]
-        corpus_tokens = bm25s.tokenize(corpus, stemmer=STEMMER)
-        
-        self.index = bm25s.BM25()
-        self.index.index(corpus_tokens)
-    
-    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        """Recupera documentos relevantes."""
-        if self.index is None or not self.documents:
-            return []
-        
-        query_tokens = bm25s.tokenize([query], stemmer=STEMMER)
-        results, _ = self.index.retrieve(query_tokens, k=min(self.k, len(self.documents)))
-        
-        return [self.documents[idx] for idx in results[0] if 0 <= idx < len(self.documents)]
-    
-    @staticmethod
-    def index_exists(path: str) -> bool:
-        """Verifica si existe un índice válido."""
-        return all(os.path.exists(os.path.join(path, f)) for f in ["index.pkl", "documents.pkl", "metadata.json"])
-    
-    @staticmethod
-    def needs_rebuild(path: str, doc_count: int) -> bool:
-        """Verifica si el índice necesita reconstruirse (por docs o config)."""
-        metadata_file = os.path.join(path, "metadata.json")
-        if not os.path.exists(metadata_file):
-            return True
-        
-        try:
-            with open(metadata_file, "r") as f:
-                metadata = json.load(f)
-                # Rebuild si cambió el número de docs o la configuración de chunking
-                if metadata.get("num_documents", 0) != doc_count:
-                    return True
-                if metadata.get("config_hash") != get_config_hash():
-                    print(f"⚠️ BM25: Configuración de chunking cambió, reconstruyendo...")
-                    return True
-                return False
-        except Exception:
-            return True
 
 def iterate_qdrant_docs(vectorstore: Qdrant, batch_size=100):
     offset = None
@@ -188,7 +101,12 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     if not vectorstore.client.collection_exists(QDRANT_COLL):
         vectorstore.client.create_collection(
             collection_name=QDRANT_COLL,
-            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),  # change size
+            vectors_config={
+                "embedding": VectorParams(size=1536, distance=Distance.COSINE),
+            },
+            sparse_vectors_config={
+                "bm25": SparseVectorParams(modifier=Modifier.IDF),
+            },
         )
 
     # Check files to update
@@ -235,7 +153,29 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
 
         for i in range(0, len(docs_batch), batch_size):
             sub_docs = docs_batch[i:i + batch_size]
-            new_ids = vectorstore.add_documents(sub_docs)
+            new_ids = [str(uuid.uuid4()) for _ in sub_docs]
+            embs = EMBEDDINGS.embed_documents([i.page_content for i in sub_docs])
+
+            points = [
+                PointStruct(
+                    id=uuid,
+                    vector={
+                        "embedding": emb,
+                        "bm25": QDocument(text=doc.page_content, model="qdrant/bm25")
+                    },
+                    payload={
+                        "page_content": doc.page_content,
+                        "metadata": doc.metadata
+                    }
+                )
+
+                for uuid, emb, doc in zip(new_ids, embs, sub_docs)
+            ]
+
+            vectorstore.client.upsert(
+                vectorstore.collection_name,
+                points
+            )
 
             if manifest.has_topics():
                 assign_topics(vectorstore, new_ids)
@@ -283,6 +223,33 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     return vectorstore
 
 
+def hybrid_search(vectorstore: Qdrant, query: str, k: int, prefetch_k: int):
+    # Embed query
+    emb = vectorstore.embeddings.embed_query(query)
+    
+    # Make search request to the server
+    search_results = vectorstore.client.query_points(
+        collection_name=vectorstore.collection_name,
+        query=FusionQuery(fusion=Fusion.RRF),
+        prefetch=[
+            Prefetch(query=emb, using="embedding", limit=prefetch_k),
+            Prefetch(query=QDocument(text=query, model="qdrant/bm25"), using="bm25", limit=prefetch_k)
+        ],
+        search_params=SearchParams(hnsw_ef=256, exact=False),
+        with_payload=True,
+        with_vectors=False,
+        limit=k,
+    )
+
+    # Transform to langchain's Document model
+    res = [
+        Document(page_content=d.payload['page_content'], metadata=d.payload['metadata'])
+        for d in search_results.points
+    ]
+
+    return res
+
+
 def extract_topics(vectorstore: Qdrant):
     manifest = FaissManifest(QDRANT_PATH)
 
@@ -298,45 +265,3 @@ def extract_topics(vectorstore: Qdrant):
             
         else:
             print(f"El índice es demasiado pequeño para detectar temas")
-
-
-def create_hybrid_retriever(vectorstore: Qdrant, k: int = 256) -> Tuple[EnsembleRetriever, List[Document]]:
-    """
-    Crea un retriever híbrido combinando BM25 (léxico) y FAISS (semántico).
-    
-    Args:
-        vectorstore: El vectorstore FAISS
-        k: Número de documentos a recuperar de cada retriever
-        
-    Returns:
-        Tupla de (EnsembleRetriever, List[Document]) - el retriever y todos los documentos
-    """
-    # Obtener todos los documentos para BM25
-    all_docs = list(i for _, i in iterate_qdrant_docs(vectorstore))
-    
-    if not all_docs:
-        return None, []
-    
-    # Cargar o construir índice BM25
-    if BM25Retriever.index_exists(BM25_PATH) and not BM25Retriever.needs_rebuild(BM25_PATH, len(all_docs)):
-        print(f"📂 BM25: Cargando índice desde {BM25_PATH}")
-        bm25_retriever = BM25Retriever.load_local(BM25_PATH, k=k)
-    else:
-        print("🔨 BM25: Construyendo índice...")
-        bm25_retriever = BM25Retriever(k=k)
-        bm25_retriever.add_documents(all_docs)
-        bm25_retriever.save_local(BM25_PATH)
-        print(f"💾 BM25: Índice guardado en {BM25_PATH}")
-    
-    # Crear retriever FAISS
-    faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": k})
-    
-    # Combinar con EnsembleRetriever
-    hybrid_retriever = EnsembleRetriever(
-        retrievers=[bm25_retriever, faiss_retriever],
-        weights=[BM25_WEIGHT, VECTOR_WEIGHT]
-    )
-    
-    print(f"🔀 Retriever híbrido creado: {len(all_docs)} documentos, BM25={BM25_WEIGHT}, Vector={VECTOR_WEIGHT}")
-    
-    return hybrid_retriever, all_docs
