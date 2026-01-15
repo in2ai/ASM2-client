@@ -20,10 +20,10 @@ ENV LANG=es_ES.UTF-8 \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Directorio compartido para modelos de sentence-transformers
-# (evita que root y appuser usen cachés distintos)
+# Directorio compartido para modelos (evita que root y appuser usen cachés distintos)
 ENV SENTENCE_TRANSFORMERS_HOME=/app/models \
-    HF_HOME=/app/models
+    HF_HOME=/app/models \
+    STANZA_RESOURCES_DIR=/app/models/stanza
 
 # Config por defecto Streamlit (puedes sobreescribir por env)
 ENV STREAMLIT_SERVER_HEADLESS=true \
@@ -45,20 +45,14 @@ RUN if ! grep -qi '^streamlit' requirements.txt; then echo 'streamlit' >> requir
 # Instalar deps Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Descargar modelos de Stanza (solo procesadores necesarios: tokenize, mwt, pos, lemma)
-RUN python -c "import stanza; \
-    stanza.download('es', package='ancora', processors='tokenize,mwt,pos,lemma'); \
-    stanza.download('en', processors='tokenize,mwt,pos,lemma'); \
-    stanza.download('gl', package='ctg', processors='tokenize,mwt,pos,lemma')"
-
-RUN python -c "from fast_langdetect import LangDetectConfig, LangDetector; \
-    LangDetector(LangDetectConfig(model='large'))"
-
-# Crear directorio de modelos y pre-descargar modelo de reranking
-# chmod 755 asegura que cualquier usuario pueda leer los modelos (necesario para user: "${UID}:${GID}" en docker-compose)
-# Modelos anterior:
-#   - BAAI/bge-reranker-v2-m3 (multilingüe, ~560M params, más lento)
-RUN mkdir -p /app/models && \
+# Crear directorio de modelos y descargar todos los modelos
+RUN mkdir -p /app/models/stanza && \
+    python -c "import stanza; \
+        stanza.download('es', package='ancora', processors='tokenize,mwt,pos,lemma'); \
+        stanza.download('en', processors='tokenize,mwt,pos,lemma'); \
+        stanza.download('gl', package='ctg', processors='tokenize,mwt,pos,lemma')" && \
+    python -c "from fast_langdetect import LangDetectConfig, LangDetector; \
+        LangDetector(LangDetectConfig(model='large'))" && \
     python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')" && \
     chmod -R 755 /app/models
 
