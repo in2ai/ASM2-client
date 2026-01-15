@@ -239,3 +239,10 @@ ASM2-client/
 ├── .env.example           # Plantilla de variables de entorno
 └── Dockerfile             # Imagen del cliente Python
 ```
+
+---
+
+<div align="center">
+    <img src="img/LOGOS.png" width="800" alt="Logos de financiación IGAPE, Xunta de Galicia y NextGenerationEU">
+    <p><i>Este proyecto ha sido financiado por el Instituto Galego de Promoción Económica (IGAPE) y la Xunta de Galicia en el marco del Plan de Recuperación, Transformación y Resiliencia, financiado por la Unión Europea – NextGenerationEU, dentro del procedimiento IG408M (“Ayudas para el desarrollo tecnológico y la innovación mediante el uso de la Inteligencia Artificial – IA360”).</i></p>
+</div>
