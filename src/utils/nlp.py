@@ -7,9 +7,9 @@ DETECTOR = LangDetector(config)
 # SPACY_MODEL = spacy.load("es_core_news_md")
 
 lang_model_dict = {
-    "es": stanza.Pipeline("es", package="ancora"),
-    "en": stanza.Pipeline("en"),  # default (ewt)
-    "gl": stanza.Pipeline("gl", package="ctg"),
+    "es": stanza.Pipeline("es", package="ancora", processors="tokenize,mwt,pos,lemma"),
+    "en": stanza.Pipeline("en", processors="tokenize,mwt,pos,lemma"),
+    "gl": stanza.Pipeline("gl", package="ctg", processors="tokenize,mwt,pos,lemma"),
 }
 
 supported_languages = ["es", "en", "gl"]
@@ -17,6 +17,9 @@ supported_languages = ["es", "en", "gl"]
 
 def detect_language(query: str):
     global DETECTOR
+
+    print("NLP RESULTS OF LANGUAGE: \n")
+    print(DETECTOR.detect(query, k=1)[0]["lang"])
 
     return DETECTOR.detect(query, k=1)[0]["lang"]
 
