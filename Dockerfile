@@ -51,6 +51,9 @@ RUN python -c "import stanza; \
     stanza.download('en', processors='tokenize,mwt,pos,lemma'); \
     stanza.download('gl', package='ctg', processors='tokenize,mwt,pos,lemma')"
 
+RUN python -c "from fast_langdetect import LangDetectConfig, LangDetector; \
+    LangDetector(LangDetectConfig(model='large'))"
+
 # Crear directorio de modelos y pre-descargar modelo de reranking
 # chmod 755 asegura que cualquier usuario pueda leer los modelos (necesario para user: "${UID}:${GID}" en docker-compose)
 # Modelos anterior:

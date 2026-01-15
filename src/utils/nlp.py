@@ -1,7 +1,7 @@
 import stanza
 from fast_langdetect import LangDetectConfig, LangDetector
 
-config = LangDetectConfig(cache_dir="/custom/cache", model="lite")
+config = LangDetectConfig(cache_dir="/custom/cache", model="large")
 DETECTOR = LangDetector(config)
 
 # SPACY_MODEL = spacy.load("es_core_news_md")
