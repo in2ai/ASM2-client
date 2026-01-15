@@ -23,8 +23,8 @@ from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_openai import OpenAIEmbeddings
 from pydantic import Field
 
-from src.connectors.faiss_file import FaissFile
-from src.connectors.manifest import FaissManifest
+from src.connectors.vdb_file import VDBFile
+from src.connectors.manifest import VDBManifest
 from src.utils.topic import assign_topics, extract_initial_topics
 
 QDRANT_PATH = "qdrant_index"
@@ -70,18 +70,18 @@ def iterate_qdrant_docs(vectorstore: Qdrant, batch_size=100):
         if offset is None:
             break
 
-def build_vectorstore(files: List[FaissFile], source, batch_size=200):
+def build_vectorstore(files: List[VDBFile], source, batch_size=200):
     global QDRANT_PATH, DOCUMENT_SPLITTER, EMBEDDINGS
 
     # Read status manifest file
-    manifest = FaissManifest(QDRANT_PATH)
+    manifest = VDBManifest(QDRANT_PATH)
     current_config_hash = get_config_hash()
     
     # Verificar si la configuración de chunking cambió
     config_changed = manifest.needs_config_rebuild(current_config_hash)
     
     if config_changed:
-        print(f"⚠️ FAISS ({source}): Configuración de chunking cambió, reconstruyendo índice completo...")
+        print(f"⚠️ ({source}): Configuración de chunking cambió, reconstruyendo índice completo...")
 
     # Check if the part for this source is already constructed
     client = QdrantClient(
@@ -251,7 +251,7 @@ def hybrid_search(vectorstore: Qdrant, query: str, k: int, prefetch_k: int):
 
 
 def extract_topics(vectorstore: Qdrant):
-    manifest = FaissManifest(QDRANT_PATH)
+    manifest = VDBManifest(QDRANT_PATH)
 
     # Add topics if needed
     if not manifest.has_topics():

@@ -6,7 +6,7 @@ import streamlit as st
 from PyPDF2 import PdfReader
 
 from src.config.config import *
-from src.connectors.faiss_file import OnedriveFile
+from src.connectors.vdb_file import OnedriveFile
 from src.connectors.store import build_vectorstore
 
 # ─────────────────────────────────────────────────────────────────────────────

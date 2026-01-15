@@ -6,7 +6,7 @@ from src.utils.helpers import safe_execute
 from dropbox.exceptions import ApiError
 
 
-class FaissFile:
+class VDBFile:
     def __init__(self, metadata):
         self.metadata = metadata
 
@@ -14,7 +14,7 @@ class FaissFile:
         ...
 
 
-class GoogleDriveFile(FaissFile):
+class GoogleDriveFile(VDBFile):
     def __init__(self, metadata, service):
         super().__init__(metadata)
         self.service = service
@@ -40,7 +40,7 @@ class GoogleDriveFile(FaissFile):
         return None
 
 
-class DropboxFile(FaissFile):
+class DropboxFile(VDBFile):
     def __init__(self, metadata, service):
         super().__init__(metadata)
         self.service = service
@@ -71,7 +71,7 @@ class DropboxFile(FaissFile):
 def _ms_headers(token_dict):
     return {"Authorization": f"Bearer {token_dict['access_token']}"}
 
-class OnedriveFile(FaissFile):
+class OnedriveFile(VDBFile):
     def __init__(self, metadata, token):
         super().__init__(metadata)
         self.token = token

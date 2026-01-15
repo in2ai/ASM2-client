@@ -11,7 +11,7 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 
 from src.config.config import *
-from src.connectors.faiss_file import GoogleDriveFile
+from src.connectors.vdb_file import GoogleDriveFile
 from src.connectors.store import build_vectorstore
 from src.utils.helpers import safe_execute
 

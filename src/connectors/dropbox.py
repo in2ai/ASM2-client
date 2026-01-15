@@ -6,7 +6,7 @@ from dropbox.exceptions import ApiError
 from PyPDF2 import PdfReader
 
 from src.config.config import *
-from src.connectors.faiss_file import DropboxFile
+from src.connectors.vdb_file import DropboxFile
 from src.connectors.store import build_vectorstore
 
 # ─────────────────────────────────────────────────────────────────────────────

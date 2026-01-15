@@ -64,7 +64,7 @@ COPY src /app/src
 COPY img /app/img
 
 # No incluimos secretos en la imagen; se montarán como volumen
-# (client_secret.json, client_secret_website.json, .env, faiss_index/...)
+# (client_secret.json, client_secret_website.json, .env, qdrant_index/...)
 
 RUN chown -R appuser:appuser /app
 USER appuser
