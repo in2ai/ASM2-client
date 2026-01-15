@@ -41,10 +41,15 @@ export const env = createEnv({
         error:
           "NEXT_PUBLIC_WORKOS_REDIRECT_URI must end with '/api/auth/callback'",
       }),
-    NEXT_PUBLIC_APP_URL: z.url({
-      error:
-        "NEXT_PUBLIC_APP_URL must be a valid URL (e.g., https://yourdomain.com). For Dokploy: https://${{DOKPLOY_DEPLOY_URL}}",
-    }),
+    NEXT_PUBLIC_APP_URL: z
+      .string()
+      .min(1, { message: "NEXT_PUBLIC_APP_URL is required" })
+      .refine(
+        (val) => val.startsWith("http://") || val.startsWith("https://"),
+        {
+          message: "NEXT_PUBLIC_APP_URL must start with http:// or https://",
+        },
+      ),
   },
 
   /**
@@ -63,7 +68,13 @@ export const env = createEnv({
     WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD,
     NEXT_PUBLIC_WORKOS_REDIRECT_URI:
       process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_APP_URL: (() => {
+      console.log(
+        "🔍 NEXT_PUBLIC_APP_URL raw value:",
+        process.env.NEXT_PUBLIC_APP_URL,
+      );
+      return process.env.NEXT_PUBLIC_APP_URL;
+    })(),
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
