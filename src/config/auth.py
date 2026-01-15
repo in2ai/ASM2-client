@@ -1,7 +1,7 @@
 # Fake for now
 
-USER_ID = 'Unknown user'
-USER_ROLE = 'Unknown role'
+USER_ID = 'user in2ai'
+USER_ROLE = 'admin in2ai'
 
 def authenticate(user_id, user_role):
     global USER_ID, USER_ROLE
