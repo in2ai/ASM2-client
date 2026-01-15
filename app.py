@@ -400,7 +400,8 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
     # 3) Preparar mensajes para el LLM
     system = (
         "You are a RAG conversational assistant. Respond ONLY with the provided CONTEXT. "
-        "Respond EXCLUSIVELY in the language of the last message of the user. "
+        "Respond EXCLUSIVELY in the language of the last message of the user, "
+        f"which has been detected to have the following language code: {lang_code}. "
         "Do not improvise if you don't have information in the context. "
         'In your response, do not use the word "CONTEXT", instead use "the sources". '
         "Write in natural, clear, and direct language. "
