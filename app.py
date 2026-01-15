@@ -210,24 +210,24 @@ def rewrite_query_with_context(query: str, history: list) -> str:
     if not history or len(history) < 2:
         return query
 
-    # Coger los últimos 4 mensajes como contexto
+    # Get the last 4 messages as context
     recent = history[-4:]
     history_text = "\n".join(
-        f"{'Usuario' if m['role'] == 'user' else 'Asistente'}: {m['content'][:300]}"
+        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content'][:300]}"
         for m in recent
     )
 
     rewriter_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    prompt = f"""Dado este historial de conversación:
+    prompt = f"""Given this conversation history:
 {history_text}
 
-Tu tarea: Si la siguiente consulta contiene pronombres o referencias ambiguas (como "eso", "ese documento", "lo mismo", "más sobre eso"), reescríbela para que sea autocontenida.
-Si la consulta ya es clara y autocontenida, devuélvela tal cual.
+Your task: If the following query contains ambiguous pronouns or references (like "it", "that document", "the same", "more about that"), rewrite it to be self-contained.
+If the query is already clear and self-contained, return it as is.
 
 
-Consulta original: {query}
+Original query: {query}
 
-Responde SOLO con la consulta reescrita, sin explicaciones:"""
+Respond ONLY with the rewritten query, without explanations:"""
 
     try:
         rewritten = rewriter_llm.invoke([HumanMessage(content=prompt)]).content.strip()
@@ -301,7 +301,7 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
 
     # Detectar idioma
     lang_code = detect_language(query)
-    print(lang_code)
+    print("IDIOMA DETECTADO: ", lang_code)
 
     # Register search terms
     search_terms = extract_search_terms(query, lang_code)
@@ -398,41 +398,41 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
     insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
     # 3) Preparar mensajes para el LLM
-    # Nota: El prompt instruye al LLM a seleccionar solo las fuentes que realmente utiliza
     system = (
-        "Eres un asistente conversacional RAG en ESPAÑOL. Responde SOLO con el CONTEXTO proporcionado. "
-        "No improvises si no tienes información en el contexto. "
-        'En tu respuesta, no uses la palabra "CONTEXTO", sino usa "las fuentes". '
-        "Redacta en lenguaje natural, claro y directo. "
-        "IMPORTANTE: En el campo 'sources', incluye SOLO las fuentes que realmente hayas utilizado para responder. "
-        "Si la pregunta es un saludo, agradecimiento o no requiere información de las fuentes, deja 'sources' vacío. "
-        "Usa el historial de conversación para seguir el hilo."
+        "You are a RAG conversational assistant. Respond ONLY with the provided CONTEXT. "
+        "Respond EXCLUSIVELY in the language of the last message of the user. "
+        "Do not improvise if you don't have information in the context. "
+        'In your response, do not use the word "CONTEXT", instead use "the sources". '
+        "Write in natural, clear, and direct language. "
+        "IMPORTANT: In the 'sources' field, include ONLY the sources you actually used to respond. "
+        "If the question is a greeting, thanks, or does not require information from the sources, leave 'sources' empty. "
+        "Use the conversation history to follow the thread."
     )
 
-    # Incluir enlaces en la lista de fuentes para que el LLM pueda devolverlos
+    # Include links in the sources list so the LLM can return them
     sources_info = "\n".join(
         [
-            f"- título: {s['title']}, tipo: {s['source_type']}, link: {s.get('link') or 'N/A'}"
+            f"- title: {s['title']}, type: {s['source_type']}, link: {s.get('link') or 'N/A'}"
             for s in available_sources
         ]
     )
     print(sources_info)
 
-    # Construir lista de mensajes para el LLM desde st.session_state.messages
+    # Build list of messages for the LLM from st.session_state.messages
     messages = [SystemMessage(content=system)]
-    for m in history[:-1][-10:]:  # Últimos 10 mensajes excluyendo el actual
+    for m in history[:-1][-10:]:  # Last 10 messages excluding current
         if m["role"] == "user":
             messages.append(HumanMessage(content=m["content"]))
         else:
             messages.append(AIMessage(content=m["content"]))
 
-    user_message = f"""CONTEXTO:
+    user_message = f"""CONTEXT:
 {contexto}
 
-FUENTES DISPONIBLES:
+AVAILABLE SOURCES:
 {sources_info}
 
-PREGUNTA:
+QUESTION:
 {query}"""
 
     messages.append(HumanMessage(content=user_message))
