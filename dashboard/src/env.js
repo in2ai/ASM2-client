@@ -41,7 +41,10 @@ export const env = createEnv({
         error:
           "NEXT_PUBLIC_WORKOS_REDIRECT_URI must end with '/api/auth/callback'",
       }),
-    NEXT_PUBLIC_APP_URL: z.url(),
+    NEXT_PUBLIC_APP_URL: z.url({
+      error:
+        "NEXT_PUBLIC_APP_URL must be a valid URL (e.g., https://yourdomain.com). For Dokploy: https://${{DOKPLOY_DEPLOY_URL}}",
+    }),
   },
 
   /**
