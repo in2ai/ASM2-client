@@ -1,12 +1,14 @@
-# ASM2 Central
+# ASM2 Dashboard
 
 Multi-tenant analytics dashboard for RAG metrics with WorkOS authentication and role-based access control.
+
+> **Note:** For environment variables, Docker deployment, and general project setup, see the [main README](../README.md) and [`.env.example`](../.env.example).
 
 ## Tech Stack
 
 - [Next.js 15](https://nextjs.org) - React framework with App Router
 - [WorkOS AuthKit](https://workos.com/docs/authkit) - Authentication and user management
-- [QuestDB](https://questdb.io/) - High-performance time-series database for metrics
+- [QuestDB](https://questdb.io/) - High-performance time-series database
 - [tRPC](https://trpc.io) - Type-safe API layer
 - [Tailwind CSS 4](https://tailwindcss.com) - Styling
 - [shadcn/ui](https://ui.shadcn.com/) - UI components
@@ -14,200 +16,74 @@ Multi-tenant analytics dashboard for RAG metrics with WorkOS authentication and 
 
 ## Project Structure
 
-```
+```text
 src/
 ├── app/                    # Next.js App Router pages and layouts
 │   ├── _components/        # Page-specific components
+│   ├── actions/            # Server actions (auth, etc.)
 │   └── api/                # API routes (auth, trpc)
 ├── components/             # Reusable UI components
 │   └── ui/                 # shadcn/ui primitives
-├── lib/                    # Client-side utilities 
+├── lib/                    # Client-side utilities
 ├── server/                 # Server-side logic
 │   ├── api/                # tRPC routers and procedures
-│   └── db/                 # Database connection and queries (QuestDB)
+│   └── db/                 # Database connection and queries
 ├── trpc/                   # tRPC client configuration
 └── env.js                  # Environment variable validation schema
 ```
 
-## Getting Started
+## Local Development
 
 ### Prerequisites
 
-- Node.js 18+ or Bun
-- QuestDB instance (local or cloud)
-- WorkOS account and application
+- Node.js 18+ and pnpm
+- Environment variables configured (see root `.env.example`)
 
-### WorkOS Setup
-
-#### Step 1: Create WorkOS Account and Application
-
-1. Sign up for a WorkOS account at [https://dashboard.workos.com/](https://dashboard.workos.com/)
-
-2. Create a new application in the WorkOS dashboard:
-   - Click "Create Application"
-   - Enter your application name (e.g., "ASM2 Central")
-   - Select your application type
-
-#### Step 2: Configure Authentication Methods
-
-1. In your WorkOS application dashboard, navigate to **Authentication** settings
-
-2. Enable the authentication methods you want to support:
-   - **Email/Password**: Basic email and password authentication
-   - **Magic Link**: Passwordless email authentication
-   - **SSO**: Enterprise single sign-on (Google, Microsoft, Okta, etc.)
-   - **Social Login**: OAuth providers (GitHub, Google, etc.)
-
-3. Configure your authentication settings:
-   - Set session duration (default: 7 days)
-   - Configure password requirements if using email/password
-   - Customize email templates (optional)
-
-#### Step 3: Configure Redirect URIs
-
-1. In the WorkOS dashboard, navigate to **Redirect URIs**
-
-2. Add your redirect URIs for each environment:
-   - **Development**: `http://localhost:3001/api/auth/callback`
-   - **Production**: `https://yourdomain.com/api/auth/callback`
-
-3. **Important**: The redirect URI must match exactly (including protocol and port)
-
-#### Step 4: Get Your Credentials
-
-1. Navigate to the **API Keys** section in your WorkOS dashboard
-
-2. Copy your credentials:
-   - **API Key**: Starts with `sk_test_` (test) or `sk_live_` (production)
-   - **Client ID**: Starts with `client_`
-
-3. **Security Note**: Never commit these credentials to version control
-
-#### Step 5: Generate Cookie Password
-
-Generate a secure 32+ character password for cookie encryption:
+### Quick Start
 
 ```bash
-# Using Node.js
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Install dependencies
+pnpm install
 
-# Using OpenSSL
-openssl rand -hex 32
+# Start development server
+pnpm dev
 ```
 
-### Environment Configuration
+Open [http://localhost:3001](http://localhost:3001)
 
-#### Step 1: Create Environment File
+### Local Database Override
 
-Copy the example environment file:
+When running the dashboard locally while QuestDB runs in Docker, create a `.env.local` file:
 
-```bash
-cp .env.example .env
-```
-
-#### Step 2: Configure Database Connection (QuestDB)
-
-Configure the connection to your QuestDB instance:
-
-```bash
+```env
 QUESTDB_HOST=localhost
-QUESTDB_PORT=8812
-QUESTDB_USER=admin
-QUESTDB_PASSWORD=quest
-QUESTDB_DB=qdb
 ```
 
-#### Step 3: Configure WorkOS Credentials
-
-Fill in your WorkOS credentials from Step 4 of WorkOS Setup:
+### Verify Configuration
 
 ```bash
-WORKOS_API_KEY=sk_test_...
-WORKOS_CLIENT_ID=client_...
-WORKOS_COOKIE_PASSWORD=...
+pnpm typecheck
 ```
 
-#### Step 4: Configure Redirect URI
+## Role-Based Access Control
 
-Set the redirect URI to match your environment:
+### Administrator (`admin` role)
 
-```bash
-# Development
-NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3001/api/auth/callback
+- View and switch between all organizations/nodes
+- Access node management page
+- View aggregated metrics across all organizations
+- Export data from any organization
 
-# Production
-NEXT_PUBLIC_WORKOS_REDIRECT_URI=https://yourdomain.com/api/auth/callback
-```
+### End User (any other role)
 
-#### Step 5: Verify Configuration
-
-Verify your environment variables are valid:
-
-```bash
-npm run typecheck
-```
-
-If validation fails, check the error messages for specific issues with your environment variables.
-
-### Installation
-
-1. Install dependencies:
-
-   ```bash
-   pnpm install
-   # or
-   npm install
-   ```
-
-2. Start the development server:
-
-   ```bash
-   npm run dev
-   ```
-
-3. Open [http://localhost:3001](http://localhost:3001) in your browser
-
-## Role Configuration
-
-The application uses WorkOS organization roles to determine user permissions.
-
-### Role Types
-
-**Administrator (`admin` role)**
-
-- Can view and switch between all organizations/nodes
-- Can access the node management page
-- Can view aggregated metrics across all organizations
-- Can export data from any organization
-
-**End User (any other role or no role)**
-
-- Can only view their own organization's data
+- View only their own organization's data
 - Cannot switch between organizations
-- Cannot access admin-only features
-- Data is automatically filtered to their organization
+- Data automatically filtered to their organization
 
 ## Troubleshooting
 
-### Database Connection Issues
-
-**Problem**: Cannot connect to QuestDB
-
-**Solutions**:
-- Verify QuestDB is running and accessible.
-- Check that the `QUESTDB_HOST` and `QUESTDB_PORT` (usually 8812 for PG wire) are correct.
-- Ensure the user and password are correct.
-- Check `src/server/db/connection.ts` logic if issues persist.
-
-### Authentication Issues
-
-**Problem**: "Unauthorized" or "Forbidden"
-
-**Solutions**:
-- Check that the user belongs to an organization in WorkOS.
-- Verify the Redirect URI matches exactly in both `.env` and WorkOS Dashboard.
-
-### Common Errors
-
-- `TypeError: fetch failed`: Often indicates the QuestDB server is not reachable.
-- `Invalid environment variables`: Check `src/env.js` for validation rules.
+| Error                           | Cause                    | Solution                                                           |
+| ------------------------------- | ------------------------ | ------------------------------------------------------------------ |
+| `TypeError: fetch failed`       | QuestDB not reachable    | Check `QUESTDB_HOST` (`questdb` for Docker, `localhost` for local) |
+| `Invalid environment variables` | Missing/invalid env vars | Run `pnpm typecheck` to see details                                |
+| `Redirect loop after login`     | Mismatched URLs          | Verify `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_WORKOS_REDIRECT_URI` |
