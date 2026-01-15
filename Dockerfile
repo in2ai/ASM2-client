@@ -51,8 +51,8 @@ RUN mkdir -p /app/models/stanza && \
         stanza.download('es', package='ancora', processors='tokenize,mwt,pos,lemma'); \
         stanza.download('en', processors='tokenize,mwt,pos,lemma'); \
         stanza.download('gl', package='ctg', processors='tokenize,mwt,pos,lemma')" && \
-    python -c "from fast_langdetect import LangDetectConfig, LangDetector; \
-        LangDetector(LangDetectConfig(model='large'))" && \
+    python -c "from huggingface_hub import hf_hub_download; \
+        hf_hub_download(repo_id='cis-lmu/glotlid', filename='model.bin')" && \
     python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')" && \
     chmod -R 755 /app/models
 

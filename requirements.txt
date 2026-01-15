@@ -15,7 +15,8 @@ PyStemmer==2.2.0.3
 
 # NLP & Language Detection
 stanza
-fast-langdetect
+fasttext-wheel
+huggingface_hub
 
 # ML Models (reranking)
 torch==2.4.0

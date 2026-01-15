@@ -1,9 +1,21 @@
+import os
 import stanza
-from fast_langdetect import LangDetectConfig, LangDetector
+import fasttext
+from huggingface_hub import hf_hub_download
 
-DETECTOR = LangDetector(LangDetectConfig(model="large"))
+GLOTLID_MODEL_PATH = hf_hub_download(
+    repo_id="cis-lmu/glotlid",
+    filename="model.bin",
+    cache_dir=os.environ.get("HF_HOME", None)
+)
+DETECTOR = fasttext.load_model(GLOTLID_MODEL_PATH)
 
-# SPACY_MODEL = spacy.load("es_core_news_md")
+GLOTLID_TO_ISO2 = {
+    "spa_Latn": "es",
+    "eng_Latn": "en",
+    "glg_Latn": "gl",
+    "por_Latn": "pt",
+}
 
 lang_model_dict = {
     "es": stanza.Pipeline("es", package="ancora", processors="tokenize,mwt,pos,lemma"),
@@ -14,13 +26,11 @@ lang_model_dict = {
 supported_languages = ["es", "en", "gl"]
 
 
-def detect_language(query: str):
-    global DETECTOR
-
-    print("NLP RESULTS OF LANGUAGE: \n")
-    print(DETECTOR.detect(query, k=1)[0]["lang"])
-
-    return DETECTOR.detect(query, k=1)[0]["lang"]
+def detect_language(query: str) -> str:
+    labels, _ = DETECTOR.predict(query.replace("\n", " "), k=1)
+    lang_code = labels[0].replace("__label__", "")
+    iso2 = GLOTLID_TO_ISO2.get(lang_code, "es")
+    return iso2
 
 
 def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
