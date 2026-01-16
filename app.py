@@ -440,7 +440,7 @@ QUESTION:
 
     insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user_message))
 
-    return messages, available_sources, allowed_chunks
+    return messages, available_sources, allowed_chunks, lang_code
 
 
 def responder_streaming(
@@ -460,7 +460,7 @@ def responder_streaming(
         )
         return msg
 
-    messages, available_sources, allowed_chunks = result
+    messages, available_sources, allowed_chunks, lang_code = result
 
     # LLM con structured output para que seleccione solo las fuentes que realmente usa
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
@@ -469,7 +469,17 @@ def responder_streaming(
     with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
         response: RAGResponse = structured_llm.invoke(messages)
 
+    print(f"DEBUG LLM response: {response}")
     full_response = response.answer
+
+    if not full_response.strip():
+        fallback_messages = {
+            "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
+            "en": "I couldn't find relevant information about that topic in the available sources.",
+            "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
+        }
+        full_response = fallback_messages.get(lang_code, fallback_messages["es"])
+
     insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, len(full_response.split()))
 
     # Añadir solo las fuentes que el LLM seleccionó (no todas las disponibles)
