@@ -18,9 +18,9 @@ GLOTLID_TO_ISO2 = {
 }
 
 lang_model_dict = {
-    "es": stanza.Pipeline("es", package="ancora", processors="tokenize,mwt,pos,lemma"),
-    "en": stanza.Pipeline("en", processors="tokenize,mwt,pos,lemma"),
-    "gl": stanza.Pipeline("gl", package="ctg", processors="tokenize,mwt,pos,lemma"),
+    "es": stanza.Pipeline("es", package="ancora", processors="tokenize,mwt,pos,lemma", download_method=None),
+    "en": stanza.Pipeline("en", processors="tokenize,mwt,pos,lemma", download_method=None),
+    "gl": stanza.Pipeline("gl", package="ctg", processors="tokenize,mwt,pos,lemma", download_method=None),
 }
 
 supported_languages = ["es", "en", "gl"]
