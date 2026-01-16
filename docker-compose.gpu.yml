@@ -1,0 +1,16 @@
+# GPU override configuration for the app service
+# Usage:
+#   - Via COMPOSE_FILE env var (recommended): Set COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml in .env
+#   - Via command line: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+services:
+  app:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility

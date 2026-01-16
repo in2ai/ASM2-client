@@ -24,7 +24,6 @@ type UserPreferencesResponse = {
 /**
  * Preferences router - Temporary stub implementation
  * TODO: Implement persistent storage for user preferences
- * Requirements 8.1, 8.2: Removed defaultNodeId field and MongoDB dependency
  */
 export const preferencesRouter = createTRPCRouter({
   // Get user preferences - returns null (no persistent storage yet)
