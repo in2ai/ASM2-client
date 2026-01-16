@@ -1,4 +1,6 @@
 import os
+import unicodedata
+import regex as re
 import stanza
 import fasttext
 from huggingface_hub import hf_hub_download
@@ -24,6 +26,16 @@ lang_model_dict = {
 }
 
 supported_languages = ["es", "en", "gl"]
+
+
+_WORD_RE = re.compile(r"\p{L}+\p{M}*|\p{N}+")
+
+
+def unicode_tokenize(text: str) -> list[str]:
+    if not text:
+        return []
+    normalized = unicodedata.normalize("NFKC", text).lower()
+    return _WORD_RE.findall(normalized)
 
 
 def detect_language(query: str) -> str:

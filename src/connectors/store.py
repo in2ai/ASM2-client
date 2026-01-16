@@ -9,7 +9,6 @@ import json
 import pickle
 
 import bm25s
-import Stemmer
 
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
@@ -24,6 +23,7 @@ from pydantic import Field
 from src.connectors.faiss_file import FaissFile
 from src.connectors.manifest import FaissManifest
 from src.utils.topic import assign_topics, extract_initial_topics
+from src.utils.nlp import unicode_tokenize
 
 FAISS_PATH = "faiss_index"
 BM25_PATH = "bm25_index"
@@ -32,7 +32,6 @@ INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 # chunk_overlap aumentado de 100 a 200 para mejor coherencia entre chunks
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-STEMMER = Stemmer.Stemmer("spanish")
 
 # Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
 # BM25 funciona mejor en español, ajustado de 0.3/0.7 a 0.4/0.6
@@ -45,7 +44,11 @@ def get_config_hash() -> str:
     Genera un hash de la configuración de chunking.
     Si cambia chunk_size o chunk_overlap, el hash cambia y se fuerza rebuild.
     """
-    config = f"chunk_size={DOCUMENT_SPLITTER._chunk_size}_overlap={DOCUMENT_SPLITTER._chunk_overlap}"
+    config = (
+        f"chunk_size={DOCUMENT_SPLITTER._chunk_size}"
+        f"_overlap={DOCUMENT_SPLITTER._chunk_overlap}"
+        "_tokenizer=unicode_v1"
+    )
     return hashlib.md5(config.encode()).hexdigest()[:8]
 
 
@@ -91,7 +94,7 @@ class BM25Retriever(BaseRetriever):
         
         self.documents = documents
         corpus = [doc.page_content for doc in documents]
-        corpus_tokens = bm25s.tokenize(corpus, stemmer=STEMMER)
+        corpus_tokens = [unicode_tokenize(text) for text in corpus]
         
         self.index = bm25s.BM25()
         self.index.index(corpus_tokens)
@@ -101,7 +104,7 @@ class BM25Retriever(BaseRetriever):
         if self.index is None or not self.documents:
             return []
         
-        query_tokens = bm25s.tokenize([query], stemmer=STEMMER)
+        query_tokens = [unicode_tokenize(query)]
         results, _ = self.index.retrieve(query_tokens, k=min(self.k, len(self.documents)))
         
         return [self.documents[idx] for idx in results[0] if 0 <= idx < len(self.documents)]

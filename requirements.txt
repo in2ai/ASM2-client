@@ -12,6 +12,7 @@ openai==1.109.1
 faiss-gpu-cu12==1.13.0
 bm25s==0.2.12
 PyStemmer==2.2.0.3
+regex
 
 # NLP & Language Detection
 stanza
