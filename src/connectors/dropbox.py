@@ -5,6 +5,8 @@ from dropbox.exceptions import ApiError
 
 from PyPDF2 import PdfReader
 
+from qdrant_client.http.models import Filter, FieldCondition, MatchValue, MatchAny
+
 from src.config.config import *
 from src.connectors.vdb_file import DropboxFile
 from src.connectors.store import build_vectorstore
@@ -79,6 +81,9 @@ def oauth_dropbox():
         )
         _ = dbx.users_get_current_account()
         st.success("✅ Dropbox conectado")
+
+        st.session_state.dropbox_principals = get_authenticated_dropbox_principals(dbx)
+
         return dbx
     except Exception as e:
         st.error(f"Error conectando a Dropbox: {e}")
@@ -152,6 +157,137 @@ def get_dropbox_link(dbx, path_lower):
                 return links.links[0].url
         return None
     
+
+def get_dropbox_file_principals(dbx: dropbox.Dropbox, file_id_or_path: str, page_limit: int = 100):
+    principals = set()
+    acl_anyone = False
+
+    try:
+        res = dbx.sharing_list_file_members(
+            file=file_id_or_path,
+            include_inherited=True,
+            limit=page_limit,
+        )
+    except ApiError:
+        raise
+
+    def process_page(page):
+        # page.users is a list of UserFileMembershipInfo objects
+        for u in getattr(page, "users", []) or []:
+            # safe access to nested user object
+            member = getattr(u, "user", None) or {}
+            acct_id = getattr(member, "account_id", None)
+            email = getattr(member, "email", None)
+
+            if acct_id:
+                principals.add(f"dropbox:user_id:{acct_id}")
+            if email:
+                principals.add(f"dropbox:user:{email.strip().lower()}")
+
+    process_page(res)
+
+    # follow pagination if needed
+    has_more = getattr(res, "has_more", False)
+    cursor = getattr(res, "cursor", None)
+
+    while has_more:
+        cont = dbx.sharing_list_file_members_continue(cursor=cursor)
+        process_page(cont)
+        has_more = getattr(cont, "has_more", False)
+        cursor = getattr(cont, "cursor", None)
+
+    # Check shared links to detect 'anyone with link' / public link
+    try:
+        links_res = dbx.sharing_list_shared_links(path=file_id_or_path)
+    except ApiError:
+        links_res = None
+
+    if links_res:
+        links = getattr(links_res, "links", []) or []
+
+        for link in links:
+            vis = None
+            lp = getattr(link, "link_permissions", None)
+
+            if lp is not None:
+                vis = getattr(lp, "resolved_visibility", None)
+            
+            if vis and vis.is_public():
+                acl_anyone = True
+                principals.add("dropbox:anyone")
+                break
+
+            if vis and vis.is_team_only():
+                cot = getattr(link, "content_owner_team_info", None)
+
+                if cot and getattr(cot, "id", None):
+                    team_id = cot.id
+                    
+                else:
+                    tmi = getattr(link, "team_member_info", None)
+                    team_id = (getattr(tmi, "team_info", None) and getattr(tmi.team_info, "id", None)) or None
+
+                if team_id:
+                    principals.add(f"dropbox:team:{team_id}")
+    
+    return {
+        "anyone": bool(acl_anyone),
+        "allowed": sorted(principals)
+    }
+
+
+def get_authenticated_dropbox_principals(dbx):
+    acct = dbx.users_get_current_account()
+
+    tokens = set()
+
+    account_id = acct.account_id
+    email = acct.email
+    team_id = acct.team.id if acct.team else None
+
+    # canonical identifiers
+    if account_id:
+        tokens.add(f"dropbox:user_id:{account_id}")
+
+    if email:
+        tokens.add(f"dropbox:user:{email.strip().lower()}")
+
+    if team_id:
+        tokens.add(f"dropbox:team:{team_id}")
+
+    return sorted(tokens)
+
+
+def get_dropbox_qdrant_filter(auth_principals):
+    # source == "Dropbox"
+    source_condition = FieldCondition(
+        key="metadata.source",
+        match=MatchValue(value="Dropbox")
+    )
+
+    # permissions.anyone == True
+    anyone_condition = FieldCondition(
+        key="metadata.permissions.anyone",
+        match=MatchValue(value=True)
+    )
+
+    allowed_condition = FieldCondition(
+        key="metadata.permissions.allowed",
+        match=MatchAny(any=auth_principals)
+    )
+
+    # anyone_condition OR allowed_condition
+    or_block = Filter(
+        should=[anyone_condition, allowed_condition],
+    )
+
+    # source_condition AND or_block
+    final_filter = Filter(
+        must=[source_condition, or_block]
+    )
+
+    return final_filter
+    
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
@@ -169,7 +305,8 @@ def construir_vectorstore_dropbox():
             "path_lower": f.path_lower, 
             "modifiedTime": f.client_modified.isoformat(),
             "mimeType": guess_mime_from_name(f.name),
-            "webViewLink": get_dropbox_link(dbx, f.path_lower)
+            "webViewLink": get_dropbox_link(dbx, f.path_lower),
+            "permissions": get_dropbox_file_principals(dbx, f.id or f.path_lower)
         } 
         for f in files
     ]

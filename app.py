@@ -28,7 +28,8 @@ from src.config.config import *
 from src.connectors.drive import drive_can_read, get_current_user_drive, oauth_login_drive, construir_vectorstore_drive
 from src.connectors.dropbox import dropbox_can_read, oauth_dropbox, construir_vectorstore_dropbox
 from src.connectors.onedrive import onedrive_can_read, onedrive_device_login, construir_vectorstore_onedrive
-from src.connectors.store import extract_topics, hybrid_search
+from src.connectors.search import hybrid_search
+from src.connectors.store import extract_topics
 
 # Metrics
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity, register_words, register_topics

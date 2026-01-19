@@ -1,25 +1,16 @@
 from typing import List
 import os
 
-from typing import List, Tuple, Optional
 import hashlib
 import os
-import json
-import pickle
 import uuid
-
-import bm25s
-import Stemmer
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import VectorParams, SparseVectorParams, Modifier, Distance, PointStruct, Fusion, FusionQuery, SearchParams, Prefetch, Document as QDocument
 
 from langchain_community.vectorstores import Qdrant
-from langchain.retrievers.ensemble import EnsembleRetriever
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from langchain_core.retrievers import BaseRetriever
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_openai import OpenAIEmbeddings
 from pydantic import Field
 
@@ -221,33 +212,6 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
     print(f"💾 ({source}) Índice guardado en {QDRANT_PATH} [config: {current_config_hash}]")
     
     return vectorstore
-
-
-def hybrid_search(vectorstore: Qdrant, query: str, k: int, prefetch_k: int):
-    # Embed query
-    emb = vectorstore.embeddings.embed_query(query)
-    
-    # Make search request to the server
-    search_results = vectorstore.client.query_points(
-        collection_name=vectorstore.collection_name,
-        query=FusionQuery(fusion=Fusion.RRF),
-        prefetch=[
-            Prefetch(query=emb, using="embedding", limit=prefetch_k),
-            Prefetch(query=QDocument(text=query, model="qdrant/bm25"), using="bm25", limit=prefetch_k)
-        ],
-        search_params=SearchParams(hnsw_ef=256, exact=False),
-        with_payload=True,
-        with_vectors=False,
-        limit=k,
-    )
-
-    # Transform to langchain's Document model
-    res = [
-        Document(page_content=d.payload['page_content'], metadata=d.payload['metadata'])
-        for d in search_results.points
-    ]
-
-    return res
 
 
 def extract_topics(vectorstore: Qdrant):
