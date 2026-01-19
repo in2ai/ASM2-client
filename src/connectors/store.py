@@ -135,7 +135,7 @@ class BM25Retriever(BaseRetriever):
             return True
 
 CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
-TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
+TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 100))
 
 def setup_faiss_gpu(vectorstore):
     try:
