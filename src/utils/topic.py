@@ -4,6 +4,7 @@ import math
 import random
 import json
 import os
+from typing import Iterable
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -11,8 +12,55 @@ from langchain_community.vectorstores import FAISS
 
 TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
 TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
+TOPIC_MAPPING_FILENAME = "topics.json"
+SUPPORTED_TOPIC_LANGS = ["es", "en", "gl"]
 
-def extract_initial_topics(vdb: FAISS):
+
+def get_topic_mapping_path(vdb_path: str) -> str:
+    return os.path.join(vdb_path, TOPIC_MAPPING_FILENAME)
+
+
+def load_topic_mapping(vdb_path: str) -> dict:
+    path = get_topic_mapping_path(vdb_path)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_topic_mapping(vdb_path: str, mapping: dict) -> None:
+    os.makedirs(vdb_path, exist_ok=True)
+    path = get_topic_mapping_path(vdb_path)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(mapping, f, ensure_ascii=False, indent=2)
+
+
+def resolve_topic_names(
+    topic_indices: Iterable[int], lang_code: str, vdb_path: str
+) -> set[str]:
+    mapping = load_topic_mapping(vdb_path)
+    if not mapping:
+        return {str(idx) for idx in topic_indices}
+
+    lang_map = mapping.get(lang_code) or mapping.get("es") or {}
+    fallback_map = mapping.get("es", {})
+    resolved = set()
+
+    for idx in topic_indices:
+        key = str(idx)
+        name = None
+        if isinstance(lang_map, dict):
+            name = lang_map.get(key)
+        if not name and isinstance(fallback_map, dict):
+            name = fallback_map.get(key)
+        resolved.add(name if name else str(idx))
+
+    return resolved
+
+def extract_initial_topics(vdb: FAISS, vdb_path: str):
     # Iteration variables
     num_vectors = vdb.index.ntotal
     batch_size = 1024
@@ -57,6 +105,8 @@ def extract_initial_topics(vdb: FAISS):
 
     # Calculate representative docs
     topics = {}
+    topic_mapping = {lang: {} for lang in SUPPORTED_TOPIC_LANGS}
+    topic_index = 0
 
     for members in communities:
         if not members or len(members) < 100:
@@ -77,14 +127,37 @@ def extract_initial_topics(vdb: FAISS):
         if topic_json is None:
             continue
 
-        topic_name = topic_json['Tema']
+        topic_names = topic_json.get("Tema")
+        if isinstance(topic_names, str):
+            topic_names = {lang: topic_names for lang in SUPPORTED_TOPIC_LANGS}
+        if not isinstance(topic_names, dict):
+            continue
 
-        print(f'Topic: {topic_name}')
+        for lang in SUPPORTED_TOPIC_LANGS:
+            name = topic_names.get(lang) if isinstance(topic_names, dict) else None
+            if not name:
+                name = topic_names.get("es")
+            if not name:
+                name = next(
+                    (
+                        v
+                        for v in topic_names.values()
+                        if isinstance(v, str) and v.strip()
+                    ),
+                    None,
+                )
+            if not name:
+                name = f"Topic {topic_index}"
+            topic_mapping[lang][str(topic_index)] = name
+
+        print(f'Topic: {topic_mapping.get("es", {}).get(str(topic_index))}')
 
         for m in members:
             m_id = idx_to_doc[m]
             topics.setdefault(m_id, [])
-            topics[m_id].append(topic_name)
+            topics[m_id].append(topic_index)
+
+        topic_index += 1
 
     # Calculate multiple topics
     aggregated_topics = {}
@@ -120,6 +193,8 @@ def extract_initial_topics(vdb: FAISS):
     for id, ts in aggregated_topics.items():
         doc = vdb.docstore.search(id)
         doc.metadata['topics'] = ts 
+
+    save_topic_mapping(vdb_path, topic_mapping)
 
     return communities
 
@@ -180,11 +255,15 @@ def assign_topics(vdb: FAISS, ids):
 def get_topic(texts):
     system = """
     Eres un asistente que dados una serie de fragmentos de textos tiene que decidir un tema general para los mismos en un contexto de empresa.
-    Los textos pueden estar en múltiples idiomas, pero el tema resultante siempre tiene que estar en español y debe hacer alusión al contenido, no a la forma.
+    Los textos pueden estar en múltiples idiomas. Devuelve el nombre del tema en español, inglés y gallego, y debe hacer alusión al contenido, no a la forma.
     la respuesta debe ser únicamente un JSON válido con la siguiente forma:
 
     {
-        "Tema": "Tema de los textos (Ejemplos: Recursos Humanos, Contabilidad, Ingeniería de Software, ...)",
+        "Tema": {
+            "es": "Tema de los textos (Ejemplos: Recursos Humanos, Contabilidad, Ingeniería de Software, ...)",
+            "en": "Topic of the texts (Examples: Human Resources, Accounting, Software Engineering, ...)",
+            "gl": "Tema dos textos (Exemplos: Recursos Humanos, Contabilidade, Enxeñaría de Software, ...)"
+        },
         "Razonamiento": "Razonamiento corto de por qué se ha elegido ese tema en particular"
     }
 

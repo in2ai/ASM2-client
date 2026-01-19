@@ -43,7 +43,7 @@ from src.connectors.onedrive import (
     onedrive_can_read,
     onedrive_device_login,
 )
-from src.connectors.store import EMBEDDINGS, create_hybrid_retriever
+from src.connectors.store import EMBEDDINGS, FAISS_PATH, create_hybrid_retriever
 
 # Metrics
 from src.metrics.metrics import (
@@ -57,6 +57,7 @@ from src.metrics.metrics import (
 
 # Utils
 from src.utils.nlp import detect_language, extract_search_terms
+from src.utils.topic import resolve_topic_names
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -359,10 +360,11 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
     if not allowed_chunks:
         return None
 
-    topics = {
+    topic_indices = {
         t for d in allowed_chunks for t, _ in d.metadata.get("topics", {}).items()
     }
-    register_topics(topics)
+    topics_for_db = resolve_topic_names(topic_indices, "es", FAISS_PATH)
+    register_topics(topics_for_db)
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 

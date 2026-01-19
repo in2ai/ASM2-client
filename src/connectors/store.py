@@ -264,7 +264,7 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     if CALCULATE_TOPICS and not manifest.has_topics():
         if manifest.num_chunks() > TOPIC_MIN_SIZE:
             print(f"💾 ({source}) Detectando temas...")
-            extract_initial_topics(vectorstore)
+            extract_initial_topics(vectorstore, FAISS_PATH)
             manifest.set_topics()
             vectorstore.save_local(FAISS_PATH)
             
