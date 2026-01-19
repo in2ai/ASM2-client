@@ -34,9 +34,9 @@ EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 
 # Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
-# BM25 funciona mejor en español, ajustado de 0.3/0.7 a 0.4/0.6
-BM25_WEIGHT = 0.4
-VECTOR_WEIGHT = 0.6
+# Vector search is multilingual (OpenAI embeddings), BM25 has no stemming
+BM25_WEIGHT = 0.3
+VECTOR_WEIGHT = 0.7
 
 
 def get_config_hash() -> str:

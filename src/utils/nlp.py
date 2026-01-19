@@ -1,28 +1,33 @@
 import os
 import unicodedata
+
+import fasttext
 import regex as re
 import stanza
-import fasttext
 from huggingface_hub import hf_hub_download
 
 GLOTLID_MODEL_PATH = hf_hub_download(
     repo_id="cis-lmu/glotlid",
     filename="model.bin",
-    cache_dir=os.environ.get("HF_HOME", None)
+    cache_dir=os.environ.get("HF_HOME", None),
 )
 DETECTOR = fasttext.load_model(GLOTLID_MODEL_PATH)
 
-GLOTLID_TO_ISO2 = {
-    "spa_Latn": "es",
-    "eng_Latn": "en",
-    "glg_Latn": "gl",
-    "por_Latn": "pt",
-}
+GLOTLID_TO_ISO2 = {"spa_Latn": "es", "eng_Latn": "en", "glg_Latn": "gl"}
 
 lang_model_dict = {
-    "es": stanza.Pipeline("es", package="ancora", processors="tokenize,mwt,pos,lemma", download_method=None),
-    "en": stanza.Pipeline("en", processors="tokenize,mwt,pos,lemma", download_method=None),
-    "gl": stanza.Pipeline("gl", package="ctg", processors="tokenize,mwt,pos,lemma", download_method=None),
+    "es": stanza.Pipeline(
+        "es",
+        package="ancora",
+        processors="tokenize,mwt,pos,lemma",
+        download_method=None,
+    ),
+    "en": stanza.Pipeline(
+        "en", processors="tokenize,mwt,pos,lemma", download_method=None
+    ),
+    "gl": stanza.Pipeline(
+        "gl", package="ctg", processors="tokenize,mwt,pos,lemma", download_method=None
+    ),
 }
 
 supported_languages = ["es", "en", "gl"]
