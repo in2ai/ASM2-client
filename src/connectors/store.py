@@ -6,7 +6,7 @@ import os
 import uuid
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import VectorParams, SparseVectorParams, Modifier, Distance, PointStruct, Filter, FieldCondition, MatchValue, Document as QDocument
+from qdrant_client.http.models import VectorParams, SparseVectorParams, Modifier, Distance, PointStruct, Filter, MatchAny, FieldCondition, MatchValue, Document as QDocument
 
 from langchain_community.vectorstores import Qdrant
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -127,9 +127,12 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
         return vectorstore
 
     # Delete chunks
+    id_deletion_filter = Filter(
+        must=[FieldCondition(key="metadata.id", match=MatchAny(any=files_to_delete))]
+    )
+
     ids_to_delete = [
-        doc_id for doc_id, doc in iterate_qdrant_docs(vectorstore)
-        if doc.metadata['id'] in files_to_delete
+        i for i, _ in iterate_qdrant_docs(vectorstore, with_payload=False, scroll_filter=id_deletion_filter)
     ]
 
     if len(ids_to_delete) > 0:
