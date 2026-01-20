@@ -6,7 +6,7 @@ import os
 import uuid
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import VectorParams, SparseVectorParams, Modifier, Distance, PointStruct, Fusion, FusionQuery, SearchParams, Prefetch, Document as QDocument
+from qdrant_client.http.models import VectorParams, SparseVectorParams, Modifier, Distance, PointStruct, Filter, FieldCondition, MatchValue, Document as QDocument
 
 from langchain_community.vectorstores import Qdrant
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -38,7 +38,7 @@ def get_config_hash() -> str:
     return hashlib.md5(config.encode()).hexdigest()[:8]
 
 
-def iterate_qdrant_docs(vectorstore: Qdrant, batch_size=100):
+def iterate_qdrant_docs(vectorstore: Qdrant, batch_size=100, with_payload=True, with_vectors=False, scroll_filter=None):
     offset = None
 
     while True:
@@ -46,8 +46,9 @@ def iterate_qdrant_docs(vectorstore: Qdrant, batch_size=100):
             collection_name=QDRANT_COLL,
             offset=offset,
             limit=batch_size,
-            with_payload=True,
-            with_vectors=False,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+            scroll_filter=scroll_filter
         )
 
         for p in points:
@@ -99,6 +100,10 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
                 "bm25": SparseVectorParams(modifier=Modifier.IDF),
             },
         )
+
+    # Update file permissions
+    for file in files:
+        update_file_permissions(vectorstore, file.metadata['id'], file.metadata['permissions'])
 
     # Check files to update
     current = manifest.get_processed_ids(source)
@@ -212,6 +217,30 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
     print(f"💾 ({source}) Índice guardado en {QDRANT_PATH} [config: {current_config_hash}]")
     
     return vectorstore
+
+
+def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
+    # Create file filter
+    id_filter = Filter(
+        must=[FieldCondition(key="metadata.id", match=MatchValue(value=file_id))]
+    )
+    
+    # Check if the permissions need to be updated
+    _, first_doc = next(
+        iterate_qdrant_docs(vectorstore, batch_size=1, scroll_filter=id_filter), 
+        (None, None)
+    )
+
+    if first_doc is None or first_doc.metadata['permissions'] == new_permissions:
+        return
+
+    # Update the permissions in batch
+    vectorstore.client.set_payload(
+        collection_name=vectorstore.collection_name,
+        key='metadata',
+        payload={'permissions': new_permissions},
+        points=id_filter
+    )
 
 
 def extract_topics(vectorstore: Qdrant):
