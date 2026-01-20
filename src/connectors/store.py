@@ -131,15 +131,19 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
         must=[FieldCondition(key="metadata.id", match=MatchAny(any=files_to_delete))]
     )
 
-    ids_to_delete = [
-        i for i, _ in iterate_qdrant_docs(vectorstore, with_payload=False, scroll_filter=id_deletion_filter)
-    ]
+    num_ids_to_delete = vectorstore.client.count(
+        collection_name=vectorstore.collection_name,
+        count_filter=id_deletion_filter
+    ).count
 
-    if len(ids_to_delete) > 0:
+    if num_ids_to_delete > 0:
         manifest.remove_processed_ids(source, files_to_delete)
-        manifest.remove_chunks(len(ids_to_delete))
+        manifest.remove_chunks(num_ids_to_delete)
 
-        vectorstore.delete(ids_to_delete)
+        vectorstore.client.delete(
+            collection_name=vectorstore.collection_name,
+            points_selector=id_deletion_filter
+        )
 
         manifest.save()
 
