@@ -6,13 +6,12 @@ import os
 import uuid
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import VectorParams, SparseVectorParams, Modifier, Distance, PointStruct, Filter, MatchAny, FieldCondition, MatchValue, Document as QDocument
+from qdrant_client.http.models import PayloadSchemaType, VectorParams, SparseVectorParams, Modifier, Distance, PointStruct, Filter, MatchAny, FieldCondition, MatchValue, Document as QDocument
 
 from langchain_community.vectorstores import Qdrant
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
-from pydantic import Field
 
 from src.connectors.vdb_file import VDBFile
 from src.connectors.manifest import VDBManifest
@@ -22,7 +21,7 @@ QDRANT_PATH = "qdrant_index"
 BM25_PATH = "bm25_index"
 
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
-QDRANT_COLL = "documents"
+QDRANT_COL = "documents"
 
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 
@@ -43,7 +42,7 @@ def iterate_qdrant_docs(vectorstore: Qdrant, batch_size=100, with_payload=True, 
 
     while True:
         points, offset = vectorstore.client.scroll(
-            collection_name=QDRANT_COLL,
+            collection_name=QDRANT_COL,
             offset=offset,
             limit=batch_size,
             with_payload=with_payload,
@@ -82,7 +81,7 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
         prefer_grpc=True,
     )
 
-    vectorstore = Qdrant(client, QDRANT_COLL, EMBEDDINGS)
+    vectorstore = Qdrant(client, QDRANT_COL, EMBEDDINGS)
 
     # Limpiar manifest si config cambió
     if config_changed:
@@ -90,15 +89,35 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
         manifest.manifest["total_chunks"] = 0
         manifest.manifest["completed"] = {}
 
-    if not vectorstore.client.collection_exists(QDRANT_COLL):
+    if not vectorstore.client.collection_exists(QDRANT_COL):
+        # Create collection
         vectorstore.client.create_collection(
-            collection_name=QDRANT_COLL,
+            collection_name=QDRANT_COL,
             vectors_config={
                 "embedding": VectorParams(size=1536, distance=Distance.COSINE),
             },
             sparse_vectors_config={
                 "bm25": SparseVectorParams(modifier=Modifier.IDF),
             },
+        )
+
+        # Create indexes
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name='metadata.source',
+            field_schema=PayloadSchemaType.KEYWORD
+        )
+        
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name='metadata.permissions.anyone',
+            field_schema=PayloadSchemaType.BOOL
+        )
+        
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name='metadata.permissions.allowed',
+            field_schema=PayloadSchemaType.KEYWORD
         )
 
     # Update file permissions
@@ -216,7 +235,7 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
     if docs_batch: 
         flush("final")
 
-    # Update status manifest con el hash de configuración actual
+    # Update status manifest
     manifest.add_completed_source(source)
     manifest.set_config_hash(current_config_hash)
     manifest.save()
