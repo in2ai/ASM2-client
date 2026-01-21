@@ -55,7 +55,8 @@ def extract_initial_topics(vdb: Qdrant):
 
         requests = [
             models.QueryRequest(
-                query=i.vector,
+                query=i.vector['embedding'], 
+                using='embedding',
                 limit=200,
                 with_payload=False,
                 with_vector=False,
@@ -160,16 +161,11 @@ def extract_initial_topics(vdb: Qdrant):
 
     # Update metadata
     for id, ts in aggregated_topics.items():
-        doc = get_doc_by_id(vdb, id)
-        doc.metadata['topics'] = ts
-
         vdb.client.set_payload(
-            vdb.collection_name,
-            {
-                "page_content": doc.page_content,
-                "metadata": doc.metadata
-            },
-            [id]
+            collection_name=vdb.collection_name,
+            key='metadata',
+            payload={'topics': ts},
+            points=[id]
         )
 
     return communities
@@ -185,6 +181,7 @@ def assign_topics(vdb: Qdrant, ids):
     requests = [
         models.QueryRequest(
             query=i,
+            using='embedding',
             limit=200,
             with_payload=True,
             with_vector=False,
@@ -226,21 +223,18 @@ def assign_topics(vdb: Qdrant, ids):
                 topics[t] += weight * contrib
 
         # Assign topics to chunk
-        doc = get_doc_by_id(vdb, point)
-        doc.metadata['topics'] = {}
+        topics_dict = {}
 
         for t, weight in topics.items():
             if weight >= TOPIC_MIN_CONTRIB:
-                doc.metadata['topics'][t] = weight
+                topics_dict[t] = weight
 
         # Save chunk to VDB
         vdb.client.set_payload(
-            vdb.collection_name,
-            {
-                "page_content": doc.page_content,
-                "metadata": doc.metadata
-            },
-            [point]
+            collection_name=vdb.collection_name,
+            key='metadata',
+            payload={'topics': topics_dict},
+            points=[point]
         )
 
 
