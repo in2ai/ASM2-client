@@ -68,8 +68,8 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
 - [ ] 4. Checkpoint - Verify configuration
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. Implement Logto route handlers
-  - [ ] 5.1 Create callback route handler (api/logto/[action]/route.ts)
+- [x] 5. Implement Logto route handlers
+  - [x] 5.1 Create callback route handler (api/logto/[action]/route.ts)
     - Handle `sign-in` action with `handleSignIn`
     - Handle `sign-out` action with `handleSignOut`
     - Handle `callback` action with `handleSignInCallback`
