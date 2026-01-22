@@ -40,6 +40,50 @@ def _get_tenant_id_from_token(token_dict: dict) -> str | None:
     return data.get("tid") or data.get("tenantId")
 
 
+def _get_drive_item_identities(token_dict: dict, file_id: str) -> dict:
+    """
+    Best-effort, API-backed identity info for an item, used as a fallback when
+    /permissions does not provide grantedTo/grantedToIdentities (common for private items).
+    """
+    cache = st.session_state.setdefault("onedrive_item_identities_cache", {})
+    if file_id in cache:
+        return cache[file_id] or {}
+
+    headers = _ms_headers(token_dict)
+    url = f"{GRAPH}/me/drive/items/{file_id}?$select=createdBy,lastModifiedBy,shared"
+
+    try:
+        r = requests.get(url, headers=headers, timeout=20)
+        if r.status_code != 200:
+            _debug_warn(f"OneDrive: driveItem metadata lookup failed ({r.status_code}) for {file_id}")
+            cache[file_id] = {}
+            return {}
+        item = r.json() or {}
+    except requests.RequestException as exc:
+        _debug_warn(f"OneDrive: error fetching driveItem metadata: {exc}")
+        cache[file_id] = {}
+        return {}
+
+    def _extract_user(facet: dict) -> dict:
+        user = (facet or {}).get("user") or {}
+        return {
+            "id": user.get("id"),
+            # Graph facets don't always include email; keep these best-effort.
+            "email": user.get("email") or user.get("userPrincipalName"),
+        }
+
+    created = _extract_user(item.get("createdBy") or {})
+    modified = _extract_user(item.get("lastModifiedBy") or {})
+
+    result = {
+        "createdBy": created,
+        "lastModifiedBy": modified,
+        "shared": item.get("shared"),
+    }
+    cache[file_id] = result
+    return result
+
+
 def get_authenticated_onedrive_principals(token_dict: dict) -> list[str]:
     """Return sorted list of principals representing the authenticated OneDrive user."""
     principals = set()
@@ -146,6 +190,20 @@ def get_onedrive_file_principals(token_dict: dict, file_id: str) -> dict:
 
     except requests.RequestException as exc:
         _debug_warn(f"OneDrive: error fetching permissions: {exc}")
+
+    # Fallback (API-backed): for private items, /permissions may not include identities.
+    if not anyone and not principals:
+        ids = _get_drive_item_identities(token_dict, file_id)
+        created = (ids.get("createdBy") or {}) if isinstance(ids, dict) else {}
+        modified = (ids.get("lastModifiedBy") or {}) if isinstance(ids, dict) else {}
+
+        for who in (created, modified):
+            uid = who.get("id")
+            if uid:
+                principals.add(f"onedrive:user_id:{uid}")
+            email = who.get("email")
+            if email:
+                principals.add(f"onedrive:user:{email.strip().lower()}")
 
     return {"anyone": anyone, "allowed": sorted(principals)}
 
