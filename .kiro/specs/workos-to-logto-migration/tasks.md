@@ -106,8 +106,8 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Generate random returnTo values, verify safe redirect logic
     - **Validates: Requirements 4.3**
 
-- [ ] 8. Update sign-out action
-  - [ ] 8.1 Replace WorkOS signOut with Logto redirect
+- [x] 8. Update sign-out action
+  - [x] 8.1 Replace WorkOS signOut with Logto redirect
     - Update `signOutAction` to redirect to `/api/logto/sign-out`
     - _Requirements: 5.1, 5.2_
 
