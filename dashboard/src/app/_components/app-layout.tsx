@@ -14,8 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChartVisibilityProvider } from "@/contexts/chart-visibility-context";
+import { type LogtoUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import {
   Activity,
   BarChart3,
@@ -36,6 +36,7 @@ type View = "overview" | "usage" | "rag-quality" | "insights";
 
 interface AppLayoutProps {
   readonly children: (view: View) => ReactNode;
+  readonly user: LogtoUser | null;
 }
 
 /**
@@ -44,13 +45,13 @@ interface AppLayoutProps {
  * The component manages the active dashboard view and UI state for the sidebar and mobile menu, and provides chart-visibility context to its children.
  *
  * @param children - Render prop that receives the current view (`"overview" | "usage" | "rag-quality" | "insights"`) and returns the content to display in the main area.
+ * @param user - The authenticated user object from Logto, or null if not authenticated.
  * @returns The composed layout element that wraps the provided content with navigation, controls, and user menu.
  */
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children, user }: AppLayoutProps) {
   const [currentView, setCurrentView] = useState<View>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user } = useAuth();
 
   // Close mobile menu when view changes
   const handleViewChange = (view: View) => {
@@ -289,15 +290,7 @@ function ViewSwitcher({
   );
 }
 
-interface WorkOSUser {
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string | null;
-  role?: string | null;
-  organizationId?: string | null;
-}
-
-function CompanyDisplay({ user }: Readonly<{ user: WorkOSUser | null }>) {
+function CompanyDisplay({ user }: Readonly<{ user: LogtoUser | null }>) {
   if (!user) {
     return null;
   }
@@ -329,7 +322,7 @@ function SignOutButton() {
   );
 }
 
-function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
+function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
   const getInitials = (): string => {
     if (user?.firstName && user?.lastName) {
       return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
@@ -396,7 +389,7 @@ function UserMenu({ user }: Readonly<{ user: WorkOSUser | null }>) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="px-2 py-1.5">
-          <PreferencesDialog />
+          <PreferencesDialog user={user} />
         </div>
         <DropdownMenuSeparator />
         <form action={signOutAction} className="w-full">

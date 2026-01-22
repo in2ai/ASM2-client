@@ -111,13 +111,13 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Update `signOutAction` to redirect to `/api/logto/sign-out`
     - _Requirements: 5.1, 5.2_
 
-- [ ] 9. Update app layout for user display
-  - [ ] 9.1 Remove WorkOS useAuth hook
+- [x] 9. Update app layout for user display
+  - [x] 9.1 Remove WorkOS useAuth hook
     - Remove import of `useAuth` from `@workos-inc/authkit-nextjs/components`
     - Update `AppLayout` to receive `user` as prop instead of using hook
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
   
-  - [ ] 9.2 Update page components to pass user prop
+  - [x] 9.2 Update page components to pass user prop
     - Fetch user with `getUser()` in server components
     - Pass user to `AppLayout` as prop
     - _Requirements: 6.1, 6.2, 6.3, 6.4_

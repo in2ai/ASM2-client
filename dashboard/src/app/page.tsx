@@ -1,10 +1,10 @@
 import { MetricsDashboard } from "@/app/_components/metrics-dashboard";
+import { getUser } from "@/lib/auth";
 import { HydrateClient, api } from "@/trpc/server";
-import { withAuth } from "@workos-inc/authkit-nextjs";
 import { redirect } from "next/navigation";
 
 export default async function Home() {
-  const { user } = await withAuth();
+  const user = await getUser();
 
   if (!user) {
     redirect("/sign-in");
@@ -19,7 +19,7 @@ export default async function Home() {
 
   return (
     <HydrateClient>
-      <MetricsDashboard />
+      <MetricsDashboard user={user} />
     </HydrateClient>
   );
 }

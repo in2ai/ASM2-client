@@ -19,13 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { type LogtoUser } from "@/lib/auth";
 import { api } from "@/trpc/react";
-import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { Loader2, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export function PreferencesDialog() {
-  const { user } = useAuth();
+interface PreferencesDialogProps {
+  readonly user: LogtoUser | null;
+}
+
+export function PreferencesDialog({ user }: PreferencesDialogProps) {
   const [open, setOpen] = useState(false);
 
   // Fetch current preferences
