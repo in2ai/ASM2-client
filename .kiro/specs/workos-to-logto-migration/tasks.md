@@ -65,7 +65,7 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Generate random Logto user info, verify output structure
     - **Validates: Requirements 6.1, 6.2, 6.3, 6.4, 7.4**
 
-- [ ] 4. Checkpoint - Verify configuration
+- [x] 4. Checkpoint - Verify configuration
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 5. Implement Logto route handlers
@@ -94,8 +94,8 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Generate random public paths, verify no redirect
     - **Validates: Requirements 3.2**
 
-- [ ] 7. Update sign-in page
-  - [ ] 7.1 Replace WorkOS auth with Logto
+- [x] 7. Update sign-in page
+  - [x] 7.1 Replace WorkOS auth with Logto
     - Replace `withAuth` with `getLogtoContext`
     - Replace `getSignInUrl` with link to `/api/logto/sign-in`
     - Preserve safe `returnTo` redirect logic

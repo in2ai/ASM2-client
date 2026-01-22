@@ -6,7 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getSignInUrl, withAuth } from "@workos-inc/authkit-nextjs";
+import { getLogtoContext } from "@logto/next/server-actions";
+import { logtoConfig } from "@/lib/logto";
 import { BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -17,7 +18,7 @@ import { redirect } from "next/navigation";
  * If an authenticated user is detected, the function redirects to `returnTo`
  * when it's a single relative path (starts with "/" and not with "//"); otherwise
  * it redirects to the root ("/"). When no user is authenticated, it returns
- * the sign-in page UI containing a link to the WorkOS sign-in URL.
+ * the sign-in page UI containing a link to the Logto sign-in endpoint.
  *
  * @param searchParams - A Promise resolving to an object that may contain `returnTo`, the optional relative path to navigate to after sign-in.
  * @returns A React element representing the sign-in page when no user is authenticated.
@@ -27,17 +28,15 @@ export default async function SignInPage({
 }: Readonly<{
   searchParams: Promise<{ returnTo?: string }>;
 }>) {
-  const { user } = await withAuth();
+  const { isAuthenticated } = await getLogtoContext(logtoConfig);
 
-  if (user) {
+  if (isAuthenticated) {
     const { returnTo } = await searchParams;
     // Only allow relative paths to prevent open redirect
     const safeReturnTo =
       returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/";
     redirect(safeReturnTo);
   }
-
-  const signInUrl = await getSignInUrl();
 
   return (
     <div className="bg-muted/10 flex min-h-screen items-center justify-center p-4">
@@ -53,7 +52,7 @@ export default async function SignInPage({
         </CardHeader>
         <CardContent>
           <Button asChild className="w-full" size="lg">
-            <Link href={signInUrl}>Iniciar sesión</Link>
+            <Link href="/api/logto/sign-in">Iniciar sesión</Link>
           </Button>
         </CardContent>
       </Card>
