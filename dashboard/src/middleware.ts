@@ -1,21 +1,35 @@
-import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { getLogtoContext } from "@logto/next/server-actions";
+import { logtoConfig } from "@/lib/logto";
 
-// In middleware auth mode, each page is protected by default.
-// Exceptions are configured via the `unauthenticatedPaths` option.
-export default authkitMiddleware({
-  // Only enable debug logging in development
-  debug: process.env.NODE_ENV === "development",
-  middlewareAuth: {
-    enabled: true,
-    unauthenticatedPaths: [
-      "/sign-in",
-      "/api/auth/callback",
-      "/api/health",
-    ],
-  },
-  // Redirect to original page after sign-in
-  signUpPaths: [],
-});
+const publicPaths = [
+  "/sign-in",
+  "/api/logto/sign-in",
+  "/api/logto/sign-out",
+  "/api/logto/callback",
+  "/api/health",
+];
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Allow public paths
+  if (publicPaths.some((path) => pathname.startsWith(path))) {
+    return NextResponse.next();
+  }
+
+  // Check authentication
+  const { isAuthenticated } = await getLogtoContext(logtoConfig);
+
+  if (!isAuthenticated) {
+    const signInUrl = new URL("/sign-in", request.url);
+    signInUrl.searchParams.set("returnTo", pathname);
+    return NextResponse.redirect(signInUrl);
+  }
+
+  return NextResponse.next();
+}
 
 // Match against pages that require authentication
 // Exclude static files and internal Next.js routes

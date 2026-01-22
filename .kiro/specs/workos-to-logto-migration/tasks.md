@@ -76,8 +76,8 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Return 404 for unknown actions
     - _Requirements: 4.1, 4.2, 4.4, 5.1, 5.2, 5.3_
 
-- [ ] 6. Update middleware for route protection
-  - [ ] 6.1 Replace WorkOS middleware with Logto middleware
+- [x] 6. Update middleware for route protection
+  - [x] 6.1 Replace WorkOS middleware with Logto middleware
     - Import `getLogtoContext` from `@logto/next/server-actions`
     - Define public paths array
     - Check authentication and redirect unauthenticated users
