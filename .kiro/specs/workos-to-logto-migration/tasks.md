@@ -43,8 +43,8 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Test that strings under 32 characters are rejected
     - **Validates: Requirements 8.4**
 
-- [ ] 3. Create Logto configuration and auth utilities
-  - [ ] 3.1 Create Logto configuration file (lib/logto.ts)
+- [x] 3. Create Logto configuration and auth utilities
+  - [x] 3.1 Create Logto configuration file (lib/logto.ts)
     - Export `logtoConfig` with endpoint, appId, appSecret, baseUrl, cookieSecret
     - Configure scopes for profile, email, custom_data, organizations, organization_roles
     - _Requirements: 2.2, 2.3_
@@ -54,7 +54,7 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Verify all required scopes are present in config
     - **Validates: Requirements 2.2**
   
-  - [ ] 3.3 Create user context helper (lib/auth.ts)
+  - [x] 3.3 Create user context helper (lib/auth.ts)
     - Implement `getUser()` function using `getLogtoContext`
     - Map Logto userInfo to LogtoUser interface (firstName, lastName, email, role, organizationId)
     - Handle missing data with appropriate fallbacks
