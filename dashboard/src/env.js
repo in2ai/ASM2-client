@@ -13,17 +13,18 @@ export const env = createEnv({
     QUESTDB_USER: z.string(),
     QUESTDB_PASSWORD: z.string(),
     QUESTDB_DB: z.string(),
-    WORKOS_API_KEY: z.string().startsWith("sk_", {
-      error:
-        "WORKOS_API_KEY must start with 'sk_' (test) or 'sk_live' (production)",
+    LOGTO_ENDPOINT: z.string().url({
+      error: "LOGTO_ENDPOINT must be a valid URL (e.g., http://logto:3001)",
     }),
-    WORKOS_CLIENT_ID: z.string().startsWith("client_", {
-      error: "WORKOS_CLIENT_ID must start with 'client_'",
+    LOGTO_APP_ID: z.string().min(1, {
+      error: "LOGTO_APP_ID is required",
     }),
-    // Cookie password must be at least 32 characters for secure encryption
-    WORKOS_COOKIE_PASSWORD: z.string().min(32, {
+    LOGTO_APP_SECRET: z.string().min(1, {
+      error: "LOGTO_APP_SECRET is required",
+    }),
+    LOGTO_COOKIE_SECRET: z.string().min(32, {
       error:
-        "WORKOS_COOKIE_PASSWORD must be at least 32 characters. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+        "LOGTO_COOKIE_SECRET must be at least 32 characters. Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
     }),
   },
 
@@ -33,15 +34,7 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    NEXT_PUBLIC_WORKOS_REDIRECT_URI: z
-      .url({
-        error: "NEXT_PUBLIC_WORKOS_REDIRECT_URI must be a valid URL",
-      })
-      .endsWith("/api/auth/callback", {
-        error:
-          "NEXT_PUBLIC_WORKOS_REDIRECT_URI must end with '/api/auth/callback'",
-      }),
-    NEXT_PUBLIC_APP_URL: z.url({
+    NEXT_PUBLIC_APP_URL: z.string().url({
       error:
         "NEXT_PUBLIC_APP_URL must be a valid URL (e.g., https://yourdomain.com). For Dokploy: https://${{DOKPLOY_DEPLOY_URL}}",
     }),
@@ -58,11 +51,10 @@ export const env = createEnv({
     QUESTDB_USER: process.env.QUESTDB_USER,
     QUESTDB_PASSWORD: process.env.QUESTDB_PASSWORD,
     QUESTDB_DB: process.env.QUESTDB_DB,
-    WORKOS_API_KEY: process.env.WORKOS_API_KEY,
-    WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID,
-    WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD,
-    NEXT_PUBLIC_WORKOS_REDIRECT_URI:
-      process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
+    LOGTO_ENDPOINT: process.env.LOGTO_ENDPOINT,
+    LOGTO_APP_ID: process.env.LOGTO_APP_ID,
+    LOGTO_APP_SECRET: process.env.LOGTO_APP_SECRET,
+    LOGTO_COOKIE_SECRET: process.env.LOGTO_COOKIE_SECRET,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
   /**

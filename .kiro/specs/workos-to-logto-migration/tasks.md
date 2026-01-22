@@ -26,13 +26,13 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Add dependency on `logto` service
     - _Requirements: 1.4, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 2. Update dashboard dependencies and environment
-  - [ ] 2.1 Update package.json
+- [x] 2. Update dashboard dependencies and environment
+  - [x] 2.1 Update package.json
     - Remove `@workos-inc/authkit-nextjs` dependency
     - Add `@logto/next` dependency
     - _Requirements: 2.1_
   
-  - [ ] 2.2 Update environment validation (env.js)
+  - [x] 2.2 Update environment validation (env.js)
     - Remove WorkOS environment variable schemas
     - Add Logto environment variable schemas with validation
     - Keep `NEXT_PUBLIC_APP_URL` (shared)
