@@ -26,18 +26,38 @@ def _debug_warn(message: str) -> None:
         st.warning(message)
 
 
-def _get_tenant_id_from_token(token_dict: dict) -> str | None:
+def _get_token_claims(token_dict: dict) -> dict:
     token = token_dict.get("access_token") or ""
     parts = token.split(".")
     if len(parts) < 2:
-        return None
+        return {}
     payload = parts[1]
     try:
         payload += "=" * (-len(payload) % 4)
         data = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
     except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _get_tenant_id_from_token(token_dict: dict) -> str | None:
+    claims = _get_token_claims(token_dict)
+    tid = claims.get("tid") or claims.get("tenantId")
+    if not tid:
         return None
-    return data.get("tid") or data.get("tenantId")
+    # Basic GUID sanity: 8-4-4-4-12 hex digits
+    if not isinstance(tid, str) or len(tid) != 36:
+        return None
+    if not all(c.isalnum() or c == "-" for c in tid):
+        return None
+    issuer = claims.get("iss") or ""
+    if issuer and "login.microsoftonline.com" not in issuer:
+        return None
+    return tid
+
+
+def _get_principal_caps(token_dict: dict) -> dict:
+    return {"tenant_id": _get_tenant_id_from_token(token_dict)}
 
 
 def _get_drive_item_identities(token_dict: dict, file_id: str) -> dict:
@@ -88,6 +108,7 @@ def get_authenticated_onedrive_principals(token_dict: dict) -> list[str]:
     """Return sorted list of principals representing the authenticated OneDrive user."""
     principals = set()
     headers = _ms_headers(token_dict)
+    caps = _get_principal_caps(token_dict)
 
     try:
         r = requests.get(f"{GRAPH}/me", headers=headers, timeout=20)
@@ -104,9 +125,8 @@ def get_authenticated_onedrive_principals(token_dict: dict) -> list[str]:
         if email:
             principals.add(f"onedrive:user:{email.strip().lower()}")
 
-        tenant_id = _get_tenant_id_from_token(token_dict)
-        if tenant_id:
-            principals.add(f"onedrive:tenant:{tenant_id}")
+        if caps["tenant_id"]:
+            principals.add(f"onedrive:tenant:{caps['tenant_id']}")
 
     except requests.RequestException as exc:
         _debug_warn(f"OneDrive: error fetching /me principals: {exc}")
@@ -124,7 +144,7 @@ def get_onedrive_file_principals(token_dict: dict, file_id: str) -> dict:
     anyone = False
     headers = _ms_headers(token_dict)
     read_roles = {"read", "write", "owner"}
-    tenant_id = _get_tenant_id_from_token(token_dict)
+    caps = _get_principal_caps(token_dict)
 
     url = f"{GRAPH}/me/drive/items/{file_id}/permissions"
 
@@ -148,8 +168,11 @@ def get_onedrive_file_principals(token_dict: dict, file_id: str) -> dict:
                     if scope == "anonymous":
                         anyone = True
                         principals.add("onedrive:anyone")
-                    elif scope == "organization" and tenant_id:
-                        principals.add(f"onedrive:tenant:{tenant_id}")
+                    elif scope == "organization":
+                        if caps["tenant_id"]:
+                            principals.add(f"onedrive:tenant:{caps['tenant_id']}")
+                        else:
+                            _debug_warn("OneDrive: organization link scope but no stable tenant id detected.")
 
                 # Check grantedToIdentitiesV2 or grantedToIdentities
                 identities = perm.get("grantedToIdentitiesV2") or perm.get("grantedToIdentities") or []
@@ -339,6 +362,7 @@ def onedrive_device_login():
 def onedrive_list_files(token_dict, root_path):
     """Lista recursivamente archivos (pdf/txt/md) desde root_path ('' o '/subcarpeta')."""
     headers = _ms_headers(token_dict)
+    # Intentionally excludes /me/drive/sharedWithMe to keep indexing scoped to the user's drive.
 
     # ---- PRE-CHEQUEO: ¿tiene OneDrive aprovisionado y permisos? ----
     probe = requests.get(f"{GRAPH}/me/drive", headers=headers, timeout=20)
