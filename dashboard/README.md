@@ -1,13 +1,13 @@
 # ASM2 Dashboard
 
-Multi-tenant analytics dashboard for RAG metrics with WorkOS authentication and role-based access control.
+Multi-tenant analytics dashboard for RAG metrics with Logto authentication and role-based access control.
 
 > **Note:** For environment variables, Docker deployment, and general project setup, see the [main README](../README.md) and [`.env.example`](../.env.example).
 
 ## Tech Stack
 
 - [Next.js 15](https://nextjs.org) - React framework with App Router
-- [WorkOS AuthKit](https://workos.com/docs/authkit) - Authentication and user management
+- [Logto](https://logto.io/) - Self-hosted authentication and user management
 - [QuestDB](https://questdb.io/) - High-performance time-series database
 - [tRPC](https://trpc.io) - Type-safe API layer
 - [Tailwind CSS 4](https://tailwindcss.com) - Styling
@@ -21,10 +21,12 @@ src/
 ├── app/                    # Next.js App Router pages and layouts
 │   ├── _components/        # Page-specific components
 │   ├── actions/            # Server actions (auth, etc.)
-│   └── api/                # API routes (auth, trpc)
+│   └── api/                # API routes (logto, trpc)
 ├── components/             # Reusable UI components
 │   └── ui/                 # shadcn/ui primitives
 ├── lib/                    # Client-side utilities
+│   ├── auth.ts             # Logto user context helper
+│   └── logto.ts            # Logto configuration
 ├── server/                 # Server-side logic
 │   ├── api/                # tRPC routers and procedures
 │   └── db/                 # Database connection and queries
@@ -86,4 +88,4 @@ pnpm typecheck
 | ------------------------------- | ------------------------ | ------------------------------------------------------------------ |
 | `TypeError: fetch failed`       | QuestDB not reachable    | Check `QUESTDB_HOST` (`questdb` for Docker, `localhost` for local) |
 | `Invalid environment variables` | Missing/invalid env vars | Run `pnpm typecheck` to see details                                |
-| `Redirect loop after login`     | Mismatched URLs          | Verify `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_WORKOS_REDIRECT_URI` |
+| `Redirect loop after login`     | Mismatched URLs          | Verify `NEXT_PUBLIC_APP_URL` and `LOGTO_ENDPOINT`                  |

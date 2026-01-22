@@ -122,11 +122,11 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Pass user to `AppLayout` as prop
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 10. Checkpoint - Verify authentication flow
+- [x] 10. Checkpoint - Verify authentication flow
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Final cleanup
-  - [ ] 11.1 Remove unused WorkOS imports and types
+- [x] 11. Final cleanup
+  - [x] 11.1 Remove unused WorkOS imports and types
     - Clean up any remaining WorkOS references
     - Update TypeScript types if needed
     - _Requirements: 2.1_
@@ -137,7 +137,7 @@ This plan migrates the dashboard authentication from WorkOS AuthKit to Logto sel
     - Test protected route access
     - _Requirements: 3.1, 4.1, 4.2, 5.1, 5.2_
 
-- [ ] 12. Final checkpoint - Full verification
+- [x] 12. Final checkpoint - Full verification
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

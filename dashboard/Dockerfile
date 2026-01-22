@@ -47,9 +47,6 @@ ENV NODE_ENV=production
 
 # NEXT_PUBLIC_* variables must be available at build time
 # because they are inlined into the client-side JavaScript bundle
-ARG NEXT_PUBLIC_WORKOS_REDIRECT_URI
-ENV NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
-
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 

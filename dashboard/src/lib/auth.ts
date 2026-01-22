@@ -27,8 +27,8 @@ export async function getUser(): Promise<LogtoUser | null> {
   const { userInfo, claims } = context;
 
   // Extract organization info from claims
-  const organizations = claims?.organizations as string[] | undefined;
-  const organizationRoles = claims?.organization_roles as string[] | undefined;
+  const organizations = claims?.organizations ?? [];
+  const organizationRoles = claims?.organization_roles ?? [];
 
   // Parse name from userInfo - split on space to get first/last name
   const nameParts = userInfo.name?.split(" ") ?? [];

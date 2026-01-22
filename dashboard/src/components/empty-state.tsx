@@ -188,7 +188,7 @@ export function NoNodesEmptyState({
       showTips={true}
       tips={[
         "Run the node setup script to create initial nodes",
-        "Ensure WorkOS organizations are properly configured",
+        "Ensure Logto organizations are properly configured",
         "Contact your system administrator for assistance",
       ]}
     />
