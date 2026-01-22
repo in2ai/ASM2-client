@@ -8,6 +8,7 @@ from qdrant_client.http.models import Fusion, FusionQuery, SearchParams, Prefetc
 
 from src.connectors.drive import get_gdrive_qdrant_filter
 from src.connectors.dropbox import get_dropbox_qdrant_filter
+from src.connectors.onedrive import get_onedrive_qdrant_filter
 
 def get_permission_filter():
     filters = []
@@ -17,6 +18,9 @@ def get_permission_filter():
 
     if "dropbox_principals" in st.session_state:
         filters.append(get_dropbox_qdrant_filter(st.session_state.dropbox_principals))
+
+    if "onedrive_principals" in st.session_state:
+        filters.append(get_onedrive_qdrant_filter(st.session_state.onedrive_principals))
 
     return Filter(should=filters)
 

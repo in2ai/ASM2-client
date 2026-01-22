@@ -1,9 +1,13 @@
 import requests
 import msal
 import io
+import base64
+import json
 
 import streamlit as st
 from PyPDF2 import PdfReader
+
+from qdrant_client.http.models import Filter, FieldCondition, MatchValue, MatchAny
 
 from src.config.config import *
 from src.connectors.vdb_file import OnedriveFile
@@ -15,6 +19,159 @@ from src.connectors.store import build_vectorstore
 
 def _ms_headers(token_dict):
     return {"Authorization": f"Bearer {token_dict['access_token']}"}
+
+
+def _debug_warn(message: str) -> None:
+    if st.session_state.get("debug"):
+        st.warning(message)
+
+
+def _get_tenant_id_from_token(token_dict: dict) -> str | None:
+    token = token_dict.get("access_token") or ""
+    parts = token.split(".")
+    if len(parts) < 2:
+        return None
+    payload = parts[1]
+    try:
+        payload += "=" * (-len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
+    except Exception:
+        return None
+    return data.get("tid") or data.get("tenantId")
+
+
+def get_authenticated_onedrive_principals(token_dict: dict) -> list[str]:
+    """Return sorted list of principals representing the authenticated OneDrive user."""
+    principals = set()
+    headers = _ms_headers(token_dict)
+
+    try:
+        r = requests.get(f"{GRAPH}/me", headers=headers, timeout=20)
+        r.raise_for_status()
+        user = r.json()
+
+        # User ID
+        user_id = user.get("id")
+        if user_id:
+            principals.add(f"onedrive:user_id:{user_id}")
+
+        # Email (prefer 'mail', fallback to 'userPrincipalName')
+        email = user.get("mail") or user.get("userPrincipalName")
+        if email:
+            principals.add(f"onedrive:user:{email.strip().lower()}")
+
+        tenant_id = _get_tenant_id_from_token(token_dict)
+        if tenant_id:
+            principals.add(f"onedrive:tenant:{tenant_id}")
+
+    except requests.RequestException as exc:
+        _debug_warn(f"OneDrive: error fetching /me principals: {exc}")
+
+    return sorted(principals)
+
+
+def get_onedrive_file_principals(token_dict: dict, file_id: str) -> dict:
+    """Return principals with read access to a OneDrive file.
+
+    Returns:
+        dict: {"anyone": bool, "allowed": sorted list of principal strings}
+    """
+    principals = set()
+    anyone = False
+    headers = _ms_headers(token_dict)
+    read_roles = {"read", "write", "owner"}
+    tenant_id = _get_tenant_id_from_token(token_dict)
+
+    url = f"{GRAPH}/me/drive/items/{file_id}/permissions"
+
+    try:
+        while url:
+            r = requests.get(url, headers=headers, timeout=30)
+            if r.status_code != 200:
+                _debug_warn(f"OneDrive: permissions lookup failed ({r.status_code}) for {file_id}")
+                break
+            data = r.json()
+
+            for perm in data.get("value", []):
+                roles = {role.lower() for role in perm.get("roles", [])}
+                if not roles.intersection(read_roles):
+                    continue
+
+                # Check sharing link
+                link = perm.get("link")
+                if link:
+                    scope = (link.get("scope") or "").lower()
+                    if scope == "anonymous":
+                        anyone = True
+                        principals.add("onedrive:anyone")
+                    elif scope == "organization" and tenant_id:
+                        principals.add(f"onedrive:tenant:{tenant_id}")
+
+                # Check grantedToIdentitiesV2 or grantedToIdentities
+                identities = perm.get("grantedToIdentitiesV2") or perm.get("grantedToIdentities") or []
+                for identity in identities:
+                    user = identity.get("user")
+                    if user:
+                        email = user.get("email") or user.get("userPrincipalName")
+                        if email:
+                            principals.add(f"onedrive:user:{email.strip().lower()}")
+                        if user.get("id"):
+                            principals.add(f"onedrive:user_id:{user['id']}")
+                    group = identity.get("group") or identity.get("siteGroup")
+                    if group:
+                        group_email = group.get("email")
+                        if group_email:
+                            principals.add(f"onedrive:group:{group_email.strip().lower()}")
+                        if group.get("id"):
+                            principals.add(f"onedrive:group_id:{group['id']}")
+
+                # Check grantedToV2 or grantedTo
+                granted = perm.get("grantedToV2") or perm.get("grantedTo") or {}
+                user = granted.get("user")
+                if user:
+                    email = user.get("email") or user.get("userPrincipalName")
+                    if email:
+                        principals.add(f"onedrive:user:{email.strip().lower()}")
+                    if user.get("id"):
+                        principals.add(f"onedrive:user_id:{user['id']}")
+                group = granted.get("group") or granted.get("siteGroup")
+                if group:
+                    group_email = group.get("email")
+                    if group_email:
+                        principals.add(f"onedrive:group:{group_email.strip().lower()}")
+                    if group.get("id"):
+                        principals.add(f"onedrive:group_id:{group['id']}")
+
+            url = data.get("@odata.nextLink")
+
+    except requests.RequestException as exc:
+        _debug_warn(f"OneDrive: error fetching permissions: {exc}")
+
+    return {"anyone": anyone, "allowed": sorted(principals)}
+
+
+def get_onedrive_qdrant_filter(auth_principals):
+    source_condition = FieldCondition(
+        key="metadata.source",
+        match=MatchValue(value="Onedrive")
+    )
+
+    anyone_condition = FieldCondition(
+        key="metadata.permissions.anyone",
+        match=MatchValue(value=True)
+    )
+
+    allowed_condition = FieldCondition(
+        key="metadata.permissions.allowed",
+        match=MatchAny(any=auth_principals)
+    )
+
+    or_block = Filter(
+        should=[anyone_condition, allowed_condition],
+    )
+
+    return Filter(must=[source_condition, or_block])
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ONEDRIVE (MICROSOFT GRAPH) — Device Code Flow sólido y único
@@ -101,6 +258,7 @@ def onedrive_device_login():
             st.stop()
 
         st.session_state.onedrive_token = result
+        st.session_state.onedrive_principals = get_authenticated_onedrive_principals(result)
         st.session_state.pop("od_flow", None)
         st.session_state.pop("od_authority", None)
         st.success("✅ OneDrive conectado.")
@@ -230,12 +388,13 @@ def construir_vectorstore_onedrive():
 
     files = [
         {
-            "id": f["id"], 
-            "name": f["name"], 
+            "id": f["id"],
+            "name": f["name"],
             "modifiedTime": f["modifiedTime"],
             "mimeType": f.get("mimeType", ""),
-            "webViewLink": f.get("webUrl")
-        } 
+            "webViewLink": f.get("webUrl"),
+            "permissions": get_onedrive_file_principals(token_dict, f["id"])
+        }
         for f in files
     ]
 
