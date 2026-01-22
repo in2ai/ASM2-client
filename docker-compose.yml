@@ -63,20 +63,58 @@ services:
     working_dir: /init
     entrypoint: ["sh", "/init/init.sh"]
 
+  logto-db:
+    image: postgres:15-alpine
+    container_name: logto-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: logto
+      POSTGRES_USER: logto
+      POSTGRES_PASSWORD: ${LOGTO_DB_PASSWORD}
+    volumes:
+      - logto_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U logto -d logto"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  logto:
+    image: ghcr.io/logto-io/logto:latest
+    container_name: logto
+    restart: unless-stopped
+    depends_on:
+      logto-db:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+    environment:
+      TRUST_PROXY_HEADER: "1"
+      DB_URL: postgres://logto:${LOGTO_DB_PASSWORD}@logto-db:5432/logto
+      ENDPOINT: http://logto:3001
+      ADMIN_ENDPOINT: http://localhost:3002
+
   dashboard:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
     image: dashboard:latest
     container_name: dashboard
     depends_on:
       - questdb
+      - logto
     ports:
       - "3001:3001"
     env_file:
       - .env
     environment:
       - NODE_ENV=production
+      - LOGTO_ENDPOINT=http://logto:3001
+      - LOGTO_APP_ID=${LOGTO_APP_ID}
+      - LOGTO_APP_SECRET=${LOGTO_APP_SECRET}
+      - LOGTO_COOKIE_SECRET=${LOGTO_COOKIE_SECRET}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
     restart: unless-stopped
+
+volumes:
+  logto_postgres_data:
