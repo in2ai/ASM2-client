@@ -1,9 +1,9 @@
-import requests
-import msal
 import io
 import base64
 import json
 
+import msal
+import requests
 import streamlit as st
 from PyPDF2 import PdfReader
 
@@ -16,6 +16,7 @@ from src.connectors.store import build_vectorstore
 # ─────────────────────────────────────────────────────────────────────────────
 # ONEDRIVE (MICROSOFT GRAPH)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _ms_headers(token_dict):
     return {"Authorization": f"Bearer {token_dict['access_token']}"}
@@ -258,6 +259,7 @@ def get_onedrive_qdrant_filter(auth_principals):
 # ONEDRIVE (MICROSOFT GRAPH) — Device Code Flow sólido y único
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def onedrive_device_login():
     """
     OneDrive login simplificado (MSAL Device Code), estilo oauth_login_drive:
@@ -269,36 +271,49 @@ def onedrive_device_login():
     """
     # Validaciones básicas
     if not ONEDRIVE_CLIENT_ID:
-        st.error("❌ Falta ONEDRIVE_CLIENT_ID en .env"); st.stop()
+        st.error("❌ Falta ONEDRIVE_CLIENT_ID en .env")
+        st.stop()
 
-    # Scopes por defecto y limpieza de reservados
+    # Alcances por defecto y limpieza de reservados
     default_scopes = ["Files.Read", "User.Read"]
-    scopes_env = (ONEDRIVE_SCOPES or default_scopes)
+    scopes_env = ONEDRIVE_SCOPES or default_scopes
     scopes = list({*scopes_env})  # dedup
     for reserved in ("offline_access", "openid", "profile"):
         if reserved in scopes:
             scopes.remove(reserved)
 
-    # Authority (tenant específico o 'common')
+    # Autoridad (tenant específico o 'common')
     tenant = (ONEDRIVE_TENANT_ID or "").strip() or "common"
     authority = f"https://login.microsoftonline.com/{tenant}"
 
     # Inicia o reutiliza el Device Code flow
     if "od_flow" not in st.session_state:
         try:
-            app = msal.PublicClientApplication(client_id=ONEDRIVE_CLIENT_ID, authority=authority)
+            app = msal.PublicClientApplication(
+                client_id=ONEDRIVE_CLIENT_ID, authority=authority
+            )
             flow = app.initiate_device_flow(scopes=scopes)
             if "user_code" not in flow:
-                err = flow.get("error_description") or flow.get("error") or "Error iniciando Device Code flow"
-                st.error(f"❌ {err}"); st.stop()
+                err = (
+                    flow.get("error_description")
+                    or flow.get("error")
+                    or "Error iniciando Device Code flow"
+                )
+                st.error(f"❌ {err}")
+                st.stop()
             st.session_state["od_flow"] = flow
             st.session_state["od_authority"] = authority
         except Exception as e:
-            st.error(f"❌ Error MSAL: {e}"); st.stop()
+            st.error(f"❌ Error MSAL: {e}")
+            st.stop()
 
-    # UI mínima (idéntico patrón a Drive)
+    # Interfaz mínima (patrón idéntico a Drive)
     flow = st.session_state["od_flow"]
-    verify_url = flow.get("verification_uri_complete") or flow.get("verification_uri") or "https://microsoft.com/devicelogin"
+    verify_url = (
+        flow.get("verification_uri_complete")
+        or flow.get("verification_uri")
+        or "https://microsoft.com/devicelogin"
+    )
     user_code = flow.get("user_code", "")
 
     st.markdown("### 🔐 Conectar OneDrive")
@@ -308,14 +323,16 @@ def onedrive_device_login():
         st.code(user_code, language="text")
 
     col1, col2, col3 = st.columns(3)
-    go     = col1.button("🚀 He autorizado", use_container_width=True, type="primary")
-    reset  = col2.button("🔁 Reiniciar", use_container_width=True)
+    go = col1.button("🚀 He autorizado", use_container_width=True, type="primary")
+    reset = col2.button("🔁 Reiniciar", use_container_width=True)
     cancel = col3.button("Cancelar", use_container_width=True)
 
     if reset:
         st.session_state.pop("od_flow", None)
         st.session_state.pop("od_authority", None)
-        st.info("Flujo reiniciado. Vuelve a pulsar el botón para generar una nueva URL.")
+        st.info(
+            "Flujo reiniciado. Vuelve a pulsar el botón para generar una nueva URL."
+        )
         st.stop()
 
     if cancel:
@@ -329,10 +346,16 @@ def onedrive_device_login():
 
     # Canjea y guarda token
     try:
-        app = msal.PublicClientApplication(client_id=ONEDRIVE_CLIENT_ID, authority=st.session_state["od_authority"])
+        app = msal.PublicClientApplication(
+            client_id=ONEDRIVE_CLIENT_ID, authority=st.session_state["od_authority"]
+        )
         result = app.acquire_token_by_device_flow(flow)
         if "access_token" not in result:
-            err = result.get("error_description") or result.get("error") or "No se obtuvo access_token"
+            err = (
+                result.get("error_description")
+                or result.get("error")
+                or "No se obtuvo access_token"
+            )
             st.error(f"❌ Error en la autorización: {err}")
             st.session_state.pop("od_flow", None)
             st.session_state.pop("od_authority", None)
@@ -351,7 +374,7 @@ def onedrive_device_login():
             except Exception:
                 pass
         return result
-    
+
     except Exception as e:
         st.error(f"❌ Error canjeando el código: {e}")
         st.session_state.pop("od_flow", None)
@@ -360,7 +383,7 @@ def onedrive_device_login():
 
 
 def onedrive_list_files(token_dict, root_path):
-    """Lista recursivamente archivos (pdf/txt/md) desde root_path ('' o '/subcarpeta')."""
+    """Lista recursivamente archivos (pdf/txt/md/etc.) desde root_path ('' o '/subcarpeta')."""
     headers = _ms_headers(token_dict)
     # Intentionally excludes /me/drive/sharedWithMe to keep indexing scoped to the user's drive.
 
@@ -370,11 +393,14 @@ def onedrive_list_files(token_dict, root_path):
         try:
             err = probe.json().get("error", {})
             code = err.get("code", "")
-            msg  = err.get("message", "")
+            msg = err.get("message", "")
         except Exception:
-            code = ""; msg = probe.text
+            code = ""
+            msg = probe.text
         # Mensajes útiles
-        if probe.status_code in (400, 404) and ("OneDrive" in msg or "drive" in msg.lower() or "site" in msg.lower()):
+        if probe.status_code in (400, 404) and (
+            "OneDrive" in msg or "drive" in msg.lower() or "site" in msg.lower()
+        ):
             raise RuntimeError(
                 "OneDrive del usuario no está aprovisionado. Abre OneDrive una vez en el navegador "
                 "(portal.office.com → OneDrive) para inicializarlo y vuelve a intentarlo."
@@ -385,7 +411,9 @@ def onedrive_list_files(token_dict, root_path):
                 f"Código: {code or 'N/A'} · Mensaje: {msg or 'N/A'}. "
                 "Comprueba que el login concedió 'Files.Read' o 'Files.Read.All' y que, si es un tenant corporativo, el admin dio consentimiento."
             )
-        raise RuntimeError(f"Graph /me/drive devolvió {probe.status_code}. {code}: {msg}")
+        raise RuntimeError(
+            f"Graph /me/drive devolvió {probe.status_code}. {code}: {msg}"
+        )
 
     # ---- Funciones auxiliares para listar ----
     def _children_url(path):
@@ -400,16 +428,19 @@ def onedrive_list_files(token_dict, root_path):
         while url:
             r = requests.get(url, headers=headers, timeout=30)
             if r.status_code == 404:
-                st.warning(f"⚠️ La ruta de OneDrive {root_path!r} no existe. Usando raíz.")
+                st.warning(
+                    f"⚠️ La ruta de OneDrive {root_path!r} no existe. Usando raíz."
+                )
                 return walk(_children_url(""))
             if r.status_code >= 400:
-                # Saca el detalle del error para ver realmente qué pasa
+                # Extrae el detalle del error para ver realmente qué pasa
                 try:
                     e = r.json().get("error", {})
                     code = e.get("code", "")
-                    msg  = e.get("message", "")
+                    msg = e.get("message", "")
                 except Exception:
-                    code = ""; msg = r.text
+                    code = ""
+                    msg = r.text
                 raise RuntimeError(f"Graph dijo {r.status_code} {code}: {msg}")
             data = r.json()
             for it in data.get("value", []):
@@ -418,18 +449,34 @@ def onedrive_list_files(token_dict, root_path):
                     walk(sub_url)
                 elif it.get("file"):
                     mime = (it["file"].get("mimeType") or "").lower()
-                    files.append({
-                        "id": it["id"],
-                        "name": it["name"],
-                        "mimeType": mime,
-                        "modifiedTime": it.get("lastModifiedDateTime"),
-                        "webUrl": it.get("webUrl"),
-                    })
+                    files.append(
+                        {
+                            "id": it["id"],
+                            "name": it["name"],
+                            "mimeType": mime,
+                            "modifiedTime": it.get("lastModifiedDateTime"),
+                            "webUrl": it.get("webUrl"),
+                        }
+                    )
             url = data.get("@odata.nextLink")
 
     walk(_children_url(root_path))
-    keep = ("application/pdf", "text/plain", "text/markdown")
-    return [f for f in files if (f["mimeType"] in keep or f["name"].lower().endswith((".pdf",".txt",".md")))]
+    keep = (
+        "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "text/html",
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    extensions = (".pdf", ".txt", ".md", ".html", ".csv", ".docx", ".pptx", ".xlsx")
+    return [
+        f
+        for f in files
+        if (f["mimeType"] in keep or f["name"].lower().endswith(extensions))
+    ]
 
 
 def onedrive_download(token_dict, item_id, mime_hint=None):
@@ -458,14 +505,16 @@ def onedrive_can_read(token_dict, item_id: str) -> bool:
     r = requests.get(url, headers=headers, timeout=20)
     return r.status_code == 200
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTRUCCIÓN ÍNDICES
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def construir_vectorstore_onedrive():
     token_dict = st.session_state.onedrive_token
 
-    # Create file list
+    # Crear lista de archivos
     files = onedrive_list_files(token_dict, ONEDRIVE_ROOT or "")
 
     files = [
@@ -482,5 +531,5 @@ def construir_vectorstore_onedrive():
 
     files = [OnedriveFile(f, token_dict) for f in files]
 
-    # Populate vector DB
-    return build_vectorstore(files, 'Onedrive')
+    # Poblar base de datos vectorial
+    return build_vectorstore(files, "Onedrive")

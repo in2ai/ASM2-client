@@ -7,8 +7,8 @@ import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
 export const metadata: Metadata = {
-  title: "ACM2 Central",
-  description: "Dashboard webapp for ACM2",
+  title: "ASM2 Central",
+  description: "Dashboard webapp for ASM2",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 

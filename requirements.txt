@@ -134,3 +134,9 @@ yarl==1.22.0
 torch==2.4.0
 transformers==4.57.5
 sentence-transformers==5.2.0
+python-docx==1.1.2
+python-pptx==1.0.2
+openpyxl==3.1.5
+beautifulsoup4==4.12.3
+lxml==5.3.0
+chardet==5.2.0

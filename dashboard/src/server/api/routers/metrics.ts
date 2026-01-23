@@ -2,8 +2,13 @@ import { Metrics } from "@/lib/metrics-constants";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import {
   countMetrics,
-  getErrorRate,
-  getRequestStats,
+  getActivityByDay,
+  getAvgDocsPerQuery,
+  getHourlyActivityPattern,
+  getMetricsByTag,
+  getResponseTimeTrend,
+  getSystemHealthStats,
+  getTokenUsageStats,
   getTotalActivityEvents,
   getUniqueUsers,
   getUserRoleDistribution,
@@ -11,9 +16,14 @@ import {
   meanSessionLength,
   topKSearchTerms,
   topKTopics,
+  type ActivityByDay,
+  type HourlyActivity,
+  type MetricsByTag,
   type MetricsQueryParams,
-  type RequestStats,
+  type ResponseTimeTrend,
   type SearchTerm,
+  type SystemHealthStats,
+  type TokenUsageStats,
   type TopicCount,
 } from "@/server/db";
 import { TRPCError } from "@trpc/server";
@@ -26,12 +36,13 @@ const metricsQuerySchema = z.object({
 
 /**
  * Dashboard metrics data structure matching the SQL schema
- * Maps directly to the 5 tables: metrics, word_counts, topic_counts, user_activity, requests
+ * Maps directly to the 4 tables: metrics, word_counts, topic_counts, user_activity
  */
 interface DashboardMetrics {
   metrics: {
     response_time: number | null;
     total_count: number;
+    by_tag: MetricsByTag[];
   };
 
   top_words: SearchTerm[];
@@ -43,11 +54,16 @@ interface DashboardMetrics {
     unique_users: number;
     total_events: number;
     role_distribution: Record<string, number>;
+    by_day: ActivityByDay[];
+    hourly_pattern: HourlyActivity[];
   };
 
-  request_stats: RequestStats;
-
-  error_rate: number;
+  rag_quality: {
+    response_time_trend: ResponseTimeTrend[];
+    token_usage: TokenUsageStats;
+    system_health: SystemHealthStats;
+    avg_docs_per_query: number;
+  };
 
   metadata: {
     updatedAt: string;
@@ -85,31 +101,42 @@ export const metricsRouter = createTRPCRouter({
         const [
           meanResponseTime,
           metricsCount,
+          metricsByTag,
           searchTerms,
           topics,
           sessionLength,
           uniqueUsersCount,
           totalEvents,
           roleDistribution,
-          requestStats,
-          errorRate,
+          activityByDay,
+          hourlyPattern,
+          responseTimeTrend,
+          tokenUsage,
+          systemHealth,
+          avgDocsPerQuery,
         ] = await Promise.all([
           meanMetric(Metrics.LLM_RESPONSE_TIME, params),
           countMetrics(params),
+          getMetricsByTag(params),
           topKSearchTerms(10, params),
           topKTopics(10, params),
           meanSessionLength(10, params),
           getUniqueUsers(params),
           getTotalActivityEvents(params),
           getUserRoleDistribution(params),
-          getRequestStats(params),
-          getErrorRate(params),
+          getActivityByDay(params),
+          getHourlyActivityPattern(params),
+          getResponseTimeTrend(params),
+          getTokenUsageStats(params),
+          getSystemHealthStats(params),
+          getAvgDocsPerQuery(params),
         ]);
 
         return {
           metrics: {
             response_time: meanResponseTime,
             total_count: metricsCount,
+            by_tag: metricsByTag,
           },
           top_words: searchTerms,
           top_topics: topics,
@@ -118,9 +145,15 @@ export const metricsRouter = createTRPCRouter({
             unique_users: uniqueUsersCount,
             total_events: totalEvents,
             role_distribution: roleDistribution,
+            by_day: activityByDay,
+            hourly_pattern: hourlyPattern,
           },
-          request_stats: requestStats,
-          error_rate: errorRate,
+          rag_quality: {
+            response_time_trend: responseTimeTrend,
+            token_usage: tokenUsage,
+            system_health: systemHealth,
+            avg_docs_per_query: avgDocsPerQuery,
+          },
           metadata: {
             updatedAt: new Date().toISOString(),
           },
@@ -146,26 +179,18 @@ export const metricsRouter = createTRPCRouter({
       try {
         const params = buildQueryParams(input);
 
-        const [
-          meanResponseTime,
-          sessionLength,
-          uniqueUsersCount,
-          totalEvents,
-          requestStats,
-        ] = await Promise.all([
-          meanMetric(Metrics.LLM_RESPONSE_TIME, params),
-          meanSessionLength(10, params),
-          getUniqueUsers(params),
-          getTotalActivityEvents(params),
-          getRequestStats(params),
-        ]);
+        const [meanResponseTime, sessionLength, uniqueUsersCount, totalEvents] =
+          await Promise.all([
+            meanMetric(Metrics.LLM_RESPONSE_TIME, params),
+            meanSessionLength(10, params),
+            getUniqueUsers(params),
+            getTotalActivityEvents(params),
+          ]);
 
         return {
           totalMetricsRecords: totalEvents,
           avgResponseTime: meanResponseTime ?? 0,
           avgSessionLength: sessionLength ?? 0,
-          totalRequests: requestStats.total_requests,
-          avgLatency: requestStats.avg_latency ?? 0,
           uniqueUsers: uniqueUsersCount,
         };
       } catch (error) {
@@ -195,68 +220,89 @@ export const metricsRouter = createTRPCRouter({
           topics,
           sessionLength,
           uniqueUsersCount,
-          requestStats,
-          errorRate,
+          totalEvents,
+          roleDistribution,
+          activityByDay,
+          hourlyPattern,
+          responseTimeTrend,
+          tokenUsage,
+          systemHealth,
+          avgDocsPerQuery,
         ] = await Promise.all([
           meanMetric(Metrics.LLM_RESPONSE_TIME, params),
           topKSearchTerms(100, params),
           topKTopics(100, params),
           meanSessionLength(10, params),
           getUniqueUsers(params),
-          getRequestStats(params),
-          getErrorRate(params),
+          getTotalActivityEvents(params),
+          getUserRoleDistribution(params),
+          getActivityByDay(params),
+          getHourlyActivityPattern(params),
+          getResponseTimeTrend(params),
+          getTokenUsageStats(params),
+          getSystemHealthStats(params),
+          getAvgDocsPerQuery(params),
         ]);
 
-        const metrics = [
-          {
-            metric_type: Metrics.LLM_RESPONSE_TIME,
-            value: meanResponseTime ?? 0,
-            unit: "ms",
+        // Build comprehensive export data with sections
+        const exportData = {
+          // Summary metrics
+          summary: {
+            unique_users: uniqueUsersCount,
+            total_events: totalEvents,
+            avg_session_length_seconds: sessionLength ?? 0,
+            avg_llm_response_time_ms: meanResponseTime ?? 0,
+            avg_docs_per_query: avgDocsPerQuery,
           },
-          {
-            metric_type: "session_length",
-            value: sessionLength ?? 0,
-            unit: "seconds",
+
+          // Token usage
+          token_usage: {
+            llm_tokens_in: tokenUsage.llm_tokens_in,
+            llm_tokens_out: tokenUsage.llm_tokens_out,
+            rag_tokens_in: tokenUsage.rag_tokens_in,
+            rag_tokens_out: tokenUsage.rag_tokens_out,
+            total_tokens:
+              tokenUsage.llm_tokens_in +
+              tokenUsage.llm_tokens_out +
+              tokenUsage.rag_tokens_in +
+              tokenUsage.rag_tokens_out,
           },
-          {
-            metric_type: "unique_users",
-            value: uniqueUsersCount,
-            unit: "count",
+
+          // System health
+          system_health: {
+            avg_cpu_percent: systemHealth.avg_cpu,
+            max_cpu_percent: systemHealth.max_cpu,
+            avg_ram_percent: systemHealth.avg_ram,
+            max_ram_percent: systemHealth.max_ram,
+            avg_gpu_percent: systemHealth.avg_gpu,
+            max_gpu_percent: systemHealth.max_gpu,
           },
-          {
-            metric_type: "total_requests",
-            value: requestStats.total_requests,
-            unit: "count",
-          },
-          {
-            metric_type: "avg_latency",
-            value: requestStats.avg_latency ?? 0,
-            unit: "ms",
-          },
-          {
-            metric_type: "error_rate",
-            value: errorRate,
-            unit: "percent",
-          },
-          ...searchTerms.map((term: SearchTerm) => ({
-            metric_type: "search_term",
-            value: term.count,
-            unit: term.word,
-          })),
-          ...topics.map((topic: TopicCount) => ({
-            metric_type: "topic",
-            value: topic.count,
-            unit: topic.topic,
-          })),
-        ];
+
+          // Role distribution
+          role_distribution: roleDistribution,
+
+          // Activity by day
+          activity_by_day: activityByDay,
+
+          // Hourly pattern
+          hourly_pattern: hourlyPattern,
+
+          // Response time trends
+          response_time_trend: responseTimeTrend,
+
+          // Search terms
+          search_terms: searchTerms,
+
+          // Topics
+          topics: topics,
+        };
 
         return {
-          metrics,
+          data: exportData,
           metadata: {
             startDate: input.startDate?.toISOString(),
             endDate: input.endDate?.toISOString(),
             exportTimestamp: new Date().toISOString(),
-            totalRecords: metrics.length,
             userId: ctx.userContext.userId,
           },
         };

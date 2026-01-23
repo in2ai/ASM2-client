@@ -1,0 +1,72 @@
+# Docker Compose configuration for running with remote QuestDB (VPS)
+#
+# Usage:
+#   docker-compose -f docker-compose.remote.yml up
+#   docker-compose -f docker-compose.remote.yml up -d        # detached mode
+#   docker-compose -f docker-compose.remote.yml up --build   # rebuild images
+#
+# Prerequisites:
+#   1. Update your .env file with VPS QuestDB connection:
+#      QUESTDB_HOST=your-vps-ip-or-hostname
+#      QUESTDB_PORT=8812
+#      QUESTDB_USER=admin
+#      QUESTDB_PASSWORD=your_password
+#
+#   2. Ensure your VPS QuestDB ports are accessible:
+#      - 8812 (PostgreSQL wire protocol)
+#      - 9000 (Web console/REST API) - optional, for debugging
+#      - 9009 (InfluxDB Line Protocol) - if needed by app
+
+services:
+  app:
+    build: .
+    image: mi-streamlit:latest
+    container_name: mi-streamlit
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - ./faiss_index:/app/faiss_index:rw
+      - ./secrets/client_secret.json:/app/client_secret.json:ro
+      - ./secrets/client_secret_website.json:/app/client_secret_website.json:ro
+      - ./img:/app/img:rw
+      - ./src:/app/src:rw
+      - ./app.py:/app/app.py:rw
+    user: "${UID}:${GID}"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:8501/_stcore/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
+    image: dashboard:latest
+    container_name: dashboard
+    # No depends_on: questdb - connecting to remote VPS instance
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
