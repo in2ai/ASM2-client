@@ -178,10 +178,18 @@ El servicio `app` puede utilizar GPU para acelerar el procesamiento. Para habili
 
 ```bash
 # Usando variable de entorno (en .env):
+# Linux/macOS:
 COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml
 
+# Windows:
+COMPOSE_FILE=docker-compose.yml;docker-compose.gpu.yml
+
 # O combinando con QuestDB remoto y GPU:
+# Linux/macOS:
 COMPOSE_FILE=docker-compose.remote.yml:docker-compose.gpu.yml
+
+# Windows:
+COMPOSE_FILE=docker-compose.remote.yml;docker-compose.gpu.yml
 
 # O mediante línea de comandos:
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
@@ -191,6 +199,12 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 
 - Drivers NVIDIA instalados
 - [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+
+> [!IMPORTANT]
+> **Nota sobre el separador de `COMPOSE_FILE`**:
+>
+> - En **Linux/macOS** se utiliza el signo de dos puntos (`:`) como separador.
+> - En **Windows** se debe utilizar el punto y coma (`;`) como separador.
 
 ### Opción 4: Desarrollo Local
 
