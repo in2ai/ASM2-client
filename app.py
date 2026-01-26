@@ -43,7 +43,8 @@ from src.connectors.onedrive import (
     onedrive_can_read,
     onedrive_device_login,
 )
-from src.connectors.store import EMBEDDINGS, FAISS_PATH, create_hybrid_retriever
+from src.connectors.search import hybrid_search
+from src.connectors.store import EMBEDDINGS, extract_topics
 
 # Metrics
 from src.metrics.metrics import (
@@ -292,7 +293,7 @@ def reindex_all_sources():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=1600):
+def preparar_contexto_rag(query, vectordb, services, k=6, chunk_chars=1600):
     """
     Prepara el contexto RAG: busca documentos, filtra por permisos, reordena.
     Retorna (messages, available_sources, allowed_chunks) o None si no hay resultados.
@@ -325,7 +326,7 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
         if "drive" in services:
             drive_user = get_current_user_drive(services["drive"])
 
-        search_results = hybrid_retriever.invoke(expanded_query)
+        search_results = hybrid_search(vectordb, expanded_query, k, 25)
 
         # 1.5) Filtrar por permisos
         for f in search_results:
@@ -445,15 +446,13 @@ QUESTION:
     return messages, available_sources, allowed_chunks, lang_code
 
 
-def responder_streaming(
-    query, hybrid_retriever, services, placeholder, k=6, chunk_chars=1600
-):
+def responder_streaming(query, vectordb, services, placeholder, k=6, chunk_chars=1600):
     """
     Genera respuesta usando structured output para que el LLM seleccione las fuentes relevantes.
     Retorna la respuesta completa al final.
     """
     # Preparar contexto
-    result = preparar_contexto_rag(query, hybrid_retriever, services, k, chunk_chars)
+    result = preparar_contexto_rag(query, vectordb, services, k, chunk_chars)
 
     if result is None:
         msg = "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
@@ -575,14 +574,10 @@ def get_vectordb():
             print(f"[OneDrive ERROR] {type(e).__name__}: {e}")
             st.error(f"❌ Error indexando OneDrive: {e}")
 
-    # Crear retriever híbrido (BM25 + Vector)
-    hybrid_retriever = None
-    if vectordb is not None:
-        with st.spinner("Construyendo índice híbrido BM25…"):
-            # Reducido de k=50 a k=25 para mejor rendimiento en reranking
-            hybrid_retriever, _ = create_hybrid_retriever(vectordb, k=25)
+    # Extraer temas de chunks si es necesario
+    extract_topics(vectordb)
 
-    return vectordb, hybrid_retriever
+    return vectordb
 
 
 get_vectordb()
@@ -805,7 +800,7 @@ if prompt:
         if "OneDrive" in sel and "onedrive_token" in st.session_state:
             services["onedrive_token"] = st.session_state.onedrive_token
 
-        vectordb, hybrid_retriever = get_vectordb()
+        vectordb = get_vectordb()
 
         # Check the vector DB
         if vectordb is None:
@@ -817,7 +812,7 @@ if prompt:
             # Mostrar spinner mientras prepara el contexto, luego streaming
             with st.spinner("Pensando…"):
                 ans = responder_streaming(
-                    prompt, hybrid_retriever, services, response_placeholder, k=6
+                    prompt, vectordb, services, response_placeholder, k=6
                 )
 
     except Exception as e:

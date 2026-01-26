@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 
 import streamlit as st
 
+from qdrant_client.http.models import SearchParams
+
 load_dotenv(override=True)
 
 CLIENT_SECRET_FILE = "client_secret.json"
@@ -39,3 +41,6 @@ ONEDRIVE_AUTHORITY = f"https://login.microsoftonline.com/{ONEDRIVE_TENANT_ID}"
 ONEDRIVE_SCOPES = ["Files.Read.All", "User.Read"]
 ONEDRIVE_ROOT = (os.getenv("ONEDRIVE_ROOT") or "").strip()   # p.ej. "", "/RAG"
 GRAPH = "https://graph.microsoft.com/v1.0"
+
+# Search config
+APPROX_SEARCH_PARAMS = SearchParams(hnsw_ef=256, exact=False)

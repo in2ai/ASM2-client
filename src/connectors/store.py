@@ -1,42 +1,43 @@
-from typing import List
-import os
-
-from typing import List, Tuple, Optional
-import faiss
 import hashlib
 import os
-import json
-import pickle
+import uuid
+from typing import List
 
-import bm25s
-
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain.retrievers.ensemble import EnsembleRetriever
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
-from langchain_core.retrievers import BaseRetriever
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_openai import OpenAIEmbeddings
-from pydantic import Field
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchAny,
+    MatchValue,
+    Modifier,
+    PayloadSchemaType,
+    PointStruct,
+    SparseVectorParams,
+    VectorParams,
+)
+from qdrant_client.http.models import Document as QDocument
 
-from src.connectors.faiss_file import FaissFile
-from src.connectors.manifest import FaissManifest
-from src.utils.topic import assign_topics, extract_initial_topics
+from src.connectors.manifest import VDBManifest
+from src.connectors.vdb_file import VDBFile
 from src.utils.nlp import unicode_tokenize
+from src.utils.topic import assign_topics, extract_initial_topics
 
-FAISS_PATH = "faiss_index"
-BM25_PATH = "bm25_index"
+QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant")
+QDRANT_PATH = "qdrant_index"
+BM25_MODEL = "qdrant/bm25"
 
-INDEX = faiss.IndexFlatIP(1536)
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
-# chunk_overlap aumentado de 100 a 200 para mejor coherencia entre chunks
+QDRANT_COL = "documents"
+
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 
-# Pesos para búsqueda híbrida (0.0 = solo vector, 1.0 = solo BM25)
-# Vector search is multilingual (OpenAI embeddings), BM25 has no stemming
-BM25_WEIGHT = 0.3
-VECTOR_WEIGHT = 0.7
+TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
+CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", "") == "True"
 
 
 def get_config_hash() -> str:
@@ -52,135 +53,105 @@ def get_config_hash() -> str:
     return hashlib.md5(config.encode()).hexdigest()[:8]
 
 
-class BM25Retriever(BaseRetriever):
-    """Retriever BM25"""
-    
-    index: Optional[bm25s.BM25] = None
-    documents: List[Document] = Field(default_factory=list)
-    k: int = 256
-    
-    class Config:
-        arbitrary_types_allowed = True
-    
-    @classmethod
-    def load_local(cls, path: str, k: int = 256) -> "BM25Retriever":
-        """Carga índice BM25 desde disco."""
-        instance = cls(k=k)
-        instance.index = bm25s.BM25.load(path, load_corpus=False)
-        
-        with open(os.path.join(path, "documents.pkl"), "rb") as f:
-            instance.documents = pickle.load(f)
-        
-        return instance
-    
-    def save_local(self, path: str) -> None:
-        """Guarda índice BM25 en disco."""
-        os.makedirs(path, exist_ok=True)
-        self.index.save(path, corpus=None)
-        
-        with open(os.path.join(path, "documents.pkl"), "wb") as f:
-            pickle.dump(self.documents, f)
-        
-        with open(os.path.join(path, "metadata.json"), "w") as f:
-            json.dump({
-                "num_documents": len(self.documents),
-                "config_hash": get_config_hash()
-            }, f)
-    
-    def add_documents(self, documents: List[Document]) -> None:
-        """Construye índice BM25 a partir de documentos."""
-        if not documents:
-            return
-        
-        self.documents = documents
-        corpus = [doc.page_content for doc in documents]
-        corpus_tokens = [unicode_tokenize(text) for text in corpus]
-        
-        self.index = bm25s.BM25()
-        self.index.index(corpus_tokens)
-    
-    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        """Recupera documentos relevantes."""
-        if self.index is None or not self.documents:
-            return []
-        
-        query_tokens = [unicode_tokenize(query)]
-        results, _ = self.index.retrieve(query_tokens, k=min(self.k, len(self.documents)))
-        
-        return [self.documents[idx] for idx in results[0] if 0 <= idx < len(self.documents)]
-    
-    @staticmethod
-    def index_exists(path: str) -> bool:
-        """Verifica si existe un índice válido."""
-        return all(os.path.exists(os.path.join(path, f)) for f in ["index.pkl", "documents.pkl", "metadata.json"])
-    
-    @staticmethod
-    def needs_rebuild(path: str, doc_count: int) -> bool:
-        """Verifica si el índice necesita reconstruirse (por docs o config)."""
-        metadata_file = os.path.join(path, "metadata.json")
-        if not os.path.exists(metadata_file):
-            return True
-        
-        try:
-            with open(metadata_file, "r") as f:
-                metadata = json.load(f)
-                # Rebuild si cambió el número de docs o la configuración de chunking
-                if metadata.get("num_documents", 0) != doc_count:
-                    return True
-                if metadata.get("config_hash") != get_config_hash():
-                    print(f"⚠️ BM25: Configuración de chunking cambió, reconstruyendo...")
-                    return True
-                return False
-        except Exception:
-            return True
+def iterate_qdrant_docs(
+    vectorstore: Qdrant,
+    batch_size=100,
+    with_payload=True,
+    with_vectors=False,
+    scroll_filter=None,
+):
+    offset = None
 
-CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
-TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 100))
+    while True:
+        points, offset = vectorstore.client.scroll(
+            collection_name=QDRANT_COL,
+            offset=offset,
+            limit=batch_size,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+            scroll_filter=scroll_filter,
+        )
 
-def setup_faiss_gpu(vectorstore):
-    try:
-        gpu_res = faiss.StandardGpuResources()
-        vectorstore.index = faiss.index_cpu_to_gpu(gpu_res, 0, vectorstore.index)
-        print('Set up FAISS GPU')
+        for p in points:
+            payload = p.payload or {}
 
-    except Exception as e:
-        print('Unable to set up FAISS GPU')
+            page_content = payload.get("page_content", "")
+            metadata = payload.get("metadata", {})
 
-def build_vectorstore(files: List[FaissFile], source, batch_size=200):
-    global FAISS_PATH, DOCUMENT_SPLITTER, EMBEDDINGS, INDEX
+            yield p.id, Document(page_content=page_content, metadata=metadata)
 
+        if offset is None:
+            break
+
+
+def build_vectorstore(files: List[VDBFile], source, batch_size=200):
     # Read status manifest file
-    manifest = FaissManifest(FAISS_PATH)
+    manifest = VDBManifest(QDRANT_PATH)
     current_config_hash = get_config_hash()
-    
+
     # Verificar si la configuración de chunking cambió
     config_changed = manifest.needs_config_rebuild(current_config_hash)
+
     if config_changed:
-        print(f"⚠️ FAISS ({source}): Configuración de chunking cambió, reconstruyendo índice completo...")
+        print(
+            f"⚠️ ({source}): Configuración de chunking cambió, reconstruyendo índice completo..."
+        )
 
     # Check if the part for this source is already constructed
-    vectorstore = None
+    client = QdrantClient(
+        url=f"http://{QDRANT_HOST}:6333",
+        grpc_port=6334,
+        prefer_grpc=True,
+    )
 
-    if not config_changed:
-        try:
-            print(f"📂 ({source}) Cargando índice desde {FAISS_PATH}")
-            vectorstore = FAISS.load_local(FAISS_PATH, EMBEDDINGS, allow_dangerous_deserialization=True)
-            
-        except Exception:
-            pass
+    vectorstore = Qdrant(client, QDRANT_COL, EMBEDDINGS)
 
-    # Construct a new DB if needed (or config changed)
-    if vectorstore is None:
-        vectorstore = FAISS(embedding_function=EMBEDDINGS, index=INDEX, docstore=InMemoryDocstore({}), index_to_docstore_id={})
-        # Limpiar manifest si config cambió
-        if config_changed:
-            manifest.manifest["processed_ids"] = {}
-            manifest.manifest["total_chunks"] = 0
-            manifest.manifest["completed"] = {}
+    # Limpiar manifest si config cambió
+    if config_changed:
+        manifest.manifest["processed_ids"] = {}
+        manifest.manifest["total_chunks"] = 0
+        manifest.manifest["completed"] = {}
+
+    if not vectorstore.client.collection_exists(QDRANT_COL):
+        # Create collection
+        vectorstore.client.create_collection(
+            collection_name=QDRANT_COL,
+            vectors_config={
+                "embedding": VectorParams(size=1536, distance=Distance.COSINE),
+            },
+            sparse_vectors_config={
+                "bm25": SparseVectorParams(modifier=Modifier.IDF),
+            },
+        )
+
+        # Create indexes
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name="metadata.source",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name="metadata.permissions.anyone",
+            field_schema=PayloadSchemaType.BOOL,
+        )
+
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name="metadata.permissions.allowed",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+
+    # Update file permissions
+    for file in files:
+        update_file_permissions(
+            vectorstore, file.metadata["id"], file.metadata["permissions"]
+        )
 
     # Check files to update
     current = manifest.get_processed_ids(source)
-    new = {f.metadata['id']: f.metadata['modifiedTime'] for f in files}
+    new = {f.metadata["id"]: f.metadata["modifiedTime"] for f in files}
 
     files_to_delete = set()
     files_to_add = {id for id in new.keys() if id not in current}
@@ -188,7 +159,7 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     for id in current.keys():
         if id not in new:
             files_to_delete.add(id)
-        
+
         elif id in new and new[id] != current[id]:
             files_to_add.add(id)
             files_to_delete.add(id)
@@ -196,57 +167,84 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
     # Early return if no changes are needed
     if len(files_to_delete) == 0 and len(files_to_add) == 0:
         print(f"📂 ({source}) El índice no necesita cambios")
-        setup_faiss_gpu(vectorstore)
 
         return vectorstore
 
     # Delete chunks
-    ids_to_delete = [
-        doc_id for doc_id, doc in vectorstore.docstore._dict.items()
-        if doc.metadata['id'] in files_to_delete
-    ]
+    id_deletion_filter = Filter(
+        must=[FieldCondition(key="metadata.id", match=MatchAny(any=files_to_delete))]
+    )
 
-    if len(ids_to_delete) > 0:
+    num_ids_to_delete = vectorstore.client.count(
+        collection_name=vectorstore.collection_name, count_filter=id_deletion_filter
+    ).count
+
+    if num_ids_to_delete > 0:
         manifest.remove_processed_ids(source, files_to_delete)
-        manifest.remove_chunks(len(ids_to_delete))
-        
-        vectorstore.delete(ids_to_delete)
-        vectorstore.save_local(FAISS_PATH)
+        manifest.remove_chunks(num_ids_to_delete)
+
+        vectorstore.client.delete(
+            collection_name=vectorstore.collection_name,
+            points_selector=id_deletion_filter,
+        )
+
+        manifest.save()
 
     # Read file chunks in batches
     docs_batch, pending_ids = [], []
 
     def flush(reason="batch"):
         nonlocal docs_batch, pending_ids, manifest
-        if not docs_batch: return
+        if not docs_batch:
+            return
 
         for i in range(0, len(docs_batch), batch_size):
-            sub_docs = docs_batch[i:i + batch_size]
-            new_ids = vectorstore.add_documents(sub_docs)
+            sub_docs = docs_batch[i : i + batch_size]
+            new_ids = [str(uuid.uuid4()) for _ in sub_docs]
+            embs = EMBEDDINGS.embed_documents([i.page_content for i in sub_docs])
 
-            if CALCULATE_TOPICS and manifest.has_topics():
+            points = [
+                PointStruct(
+                    id=uuid,
+                    vector={
+                        "embedding": emb,
+                        "bm25": QDocument(text=doc.page_content, model=BM25_MODEL),
+                    },
+                    payload={
+                        "page_content": doc.page_content,
+                        "metadata": doc.metadata,
+                    },
+                )
+                for uuid, emb, doc in zip(new_ids, embs, sub_docs)
+            ]
+
+            vectorstore.client.upsert(vectorstore.collection_name, points)
+
+            if manifest.has_topics():
                 assign_topics(vectorstore, new_ids)
-
-            vectorstore.save_local(FAISS_PATH)
 
         manifest.add_processed_ids(source, pending_ids)
         manifest.add_chunks(len(docs_batch))
+        manifest.save()
 
         print(f"🧩 ({source}) Persistidos {len(docs_batch)} chunks [{reason}]")
 
         docs_batch, pending_ids = [], []
 
     for f in files:
-        if f.metadata['id'] not in files_to_add:
+        if f.metadata["id"] not in files_to_add:
             continue
 
-        f.metadata['source'] = source
+        f.metadata["source"] = source
 
         txt = f.get_text()
-        
-        if not txt: 
+
+        if not txt:
             # We add it to the manifest, since it has been already processed
-            manifest.add_processed_ids(source, [(f.metadata['id'], f.metadata["modifiedTime"])])
+            manifest.add_processed_ids(
+                source, [(f.metadata["id"], f.metadata["modifiedTime"])]
+            )
+            manifest.save()
             continue
 
         base_doc = Document(page_content=txt, metadata=f.metadata)
@@ -254,80 +252,60 @@ def build_vectorstore(files: List[FaissFile], source, batch_size=200):
         docs_batch.extend(chunks)
         pending_ids.append((f.metadata["id"], f.metadata["modifiedTime"]))
 
-        if len(docs_batch) >= batch_size: 
+        if len(docs_batch) >= batch_size:
             flush("lote")
 
-    if docs_batch: 
+    if docs_batch:
         flush("final")
 
-    # Add topics if needed
-    if CALCULATE_TOPICS and not manifest.has_topics():
-        if manifest.num_chunks() > TOPIC_MIN_SIZE:
-            print(f"💾 ({source}) Detectando temas...")
-            extract_initial_topics(vectorstore, FAISS_PATH)
-            manifest.set_topics()
-            vectorstore.save_local(FAISS_PATH)
-            
-        else:
-            print(f"({source}) El índice es demasiado pequeño para detectar temas")
-
-    # Update status manifest con el hash de configuración actual
+    # Update status manifest
     manifest.add_completed_source(source)
     manifest.set_config_hash(current_config_hash)
     manifest.save()
 
-    print(f"💾 ({source}) Índice guardado en {FAISS_PATH} [config: {current_config_hash}]")
-    
-    setup_faiss_gpu(vectorstore)
+    print(
+        f"💾 ({source}) Índice guardado en {QDRANT_PATH} [config: {current_config_hash}]"
+    )
 
     return vectorstore
 
 
-def get_all_documents(vectorstore: FAISS) -> List[Document]:
-    """Extrae todos los documentos de un vectorstore FAISS para indexación BM25."""
-    if vectorstore is None:
-        return []
-    
-    return list(vectorstore.docstore._dict.values())
-
-
-def create_hybrid_retriever(vectorstore: FAISS, k: int = 256) -> Tuple[EnsembleRetriever, List[Document]]:
-    """
-    Crea un retriever híbrido combinando BM25 (léxico) y FAISS (semántico).
-    
-    Args:
-        vectorstore: El vectorstore FAISS
-        k: Número de documentos a recuperar de cada retriever
-        
-    Returns:
-        Tupla de (EnsembleRetriever, List[Document]) - el retriever y todos los documentos
-    """
-    # Obtener todos los documentos para BM25
-    all_docs = get_all_documents(vectorstore)
-    
-    if not all_docs:
-        return None, []
-    
-    # Cargar o construir índice BM25
-    if BM25Retriever.index_exists(BM25_PATH) and not BM25Retriever.needs_rebuild(BM25_PATH, len(all_docs)):
-        print(f"📂 BM25: Cargando índice desde {BM25_PATH}")
-        bm25_retriever = BM25Retriever.load_local(BM25_PATH, k=k)
-    else:
-        print("🔨 BM25: Construyendo índice...")
-        bm25_retriever = BM25Retriever(k=k)
-        bm25_retriever.add_documents(all_docs)
-        bm25_retriever.save_local(BM25_PATH)
-        print(f"💾 BM25: Índice guardado en {BM25_PATH}")
-    
-    # Crear retriever FAISS
-    faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": k})
-    
-    # Combinar con EnsembleRetriever
-    hybrid_retriever = EnsembleRetriever(
-        retrievers=[bm25_retriever, faiss_retriever],
-        weights=[BM25_WEIGHT, VECTOR_WEIGHT]
+def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
+    # Create file filter
+    id_filter = Filter(
+        must=[FieldCondition(key="metadata.id", match=MatchValue(value=file_id))]
     )
-    
-    print(f"🔀 Retriever híbrido creado: {len(all_docs)} documentos, BM25={BM25_WEIGHT}, Vector={VECTOR_WEIGHT}")
-    
-    return hybrid_retriever, all_docs
+
+    # Check if the permissions need to be updated
+    _, first_doc = next(
+        iterate_qdrant_docs(vectorstore, batch_size=1, scroll_filter=id_filter),
+        (None, None),
+    )
+
+    if first_doc is None or first_doc.metadata["permissions"] == new_permissions:
+        return
+
+    # Update the permissions in batch
+    vectorstore.client.set_payload(
+        collection_name=vectorstore.collection_name,
+        key="metadata",
+        payload={"permissions": new_permissions},
+        points=id_filter,
+    )
+
+
+def extract_topics(vectorstore: Qdrant):
+    manifest = VDBManifest(QDRANT_PATH)
+
+    # Add topics if needed
+    if not manifest.has_topics():
+        if manifest.num_chunks() > TOPIC_MIN_SIZE:
+            print(f"💾 Detectando temas...")
+            extract_initial_topics(vectorstore, QDRANT_PATH)
+
+            if CALCULATE_TOPICS:
+                manifest.set_topics()
+                manifest.save()
+
+        else:
+            print(f"El índice es demasiado pequeño para detectar temas")

@@ -113,14 +113,14 @@ def extract_pdf_text(data: bytes) -> str:
         return None
 
 
-class FaissFile:
+class VDBFile:
     def __init__(self, metadata):
         self.metadata = metadata
 
     def get_text(self) -> str: ...
 
 
-class GoogleDriveFile(FaissFile):
+class GoogleDriveFile(VDBFile):
     def __init__(self, metadata, service):
         super().__init__(metadata)
         self.service = service
@@ -197,7 +197,7 @@ class GoogleDriveFile(FaissFile):
         return None
 
 
-class DropboxFile(FaissFile):
+class DropboxFile(VDBFile):
     def __init__(self, metadata, service):
         super().__init__(metadata)
         self.service = service
@@ -258,7 +258,7 @@ def _ms_headers(token_dict):
     return {"Authorization": f"Bearer {token_dict['access_token']}"}
 
 
-class OnedriveFile(FaissFile):
+class OnedriveFile(VDBFile):
     def __init__(self, metadata, token):
         super().__init__(metadata)
         self.token = token
