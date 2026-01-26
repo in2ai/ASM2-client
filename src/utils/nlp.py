@@ -2,10 +2,32 @@ import os
 import unicodedata
 
 import fasttext
+import nltk
 import numpy as np
 import regex as re
 import stanza
 from huggingface_hub import hf_hub_download
+from nltk.corpus import stopwords
+
+# Mapeo de códigos ISO-2 a nombres de idioma de NLTK
+NLTK_LANG_MAP = {
+    "es": "spanish",
+    "en": "english",
+    "gl": "spanish",  # Gallego usa stopwords de español como fallback
+}
+
+
+def _ensure_stopwords():
+    """Descarga stopwords de NLTK si no están disponibles."""
+    for nltk_lang in set(NLTK_LANG_MAP.values()):
+        try:
+            stopwords.words(nltk_lang)
+        except LookupError:
+            nltk.download('stopwords')
+            break  # Solo hace falta descargar una vez, el paquete incluye todos los idiomas
+
+
+_ensure_stopwords()
 
 
 class CustomLID:
@@ -133,14 +155,26 @@ def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
     if not text or not text.strip():
         return set()
 
+    # Obtener stopwords del idioma detectado (español por defecto si falla)
+    nltk_lang = NLTK_LANG_MAP.get(lang_code, "spanish")
+    stops = set(stopwords.words(nltk_lang))
+
     doc = nlp_model(text)
 
     terms = set()
     for sentence in doc.sentences:
         for word in sentence.words:
-            if word.upos == "PUNCT" or not word.text.isalpha():
+            # Solo conservar sustantivos (comunes y propios)
+            if word.upos not in ("NOUN", "PROPN"):
                 continue
-            if word.lemma and len(word.lemma) >= min_length:
-                terms.add(word.lemma.lower().strip())
+            if not word.text.isalpha():
+                continue
+            lemma = word.lemma.lower().strip() if word.lemma else None
+            if not lemma or len(lemma) < min_length:
+                continue
+            # Filtrar stopwords
+            if lemma in stops:
+                continue
+            terms.add(lemma)
 
     return terms
