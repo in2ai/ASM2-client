@@ -2,7 +2,7 @@ import os
 import json
 import datetime
 
-from src.connectors.faiss_file import FaissFile
+from src.connectors.vdb_file import VDBFile
 
 
 def load_manifest(path):
@@ -22,7 +22,7 @@ def load_manifest(path):
     }
 
 
-class FaissManifest:
+class VDBManifest:
     def __init__(self, path):
         self.path = os.path.join(path, "progress.json")
         self.manifest = load_manifest(self.path)
@@ -74,7 +74,7 @@ class FaissManifest:
         return source in self.manifest['completed']
 
 
-    def contains_file(self, file: FaissFile) -> bool:
+    def contains_file(self, file: VDBFile) -> bool:
         source = file.metadata['source']
         self.manifest['processed_ids'].setdefault(source, {})
 
