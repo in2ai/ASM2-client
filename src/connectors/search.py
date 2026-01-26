@@ -4,11 +4,13 @@ from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 
 from qdrant_client.http.models import Filter
-from qdrant_client.http.models import Fusion, FusionQuery, SearchParams, Prefetch, Document as QDocument
+from qdrant_client.http.models import Fusion, FusionQuery, Prefetch, Document as QDocument
 
+from src.config.config import APPROX_SEARCH_PARAMS
 from src.connectors.drive import get_gdrive_qdrant_filter
 from src.connectors.dropbox import get_dropbox_qdrant_filter
 from src.connectors.onedrive import get_onedrive_qdrant_filter
+from src.connectors.store import BM25_MODEL
 
 def get_permission_filter():
     filters = []
@@ -38,9 +40,9 @@ def hybrid_search(vectorstore: Qdrant, query: str, k: int, prefetch_k: int):
         query=FusionQuery(fusion=Fusion.RRF),
         prefetch=[
             Prefetch(query=emb, using="embedding", limit=prefetch_k, filter=pfilter),
-            Prefetch(query=QDocument(text=query, model="qdrant/bm25"), using="bm25", limit=prefetch_k, filter=pfilter)
+            Prefetch(query=QDocument(text=query, model=BM25_MODEL), using="bm25", limit=prefetch_k, filter=pfilter)
         ],
-        search_params=SearchParams(hnsw_ef=256, exact=False),
+        search_params=APPROX_SEARCH_PARAMS,
         with_payload=True,
         with_vectors=False,
         limit=k,

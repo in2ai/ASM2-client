@@ -10,6 +10,8 @@ from langchain.schema import Document
 
 from qdrant_client.http import models
 
+from src.config.config import APPROX_SEARCH_PARAMS
+
 
 TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
 TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
@@ -60,7 +62,7 @@ def extract_initial_topics(vdb: Qdrant):
                 limit=200,
                 with_payload=False,
                 with_vector=False,
-                params=models.SearchParams(hnsw_ef=256, exact=False)
+                params=APPROX_SEARCH_PARAMS
             )
             for i in batch
         ]
@@ -185,7 +187,7 @@ def assign_topics(vdb: Qdrant, ids):
             limit=200,
             with_payload=True,
             with_vector=False,
-            params=models.SearchParams(hnsw_ef=256, exact=False)
+            params=APPROX_SEARCH_PARAMS
         )
         for i in ids
     ]        

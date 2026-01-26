@@ -17,8 +17,9 @@ from src.connectors.vdb_file import VDBFile
 from src.connectors.manifest import VDBManifest
 from src.utils.topic import assign_topics, extract_initial_topics
 
+QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant")
 QDRANT_PATH = "qdrant_index"
-BM25_PATH = "bm25_index"
+BM25_MODEL = "qdrant/bm25"
 
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 QDRANT_COL = "documents"
@@ -62,8 +63,6 @@ def iterate_qdrant_docs(vectorstore: Qdrant, batch_size=100, with_payload=True, 
             break
 
 def build_vectorstore(files: List[VDBFile], source, batch_size=200):
-    global QDRANT_PATH, DOCUMENT_SPLITTER, EMBEDDINGS
-
     # Read status manifest file
     manifest = VDBManifest(QDRANT_PATH)
     current_config_hash = get_config_hash()
@@ -76,7 +75,7 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
 
     # Check if the part for this source is already constructed
     client = QdrantClient(
-        url="http://qdrant:6333",
+        url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
         prefer_grpc=True,
     )
@@ -183,7 +182,7 @@ def build_vectorstore(files: List[VDBFile], source, batch_size=200):
                     id=uuid,
                     vector={
                         "embedding": emb,
-                        "bm25": QDocument(text=doc.page_content, model="qdrant/bm25")
+                        "bm25": QDocument(text=doc.page_content, model=BM25_MODEL)
                     },
                     payload={
                         "page_content": doc.page_content,
