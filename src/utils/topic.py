@@ -12,12 +12,12 @@ from langchain.schema import Document
 from qdrant_client.http import models
 
 from src.config.config import APPROX_SEARCH_PARAMS
+from src.utils.nlp import SUPPORTED_LANGUAGES
 
 
 TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
 TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
 TOPIC_MAPPING_FILENAME = "topics.json"
-SUPPORTED_TOPIC_LANGS = ["es", "en", "gl"]
 CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
 
 
@@ -150,7 +150,7 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
 
     # Calculate representative docs
     topics = {}
-    topic_mapping = {lang: {} for lang in SUPPORTED_TOPIC_LANGS}
+    topic_mapping = {lang: {} for lang in SUPPORTED_LANGUAGES}
     topic_index = 0
 
     for members in communities:
@@ -174,11 +174,11 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
 
         topic_names = topic_json.get("Tema")
         if isinstance(topic_names, str):
-            topic_names = {lang: topic_names for lang in SUPPORTED_TOPIC_LANGS}
+            topic_names = {lang: topic_names for lang in SUPPORTED_LANGUAGES}
         if not isinstance(topic_names, dict):
             continue
 
-        for lang in SUPPORTED_TOPIC_LANGS:
+        for lang in SUPPORTED_LANGUAGES:
             name = topic_names.get(lang) if isinstance(topic_names, dict) else None
             if not name:
                 name = topic_names.get("es")
