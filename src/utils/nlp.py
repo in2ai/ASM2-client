@@ -97,14 +97,13 @@ class CustomLID:
 
 
 # Filtrado de idiomas soportados
-SUPPORTED_LABELS = ["__label__spa_Latn", "__label__eng_Latn", "__label__glg_Latn"]
 GLOTLID_TO_ISO2 = {"spa_Latn": "es", "eng_Latn": "en", "glg_Latn": "gl"}
-SUPPORTED_LANGUAGES = ["es", "en", "gl"]
+SUPPORTED_LABELS = [f"__label__{k}" for k in GLOTLID_TO_ISO2]
+SUPPORTED_LANGUAGES = list(GLOTLID_TO_ISO2.values())
 
 GLOTLID_MODEL_PATH = None
 DETECTOR = None
 lang_model_dict = {}
-supported_languages = SUPPORTED_LANGUAGES
 _NLP_INITIALIZED = False
 
 
@@ -123,7 +122,7 @@ def init_nlp() -> None:
     Inicializa recursos NLP de forma explícita (no en import).
     Llamar en el arranque de la app antes de usar detect_language/extract_search_terms.
     """
-    global GLOTLID_MODEL_PATH, DETECTOR, lang_model_dict, supported_languages, _NLP_INITIALIZED
+    global GLOTLID_MODEL_PATH, DETECTOR, lang_model_dict, _NLP_INITIALIZED
 
     if _NLP_INITIALIZED:
         return
@@ -155,7 +154,6 @@ def init_nlp() -> None:
             "gl", package="ctg", processors="tokenize,mwt,pos,lemma", download_method=None
         ),
     }
-    supported_languages = SUPPORTED_LANGUAGES
     _NLP_INITIALIZED = True
 
 
@@ -176,7 +174,7 @@ def detect_language(query: str) -> str:
 
 def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
     _require_init()
-    if lang_code in supported_languages:
+    if lang_code in SUPPORTED_LANGUAGES:
         nlp_model = lang_model_dict[lang_code]
     else:
         nlp_model = lang_model_dict["es"]
