@@ -575,7 +575,8 @@ def get_vectordb():
             st.error(f"❌ Error indexando OneDrive: {e}")
 
     # Extraer temas de chunks si es necesario
-    extract_topics(vectordb)
+    if vectordb is not None:
+        extract_topics(vectordb)
 
     return vectordb
 

@@ -234,12 +234,14 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
             if weight >= TOPIC_MIN_CONTRIB:
                 aggregated_topics[v_name][t] = max(weight, aggregated_topics[v_name].get(t, 0.0))
 
-    # Update metadata
+    # Actualizar metadatos
     for id, ts in aggregated_topics.items():
+        # Convertir claves enteras a strings para compatibilidad con JSON de Qdrant
+        topics_str_keys = {str(k): v for k, v in ts.items()}
         vdb.client.set_payload(
             collection_name=vdb.collection_name,
             key='metadata',
-            payload={'topics': ts},
+            payload={'topics': topics_str_keys},
             points=[id]
         )
 
