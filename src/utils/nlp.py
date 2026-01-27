@@ -9,22 +9,22 @@ import stanza
 from huggingface_hub import hf_hub_download
 from nltk.corpus import stopwords
 
-# Mapeo de códigos ISO-2 a nombres de idioma de NLTK
+# ISO-2 code to NLTK language name mapping
 NLTK_LANG_MAP = {
     "es": "spanish",
     "en": "english",
-    "gl": "spanish",  # Gallego usa stopwords de español como fallback
+    "gl": "spanish",  # Galician uses Spanish stopwords as fallback
 }
 
 
 def _ensure_stopwords():
-    """Descarga stopwords de NLTK si no están disponibles."""
+    """Downloads NLTK stopwords if not available."""
     for nltk_lang in set(NLTK_LANG_MAP.values()):
         try:
             stopwords.words(nltk_lang)
         except LookupError:
             nltk.download("stopwords", download_dir=os.environ.get("NLTK_DATA"))
-            break  # Solo hace falta descargar una vez, el paquete incluye todos los idiomas
+            break  # Only need to download once, the package includes all languages
 
 
 class CustomLID:
@@ -96,7 +96,7 @@ class CustomLID:
         return tuple(top_k_labels), top_k_probs
 
 
-# Filtrado de idiomas soportados
+# Supported language filtering
 GLOTLID_TO_ISO2 = {"spa_Latn": "es", "eng_Latn": "en", "glg_Latn": "gl"}
 SUPPORTED_LABELS = [f"__label__{k}" for k in GLOTLID_TO_ISO2]
 SUPPORTED_LANGUAGES = list(GLOTLID_TO_ISO2.values())
@@ -119,8 +119,8 @@ def unicode_tokenize(text: str) -> list[str]:
 
 def init_nlp() -> None:
     """
-    Inicializa recursos NLP de forma explícita (no en import).
-    Llamar en el arranque de la app antes de usar detect_language/extract_search_terms.
+    Explicitly initializes NLP resources (not at import time).
+    Call at app startup before using detect_language/extract_search_terms.
     """
     global GLOTLID_MODEL_PATH, DETECTOR, lang_model_dict, _NLP_INITIALIZED
 
@@ -160,7 +160,7 @@ def init_nlp() -> None:
 def _require_init() -> None:
     if not _NLP_INITIALIZED:
         raise RuntimeError(
-            "NLP no inicializado. Llama a init_nlp() al arrancar la app."
+            "NLP not initialized. Call init_nlp() at app startup."
         )
 
 
@@ -182,7 +182,7 @@ def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
     if not text or not text.strip():
         return set()
 
-    # Obtener stopwords del idioma detectado (español por defecto si falla)
+    # Get stopwords for the detected language (Spanish as default fallback)
     nltk_lang = NLTK_LANG_MAP.get(lang_code, "spanish")
     stops = set(stopwords.words(nltk_lang))
 
@@ -191,7 +191,7 @@ def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
     terms = set()
     for sentence in doc.sentences:
         for word in sentence.words:
-            # Solo conservar sustantivos (comunes y propios)
+            # Keep only nouns (common and proper)
             if word.upos not in ("NOUN", "PROPN"):
                 continue
             if not word.text.isalpha():
@@ -199,7 +199,7 @@ def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
             lemma = word.lemma.lower().strip() if word.lemma else None
             if not lemma or len(lemma) < min_length:
                 continue
-            # Filtrar stopwords
+            # Filter stopwords
             if lemma in stops:
                 continue
             terms.add(lemma)
