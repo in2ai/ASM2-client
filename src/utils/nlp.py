@@ -96,7 +96,7 @@ class CustomLID:
         return tuple(top_k_labels), top_k_probs
 
 
-# Filter detection to only Spanish, English, and Galician
+# Filtrado de idiomas soportados
 SUPPORTED_LABELS = ["__label__spa_Latn", "__label__eng_Latn", "__label__glg_Latn"]
 GLOTLID_TO_ISO2 = {"spa_Latn": "es", "eng_Latn": "en", "glg_Latn": "gl"}
 SUPPORTED_LANGUAGES = ["es", "en", "gl"]
@@ -127,6 +127,10 @@ def init_nlp() -> None:
 
     if _NLP_INITIALIZED:
         return
+
+    nltk_data_dir = os.environ.get("NLTK_DATA")
+    if nltk_data_dir and nltk_data_dir not in nltk.data.path:
+        nltk.data.path.append(nltk_data_dir)
 
     _ensure_stopwords()
 

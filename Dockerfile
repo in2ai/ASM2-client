@@ -23,7 +23,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Directorio compartido para modelos (evita que root y appuser usen cachés distintos)
 ENV SENTENCE_TRANSFORMERS_HOME=/app/models \
     HF_HOME=/app/models \
-    STANZA_RESOURCES_DIR=/app/models/stanza
+    STANZA_RESOURCES_DIR=/app/models/stanza \
+    NLTK_DATA=/app/models/nltk
 
 # Config por defecto Streamlit (puedes sobreescribir por env)
 ENV STREAMLIT_SERVER_HEADLESS=true \
@@ -46,11 +47,12 @@ RUN if ! grep -qi '^streamlit' requirements.txt; then echo 'streamlit' >> requir
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Crear directorio de modelos y descargar todos los modelos
-RUN mkdir -p /app/models/stanza && \
+RUN mkdir -p /app/models/stanza /app/models/nltk && \
     python -c "import stanza; \
         stanza.download('es', package='ancora', processors='tokenize,mwt,pos,lemma'); \
         stanza.download('en', processors='tokenize,mwt,pos,lemma'); \
         stanza.download('gl', package='ctg', processors='tokenize,mwt,pos,lemma')" && \
+    python -c "import os, nltk; nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'])" && \
     python -c "from huggingface_hub import hf_hub_download; \
         hf_hub_download(repo_id='cis-lmu/glotlid', filename='model.bin')" && \
     python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')" && \
