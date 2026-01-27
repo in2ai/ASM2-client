@@ -23,7 +23,7 @@ def _ensure_stopwords():
         try:
             stopwords.words(nltk_lang)
         except LookupError:
-            nltk.download("stopwords")
+            nltk.download("stopwords", download_dir=os.environ.get("NLTK_DATA"))
             break  # Solo hace falta descargar una vez, el paquete incluye todos los idiomas
 
 
