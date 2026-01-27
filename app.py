@@ -44,7 +44,7 @@ from src.connectors.onedrive import (
     onedrive_device_login,
 )
 from src.connectors.search import hybrid_search
-from src.connectors.store import EMBEDDINGS, extract_topics
+from src.connectors.store import EMBEDDINGS, QDRANT_PATH, extract_topics
 
 # Metrics
 from src.metrics.metrics import (
@@ -364,7 +364,7 @@ def preparar_contexto_rag(query, vectordb, services, k=6, chunk_chars=1600):
     topic_indices = {
         t for d in allowed_chunks for t, _ in d.metadata.get("topics", {}).items()
     }
-    topics_for_db = resolve_topic_names(topic_indices, "es", FAISS_PATH)
+    topics_for_db = resolve_topic_names(topic_indices, "es", QDRANT_PATH)
     register_topics(topics_for_db)
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
