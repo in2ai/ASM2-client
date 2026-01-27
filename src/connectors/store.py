@@ -282,14 +282,14 @@ def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
         (None, None),
     )
 
-    if first_doc is None or first_doc.metadata["permissions"] == new_permissions:
+    if first_doc is None or first_doc.metadata.get("permissions") == new_permissions:
         return
 
     # Update the permissions in batch
     vectorstore.client.set_payload(
         collection_name=vectorstore.collection_name,
-        key="metadata",
-        payload={"permissions": new_permissions},
+        key="metadata.permissions",
+        payload=new_permissions,
         points=id_filter,
     )
 
