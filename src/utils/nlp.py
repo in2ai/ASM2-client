@@ -23,11 +23,8 @@ def _ensure_stopwords():
         try:
             stopwords.words(nltk_lang)
         except LookupError:
-            nltk.download('stopwords')
+            nltk.download("stopwords")
             break  # Solo hace falta descargar una vez, el paquete incluye todos los idiomas
-
-
-_ensure_stopwords()
 
 
 class CustomLID:
@@ -99,34 +96,16 @@ class CustomLID:
         return tuple(top_k_labels), top_k_probs
 
 
-GLOTLID_MODEL_PATH = hf_hub_download(
-    repo_id="cis-lmu/glotlid",
-    filename="model.bin",
-    cache_dir=os.environ.get("HF_HOME", None),
-)
-
 # Filter detection to only Spanish, English, and Galician
 SUPPORTED_LABELS = ["__label__spa_Latn", "__label__eng_Latn", "__label__glg_Latn"]
-DETECTOR = CustomLID(GLOTLID_MODEL_PATH, languages=SUPPORTED_LABELS, mode="before")
-
 GLOTLID_TO_ISO2 = {"spa_Latn": "es", "eng_Latn": "en", "glg_Latn": "gl"}
+SUPPORTED_LANGUAGES = ["es", "en", "gl"]
 
-lang_model_dict = {
-    "es": stanza.Pipeline(
-        "es",
-        package="ancora",
-        processors="tokenize,mwt,pos,lemma",
-        download_method=None,
-    ),
-    "en": stanza.Pipeline(
-        "en", processors="tokenize,mwt,pos,lemma", download_method=None
-    ),
-    "gl": stanza.Pipeline(
-        "gl", package="ctg", processors="tokenize,mwt,pos,lemma", download_method=None
-    ),
-}
-
-supported_languages = ["es", "en", "gl"]
+GLOTLID_MODEL_PATH = None
+DETECTOR = None
+lang_model_dict = {}
+supported_languages = SUPPORTED_LANGUAGES
+_NLP_INITIALIZED = False
 
 
 _WORD_RE = re.compile(r"\p{L}+\p{M}*|\p{N}+")
@@ -139,7 +118,52 @@ def unicode_tokenize(text: str) -> list[str]:
     return _WORD_RE.findall(normalized)
 
 
+def init_nlp() -> None:
+    """
+    Inicializa recursos NLP de forma explícita (no en import).
+    Llamar en el arranque de la app antes de usar detect_language/extract_search_terms.
+    """
+    global GLOTLID_MODEL_PATH, DETECTOR, lang_model_dict, supported_languages, _NLP_INITIALIZED
+
+    if _NLP_INITIALIZED:
+        return
+
+    _ensure_stopwords()
+
+    GLOTLID_MODEL_PATH = hf_hub_download(
+        repo_id="cis-lmu/glotlid",
+        filename="model.bin",
+        cache_dir=os.environ.get("HF_HOME", None),
+    )
+    DETECTOR = CustomLID(GLOTLID_MODEL_PATH, languages=SUPPORTED_LABELS, mode="before")
+
+    lang_model_dict = {
+        "es": stanza.Pipeline(
+            "es",
+            package="ancora",
+            processors="tokenize,mwt,pos,lemma",
+            download_method=None,
+        ),
+        "en": stanza.Pipeline(
+            "en", processors="tokenize,mwt,pos,lemma", download_method=None
+        ),
+        "gl": stanza.Pipeline(
+            "gl", package="ctg", processors="tokenize,mwt,pos,lemma", download_method=None
+        ),
+    }
+    supported_languages = SUPPORTED_LANGUAGES
+    _NLP_INITIALIZED = True
+
+
+def _require_init() -> None:
+    if not _NLP_INITIALIZED:
+        raise RuntimeError(
+            "NLP no inicializado. Llama a init_nlp() al arrancar la app."
+        )
+
+
 def detect_language(query: str) -> str:
+    _require_init()
     labels, _ = DETECTOR.predict(query.replace("\n", " "), k=1)
     lang_code = labels[0].replace("__label__", "")
     iso2 = GLOTLID_TO_ISO2.get(lang_code, "es")
@@ -147,6 +171,7 @@ def detect_language(query: str) -> str:
 
 
 def extract_search_terms(text: str, lang_code: str, min_length: int = 2):
+    _require_init()
     if lang_code in supported_languages:
         nlp_model = lang_model_dict[lang_code]
     else:

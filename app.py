@@ -57,8 +57,11 @@ from src.metrics.metrics import (
 )
 
 # Utils
-from src.utils.nlp import detect_language, extract_search_terms
+from src.utils.nlp import detect_language, extract_search_terms, init_nlp
 from src.utils.topic import resolve_topic_names
+
+# Inicializar recursos NLP al arrancar la app
+init_nlp()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
