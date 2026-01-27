@@ -7,7 +7,7 @@ export const logtoConfig: LogtoNextConfig = {
   appSecret: env.LOGTO_APP_SECRET,
   baseUrl: env.NEXT_PUBLIC_APP_URL,
   cookieSecret: env.LOGTO_COOKIE_SECRET,
-  cookieSecure: process.env.NODE_ENV === "production",
+  cookieSecure: env.NODE_ENV === "production",
   scopes: [
     "openid",
     "profile",
