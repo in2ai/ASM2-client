@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS metrics (
 
 CREATE TABLE IF NOT EXISTS word_counts (
     ts TIMESTAMP,      -- timestamp of the count update
+    lang SYMBOL,
     user_id SYMBOL,
     user_role SYMBOL,
     word SYMBOL        -- the word being counted
