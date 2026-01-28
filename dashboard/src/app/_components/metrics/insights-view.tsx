@@ -180,19 +180,23 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
                       axisLine={false}
                       width={180}
                       style={{ fontSize: 11 }}
-                      tick={({ x, y, payload }) => (
+                      tick={(props: {
+                        x: number;
+                        y: number;
+                        payload: { value: string };
+                      }) => (
                         <text
-                          x={x}
-                          y={y}
+                          x={props.x}
+                          y={props.y}
                           dy={4}
                           textAnchor="end"
                           fill="currentColor"
                           style={{ fontSize: 11 }}
                         >
-                          <title>{payload.value}</title>
-                          {payload.value.length > 28
-                            ? payload.value.substring(0, 28) + "..."
-                            : payload.value}
+                          <title>{props.payload.value}</title>
+                          {props.payload.value.length > 28
+                            ? props.payload.value.substring(0, 28) + "..."
+                            : props.payload.value}
                         </text>
                       )}
                     />
