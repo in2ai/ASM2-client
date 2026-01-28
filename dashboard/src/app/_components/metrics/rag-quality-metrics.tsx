@@ -209,153 +209,157 @@ export function RAGQualityMetrics({
         )}
 
         {/* Token Usage Chart */}
-        <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center text-lg font-bold">
-                Consumo de tokens
-                <ChartHint hint="Compara los tokens de entrada (lo que envía el usuario + contexto) vs salida (respuesta generada) para LLM y RAG. Más tokens = mayor coste y tiempo de procesamiento." />
-              </CardTitle>
-              <CardDescription>
-                Total: {totalTokens.toLocaleString("es-ES")} tokens
-              </CardDescription>
-            </div>
-            <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-              <Activity size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="overflow-hidden p-0 pt-4">
-            <ChartContainer
-              config={{
-                input: { label: "Entrada", color: "oklch(0.6 0.2 220)" },
-                output: { label: "Salida", color: "oklch(0.7 0.25 280)" },
-              }}
-              className="h-[250px] w-full"
-            >
-              <BarChart
-                data={tokenData}
-                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+        {visibility.tokenUsage && (
+          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center text-lg font-bold">
+                  Consumo de tokens
+                  <ChartHint hint="Compara los tokens de entrada (lo que envía el usuario + contexto) vs salida (respuesta generada) para LLM y RAG. Más tokens = mayor coste y tiempo de procesamiento." />
+                </CardTitle>
+                <CardDescription>
+                  Total: {totalTokens.toLocaleString("es-ES")} tokens
+                </CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <Activity size={18} />
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-hidden p-0 pt-4">
+              <ChartContainer
+                config={{
+                  input: { label: "Entrada", color: "oklch(0.6 0.2 220)" },
+                  output: { label: "Salida", color: "oklch(0.7 0.25 280)" },
+                }}
+                className="h-[250px] w-full"
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="hsl(var(--border))"
-                  opacity={0.5}
-                />
-                <XAxis
-                  dataKey="name"
-                  tickLine={false}
-                  axisLine={false}
-                  style={{ fontSize: 12, fontWeight: 600 }}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  style={{ fontSize: 11 }}
-                  tickFormatter={(value) =>
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-                    value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
-                  }
-                />
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
-                  }
-                />
-                <Bar
-                  dataKey="input"
-                  fill="var(--color-input)"
-                  radius={[6, 6, 0, 0]}
-                  barSize={50}
-                />
-                <Bar
-                  dataKey="output"
-                  fill="var(--color-output)"
-                  radius={[6, 6, 0, 0]}
-                  barSize={50}
-                />
-                <ChartLegend
-                  content={<ChartLegendContent />}
-                  className="pt-4"
-                />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+                <BarChart
+                  data={tokenData}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="hsl(var(--border))"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 12, fontWeight: 600 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    style={{ fontSize: 11 }}
+                    tickFormatter={(value) =>
+                      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+                      value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
+                    }
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md" />
+                    }
+                  />
+                  <Bar
+                    dataKey="input"
+                    fill="var(--color-input)"
+                    radius={[6, 6, 0, 0]}
+                    barSize={50}
+                  />
+                  <Bar
+                    dataKey="output"
+                    fill="var(--color-output)"
+                    radius={[6, 6, 0, 0]}
+                    barSize={50}
+                  />
+                  <ChartLegend
+                    content={<ChartLegendContent />}
+                    className="pt-4"
+                  />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        )}
 
         {/* System Health + RAG Stats */}
-        <Card className="bg-card/40 rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center text-lg font-bold">
-                Salud del sistema
-                <ChartHint hint="Monitoriza el uso de recursos del servidor. Un uso alto sostenido de CPU, RAM o GPU puede indicar la necesidad de escalar la infraestructura." />
-              </CardTitle>
-              <CardDescription>Uso promedio de recursos</CardDescription>
-            </div>
-            <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-              <Cpu size={18} />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6 pt-4">
-            {hasSystemData ? (
-              <>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">CPU</span>
-                    <span className="text-muted-foreground">
-                      {systemHealth.avg_cpu.toFixed(1)}% (máx:{" "}
-                      {systemHealth.max_cpu.toFixed(1)}%)
-                    </span>
+        {visibility.resourceConsumption && (
+          <Card className="bg-card/40 rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center text-lg font-bold">
+                  Salud del sistema
+                  <ChartHint hint="Monitoriza el uso de recursos del servidor. Un uso alto sostenido de CPU, RAM o GPU puede indicar la necesidad de escalar la infraestructura." />
+                </CardTitle>
+                <CardDescription>Uso promedio de recursos</CardDescription>
+              </div>
+              <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                <Cpu size={18} />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-4">
+              {hasSystemData ? (
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">CPU</span>
+                      <span className="text-muted-foreground">
+                        {systemHealth.avg_cpu.toFixed(1)}% (máx:{" "}
+                        {systemHealth.max_cpu.toFixed(1)}%)
+                      </span>
+                    </div>
+                    <Progress value={systemHealth.avg_cpu} className="h-2" />
                   </div>
-                  <Progress value={systemHealth.avg_cpu} className="h-2" />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">RAM</span>
-                    <span className="text-muted-foreground">
-                      {systemHealth.avg_ram.toFixed(1)}% (máx:{" "}
-                      {systemHealth.max_ram.toFixed(1)}%)
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">RAM</span>
+                      <span className="text-muted-foreground">
+                        {systemHealth.avg_ram.toFixed(1)}% (máx:{" "}
+                        {systemHealth.max_ram.toFixed(1)}%)
+                      </span>
+                    </div>
+                    <Progress value={systemHealth.avg_ram} className="h-2" />
                   </div>
-                  <Progress value={systemHealth.avg_ram} className="h-2" />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">GPU</span>
-                    <span className="text-muted-foreground">
-                      {systemHealth.avg_gpu.toFixed(1)}% (máx:{" "}
-                      {systemHealth.max_gpu.toFixed(1)}%)
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">GPU</span>
+                      <span className="text-muted-foreground">
+                        {systemHealth.avg_gpu.toFixed(1)}% (máx:{" "}
+                        {systemHealth.max_gpu.toFixed(1)}%)
+                      </span>
+                    </div>
+                    <Progress value={systemHealth.avg_gpu} className="h-2" />
                   </div>
-                  <Progress value={systemHealth.avg_gpu} className="h-2" />
-                </div>
-              </>
-            ) : (
-              <p className="text-muted-foreground py-4 text-center text-sm">
-                No hay datos de uso de recursos
-              </p>
-            )}
+                </>
+              ) : (
+                <p className="text-muted-foreground py-4 text-center text-sm">
+                  No hay datos de uso de recursos
+                </p>
+              )}
 
-            {/* Average docs per query */}
-            <div className="border-border mt-4 border-t pt-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-primary/10 text-primary rounded-lg p-2">
-                  <FileText size={16} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Docs por consulta</p>
-                  <p className="text-muted-foreground text-xs">
-                    Promedio de documentos recuperados
-                  </p>
-                </div>
-                <div className="ml-auto text-2xl font-bold">
-                  {ragQuality.avg_docs_per_query.toFixed(1)}
+              {/* Average docs per query */}
+              <div className="border-border mt-4 border-t pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-primary/10 text-primary rounded-lg p-2">
+                    <FileText size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Docs por consulta</p>
+                    <p className="text-muted-foreground text-xs">
+                      Promedio de documentos recuperados
+                    </p>
+                  </div>
+                  <div className="ml-auto text-2xl font-bold">
+                    {ragQuality.avg_docs_per_query.toFixed(1)}
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
