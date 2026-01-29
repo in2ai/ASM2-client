@@ -1,9 +1,11 @@
 from agent import graph
-from langgraph.graph import MessagesState
+
+# from langgraph.graph import MessagesState
+from state import State
 
 if __name__ == "__main__":
     config = {"configurable": {"thread_id": "1"}}
-    query = MessagesState(messages=[("human", "Hello my friend")])  # , perform the test
+    query = State({"role": "human", "content": "Hello my friend"})  # , perform the test
 
     response = graph.invoke({"messages": query}, config)
 
