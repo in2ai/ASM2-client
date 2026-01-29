@@ -1,5 +1,9 @@
 import os
+<<<<<<< HEAD
 from psycopg2.pool import ThreadedConnectionPool
+=======
+import psycopg2
+>>>>>>> 178d346 (backend restructuring)
 
 # Environment variables from docker-compose
 DB_HOST = os.getenv("QUESTDB_HOST", "questdb")
@@ -9,6 +13,7 @@ DB_PASSWORD = os.getenv("QUESTDB_PASSWORD", "quest")
 DB_NAME = os.getenv("QUESTDB_DB", "qdb")
 
 # Connection and query management
+<<<<<<< HEAD
 def get_questdb_pool():
     return ThreadedConnectionPool(
         minconn=1,
@@ -25,6 +30,27 @@ def get_questdb_pool():
 def execute_query(pool: ThreadedConnectionPool, query, params=None):
     conn = pool.getconn()
 
+=======
+def get_connection():
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            dbname=DB_NAME,
+            connect_timeout=5
+        )
+
+        return conn
+    
+    except psycopg2.OperationalError as e:
+        print(f"[ERROR] Could not connect to QuestDB: {e}")
+        raise
+
+def execute_query(query, params=None):
+    conn = get_connection()
+>>>>>>> 178d346 (backend restructuring)
     try:
         with conn:
             with conn.cursor() as cur:
@@ -34,4 +60,8 @@ def execute_query(pool: ThreadedConnectionPool, query, params=None):
                     return cur.fetchall()
                 
     finally:
+<<<<<<< HEAD
         pool.putconn(conn)
+=======
+        conn.close()
+>>>>>>> 178d346 (backend restructuring)

@@ -118,7 +118,10 @@ class VDBFile:
     def __init__(self, metadata):
         self.metadata = metadata
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 178d346 (backend restructuring)
     def get_text(self) -> str: ...
 
 
@@ -127,7 +130,10 @@ class GoogleDriveFile(VDBFile):
         super().__init__(metadata)
         self.service = service
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 178d346 (backend restructuring)
     def get_text(self) -> str:
         file_id = self.metadata["id"]
         mime_type = self.metadata["mimeType"]
@@ -205,7 +211,10 @@ class DropboxFile(VDBFile):
         super().__init__(metadata)
         self.service = service
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 178d346 (backend restructuring)
     def get_text(self) -> str:
         file_id = self.metadata["id"]
         path_lower = self.metadata["path_lower"]
@@ -267,7 +276,10 @@ class OnedriveFile(VDBFile):
         super().__init__(metadata)
         self.token = token
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 178d346 (backend restructuring)
     def get_text(self) -> str:
         item_id = self.metadata["id"]
         mime = self.metadata.get("mimeType", "").lower()

@@ -1,8 +1,15 @@
+<<<<<<< HEAD
 from contextlib import contextmanager
 import time
 
 from googleapiclient.errors import HttpError
 
+=======
+import time
+
+from googleapiclient.errors import HttpError
+import numpy as np
+>>>>>>> 178d346 (backend restructuring)
 
 def safe_execute(request, retries=6, backoff=1.7):
     for i in range(retries):
@@ -13,6 +20,7 @@ def safe_execute(request, retries=6, backoff=1.7):
                 time.sleep(backoff ** i)
                 continue
             raise
+<<<<<<< HEAD
     raise RuntimeError("Google API: demasiados fallos consecutivos (5xx).")
 
 
@@ -54,3 +62,6 @@ def periodic_task(job_func, interval: int):
                 job_func()
                 
             time.sleep(interval)
+=======
+    raise RuntimeError("Google API: demasiados fallos consecutivos (5xx).")
+>>>>>>> 178d346 (backend restructuring)
