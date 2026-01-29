@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from state import State
 
 # Here we import our tools/plug-ins for the agent system
 from tools.test_tool import test_tool
@@ -34,7 +35,7 @@ sys_msg = SystemMessage(content="You are a helpful chatbot assistant.")
 
 
 # Node
-def assistant(state: MessagesState):
+def assistant(state: State):
     return {"messages": [llm_with_tools.invoke([sys_msg] + state["messages"])]}
 
 
@@ -43,7 +44,7 @@ def assistant(state: MessagesState):
 
 
 # 4. Build graph
-builder = StateGraph(MessagesState)
+builder = StateGraph(State)
 
 builder.add_node("assistant", assistant)
 builder.add_node("tools", ToolNode(tool_list))
