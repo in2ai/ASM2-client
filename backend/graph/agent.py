@@ -9,7 +9,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 # Here we import our tools/plug-ins for the agent system
-from tools import test_tool, vectordb_search
+from tools.test_tool import test_tool
 
 # 1. LLM definition. OpenAI for now
 # OPENAI_API_KEY defined in .env -> Load .env from project root
