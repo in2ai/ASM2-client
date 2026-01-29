@@ -22,26 +22,43 @@ llm = ChatOpenAI(
 # 2. Add tools (hybrid search, specific uses)
 
 tool_list = [test_tool]
-llm_with_tools = llm.bind_tools(tool_list)
+llm_with_tools = llm.bind_tools(tool_list, parallel_tool_calls=False)
 
 
+# TODO: substitute with actual state class State2
 # 3. Single node definition; chatbot with tools.
-def tool_calling_llm(state: MessagesState):
-    return {"messages": [llm_with_tools.invoke(state["messages"])]}
+# # System message
+sys_msg = SystemMessage(
+    content="You are a helpful assistant tasked with performing arithmetic on a set of inputs."
+)
+
+
+# Node
+def assistant(state: MessagesState):
+    return {"messages": [llm_with_tools.invoke([sys_msg] + state["messages"])]}
+
+
+# def tool_calling_llm(state: MessagesState):
+#     return {"messages": [llm_with_tools.invoke(state["messages"])]}
 
 
 # 4. Build graph
 builder = StateGraph(MessagesState)
-builder.add_node("tool_calling_llm", tool_calling_llm)
+
+builder.add_node("assistant", assistant)
 builder.add_node("tools", ToolNode(tool_list))
-builder.add_edge(START, "tool_calling_llm")
+
+# Here, in the final product, a metric node should come before the LLM call
+builder.add_edge(START, "assistant")
 builder.add_conditional_edges(
-    "tool_calling_llm",
+    "assistant",
     # If the latest message (result) from assistant is a tool call -> tools_condition routes to tools
     # If the latest message (result) from assistant is a not a tool call -> tools_condition routes to END
     tools_condition,
 )
-builder.add_edge("tools", END)
-graph = builder.compile()
+builder.add_edge("tools", "assistant")
+react_graph = builder.compile()
+
 
 # Graph is ready to be invoked! graph.invoke
+# display(Image(react_graph.get_graph(xray=True).draw_mermaid_png()))
