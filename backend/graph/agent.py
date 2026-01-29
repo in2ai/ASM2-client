@@ -4,7 +4,9 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
@@ -28,9 +30,7 @@ llm_with_tools = llm.bind_tools(tool_list, parallel_tool_calls=False)
 # TODO: substitute with actual state class State2
 # 3. Single node definition; chatbot with tools.
 # # System message
-sys_msg = SystemMessage(
-    content="You are a helpful assistant tasked with performing arithmetic on a set of inputs."
-)
+sys_msg = SystemMessage(content="You are a helpful chatbot assistant.")
 
 
 # Node
@@ -57,7 +57,9 @@ builder.add_conditional_edges(
     tools_condition,
 )
 builder.add_edge("tools", "assistant")
-react_graph = builder.compile()
+
+memory = MemorySaver()
+graph = builder.compile(checkpointer=memory)
 
 
 # Graph is ready to be invoked! graph.invoke
