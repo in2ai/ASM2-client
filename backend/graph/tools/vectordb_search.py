@@ -2,6 +2,8 @@ from langchain.tools import tool
 
 # from src.
 
+# TODO: adapt hybrid search to the message state
+
 
 @tool
 def vectordb_search(query: str) -> str:
