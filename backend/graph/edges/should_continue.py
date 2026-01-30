@@ -1,12 +1,17 @@
 from langgraph.graph import END
+from state import State
 from typing_extensions import Literal
 
 
-# Determine whether to end or summarize the conversation
-def should_continue(state: State) -> Literal["summarize_conversation", END]:
+def should_continue(state: State) -> Literal["tools", "summarize_conversation", END]:
     """Return the next node to execute."""
 
     messages = state["messages"]
+    last_message = messages[-1]
+
+    # If the assistant made tool calls, route to tools first
+    if last_message.tool_calls:
+        return "tools"
 
     # If there are more than six messages, then we summarize the conversation
     if len(messages) > 6:

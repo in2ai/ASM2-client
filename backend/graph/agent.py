@@ -5,10 +5,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import ToolNode
 
 # 1. LLM definition. OpenAI for now
 from model import llm
@@ -29,31 +28,12 @@ llm_with_tools = llm.bind_tools(tool_list, parallel_tool_calls=False)
 sys_msg = SystemMessage(content="You are a helpful chatbot assistant.")
 
 
-# Node
-from langchain_core.messages import trim_messages
-
-
-def assistant(state: State):
-    messages = trim_messages(
-        state["messages"],
-        max_tokens=100,
-        strategy="last",
-        token_counter=ChatOpenAI(model="gpt-4o"),
-        allow_partial=False,
-    )
-    return {"messages": [llm_with_tools.invoke([sys_msg] + messages)]}
-
-
-# def tool_calling_llm(state: MessagesState):
-#     return {"messages": [llm_with_tools.invoke(state["messages"])]}
-
-
 # 4. Build graph
 # # Define a new graph
 
 from edges.should_continue import should_continue
-from edges.summarize_conversation import summarize_conversation
-from nodes.assistant import assistant
+from nodes.assistant import call_model as assistant
+from nodes.summarize_conversation import summarize_conversation
 
 builder = StateGraph(State)
 
@@ -63,12 +43,6 @@ builder.add_node(summarize_conversation)
 
 builder.add_edge(START, "assistant")
 builder.add_conditional_edges("assistant", should_continue)
-builder.add_conditional_edges(
-    "assistant",
-    # If the latest message (result) from assistant is a tool call -> tools_condition routes to tools
-    # If the latest message (result) from assistant is a not a tool call -> tools_condition routes to END
-    tools_condition,
-)
 builder.add_edge("tools", "assistant")
 
 memory = MemorySaver()
@@ -76,6 +50,4 @@ graph = builder.compile(checkpointer=memory)
 
 
 # Graph is ready to be invoked! graph.invoke
-from IPython.display import Image, display
-
-display(Image(graph.get_graph(xray=True).draw_mermaid_png()))
+graph.get_graph().print_ascii()
