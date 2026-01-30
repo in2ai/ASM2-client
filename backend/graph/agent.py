@@ -9,18 +9,13 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+
+# 1. LLM definition. OpenAI for now
+from model import llm
 from state import State
 
 # Here we import our tools/plug-ins for the agent system
 from tools.test_tool import test_tool
-
-# 1. LLM definition. OpenAI for now
-# OPENAI_API_KEY defined in .env -> Load .env from project root
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-
-llm = ChatOpenAI(
-    model="gpt-4o-mini", temperature=0, api_key=os.getenv("OPENAI_API_KEY")
-)
 
 # 2. Add tools (hybrid search, specific uses)
 
@@ -38,7 +33,6 @@ sys_msg = SystemMessage(content="You are a helpful chatbot assistant.")
 from langchain_core.messages import trim_messages
 
 
-# Node
 def assistant(state: State):
     messages = trim_messages(
         state["messages"],
