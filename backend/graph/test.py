@@ -1,9 +1,17 @@
+from pathlib import Path
+
 from agent import graph
 from langchain_core.messages import HumanMessage
 
 config = {"configurable": {"thread_id": "1"}}
 
 if __name__ == "__main__":
+    # Save graph visualization to file
+    png_bytes = graph.get_graph().draw_mermaid_png()
+    graph_path = Path(__file__).parent / "graph_diagram.png"
+    graph_path.write_bytes(png_bytes)
+    print(f"Graph diagram saved to {graph_path}\n")
+
     print("Graph pipeline test\n")
 
     # 1. Basic conversation
