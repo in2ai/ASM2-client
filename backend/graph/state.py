@@ -1,19 +1,19 @@
-from langgraph.graph import MessagesState
+from typing import Annotated, Literal
 
-# from pydantic import BaseModel, field_validator, ValidationError
-
-# class PydanticState(BaseModel):
-#    name: str
-#    mood: str # "happy" or "sad"
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
+from pydantic import BaseModel, field_validator
 
 
-# TODO: think about needed information at each point of the graph
-# TODO: migration to PyDantic?
-
-
-class State(MessagesState):
-    # Add any keys needed beyond messages, which is pre-built
+class State(BaseModel):
     user_id: str
-    detected_lang: str
-    summary: str
-    pass
+    detected_lang: Literal["es", "en", "gl"]
+    summary: str = ""
+    messages: Annotated[list[AnyMessage], add_messages]
+
+    @field_validator("user_id")
+    @classmethod
+    def user_id_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("user_id must not be empty")
+        return v

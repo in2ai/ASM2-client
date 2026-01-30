@@ -50,4 +50,4 @@ graph = builder.compile(checkpointer=memory)
 
 
 # Graph is ready to be invoked! graph.invoke
-graph.get_graph().print_ascii()
+# graph.get_graph().print_ascii()

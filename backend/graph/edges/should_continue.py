@@ -6,7 +6,7 @@ from typing_extensions import Literal
 def should_continue(state: State) -> Literal["tools", "summarize_conversation", END]:
     """Return the next node to execute."""
 
-    messages = state["messages"]
+    messages = state.messages
     last_message = messages[-1]
 
     # If the assistant made tool calls, route to tools first
