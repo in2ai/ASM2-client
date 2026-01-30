@@ -35,8 +35,19 @@ sys_msg = SystemMessage(content="You are a helpful chatbot assistant.")
 
 
 # Node
+from langchain_core.messages import trim_messages
+
+
+# Node
 def assistant(state: State):
-    return {"messages": [llm_with_tools.invoke([sys_msg] + state["messages"])]}
+    messages = trim_messages(
+        state["messages"],
+        max_tokens=100,
+        strategy="last",
+        token_counter=ChatOpenAI(model="gpt-4o"),
+        allow_partial=False,
+    )
+    return {"messages": [llm_with_tools.invoke([sys_msg] + messages)]}
 
 
 # def tool_calling_llm(state: MessagesState):
