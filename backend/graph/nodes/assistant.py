@@ -2,19 +2,7 @@ from langchain_core.messages import SystemMessage
 from model import llm_with_tools
 from state import State
 
-# from langchain_core.messages import trim_messages
 
-
-# def assistant(state: State):
-#     messages = trim_messages(
-#         state["messages"],
-#         max_tokens=100,
-#         strategy="last",
-#         token_counter=ChatOpenAI(model="gpt-4o"),
-#         allow_partial=False,
-#     )
-#     return {"messages": [llm_with_tools.invoke([sys_msg] + messages)]}
-#
 # # Define the logic to call the model
 def call_model(state: State):
     # Get summary if it exists
