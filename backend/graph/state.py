@@ -13,7 +13,7 @@ from langgraph.graph import MessagesState
 
 class State(MessagesState):
     # Add any keys needed beyond messages, which is pre-built
-    user: str
-    principals: str
+    user_id: str
     detected_lang: str
+    summary: str
     pass
