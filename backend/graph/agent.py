@@ -49,13 +49,20 @@ def assistant(state: State):
 
 
 # 4. Build graph
+# # Define a new graph
+
+from edges.should_continue import should_continue
+from edges.summarize_conversation import summarize_conversation
+from nodes.assistant import assistant
+
 builder = StateGraph(State)
 
 builder.add_node("assistant", assistant)
 builder.add_node("tools", ToolNode(tool_list))
+builder.add_node(summarize_conversation)
 
-# Here, in the final product, a metric node should come before the LLM call
 builder.add_edge(START, "assistant")
+builder.add_conditional_edges("assistant", should_continue)
 builder.add_conditional_edges(
     "assistant",
     # If the latest message (result) from assistant is a tool call -> tools_condition routes to tools
@@ -69,4 +76,6 @@ graph = builder.compile(checkpointer=memory)
 
 
 # Graph is ready to be invoked! graph.invoke
-# display(Image(react_graph.get_graph(xray=True).draw_mermaid_png()))
+from IPython.display import Image, display
+
+display(Image(graph.get_graph(xray=True).draw_mermaid_png()))
