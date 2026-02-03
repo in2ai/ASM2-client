@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -7,7 +6,7 @@ from tools.test_tool import test_tool
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
-# ChatOpenAI read api_key from .env automatically
+# ChatOpenAI reads api_key from .env automatically
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 tool_list = [test_tool]
