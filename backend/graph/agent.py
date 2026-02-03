@@ -1,13 +1,12 @@
 import os
 from pathlib import Path
 
+from checkpointer import checkpointer
 from edges.should_continue import should_continue
 from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
-
-# 1. LLM definition. OpenAI for now
 from model import llm
 from nodes.assistant import call_model as assistant
 from nodes.summarize_conversation import summarize_conversation
@@ -21,15 +20,25 @@ from tools.test_tool import test_tool
 tool_list = [test_tool]
 llm_with_tools = llm.bind_tools(tool_list, parallel_tool_calls=False)
 
-
-# TODO: substitute with actual state class State2
-# 3. Single node definition; chatbot with tools.
-# # System message
-sys_msg = SystemMessage(content="You are a helpful chatbot assistant.")
-
+# 3.
+# # sys_msg = SystemMessage(
+#     content=(
+#         "You are a RAG conversational assistant. Respond ONLY with the provided CONTEXT. "
+#         "Respond EXCLUSIVELY in the language of the last message of the user, "
+#         f"which has been detected to have the following language code: {lang_code}. "
+#         "Do not improvise if you don't have information in the context. "
+#         'In your response, do not use the word "CONTEXT", instead use "the sources". '
+#         "Write in natural, clear, and direct language. "
+#         "IMPORTANT: In the 'sources' field, include ONLY the sources you actually used to respond. "
+#         "If the question is a greeting, thanks, or does not require information from the sources, leave 'sources' empty. "
+#         "Use the conversation history to follow the thread."
+#     )
+# )
+sys_msg = SystemMessage(
+    content=("You are a useful AI assistant. Be useful and polite.")
+)
 
 # 4. Build graph
-# # Define a new graph
 
 builder = StateGraph(State)
 
@@ -41,8 +50,8 @@ builder.add_edge(START, "assistant")
 builder.add_conditional_edges("assistant", should_continue)
 builder.add_edge("tools", "assistant")
 
-memory = MemorySaver()
-graph = builder.compile(checkpointer=memory)
+# checkpointer = MemorySaver()
+graph = builder.compile(checkpointer=checkpointer)
 
 
 # Graph is ready to be invoked! graph.invoke
