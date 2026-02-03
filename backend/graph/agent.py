@@ -1,9 +1,7 @@
-# TODO: build graph
-
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from edges.should_continue import should_continue
 from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -11,6 +9,8 @@ from langgraph.prebuilt import ToolNode
 
 # 1. LLM definition. OpenAI for now
 from model import llm
+from nodes.assistant import call_model as assistant
+from nodes.summarize_conversation import summarize_conversation
 from state import State
 
 # Here we import our tools/plug-ins for the agent system
@@ -30,10 +30,6 @@ sys_msg = SystemMessage(content="You are a helpful chatbot assistant.")
 
 # 4. Build graph
 # # Define a new graph
-
-from edges.should_continue import should_continue
-from nodes.assistant import call_model as assistant
-from nodes.summarize_conversation import summarize_conversation
 
 builder = StateGraph(State)
 
