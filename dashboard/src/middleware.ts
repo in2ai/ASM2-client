@@ -5,9 +5,9 @@ import { logtoConfig } from "@/lib/logto";
 
 const publicPaths = [
   "/sign-in",
+  "/callback",
   "/api/logto/sign-in",
   "/api/logto/sign-out",
-  "/api/logto/callback",
   "/api/health",
 ];
 
