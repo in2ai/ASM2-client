@@ -117,20 +117,20 @@ Respond ONLY with the rewritten query, without explanations:"""
         return query
 
 
-def prepare_rag_context(query, vectordb, reranker, sources: Dict[str, DataSource], k=6, chunk_chars=1600):
+def prepare_rag_context(query, pool, vectordb, reranker, sources: Dict[str, DataSource], k=6, chunk_chars=1600):
     """
     Prepares the RAG context: retrieves documents, filters by permissions, and reorders them.
     Returns (messages, available_sources, allowed_chunks) or None if there are no results.
     """
     # Register that the user is still active
-    register_user_activity()
+    register_user_activity(pool)
 
     # Detect language
     lang_code = detect_language(query)
 
     # Register search terms
     search_terms = extract_search_terms(query, lang_code)
-    register_words(search_terms)
+    register_words(pool, search_terms)
 
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
@@ -141,9 +141,9 @@ def prepare_rag_context(query, vectordb, reranker, sources: Dict[str, DataSource
     expanded_query = rewrite_query_with_context(query, history)
 
     # Perform hybrid search in order to get relevant documents
-    insert_metric(Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(expanded_query))
+    insert_metric(pool, Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(expanded_query))
 
-    with TimedMetric(Metrics.DOC_RESPONSE_TIME.value):
+    with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
         search_results = hybrid_search(vectordb, expanded_query, k, 25)
 
         for f in search_results:
@@ -170,9 +170,9 @@ def prepare_rag_context(query, vectordb, reranker, sources: Dict[str, DataSource
     topic_indices = {t for d in allowed_chunks for t, _ in d.metadata.get("topics", {}).items()}
     topics_for_db = resolve_topic_names(topic_indices, "es", QDRANT_PATH)
     
-    register_topics(topics_for_db)
+    register_topics(pool, topics_for_db)
 
-    insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
+    insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
     # Prepare context
     def get_doc_info(d):
@@ -199,7 +199,7 @@ def prepare_rag_context(query, vectordb, reranker, sources: Dict[str, DataSource
 
     contexto = "\n\n".join(cite(d) for d in allowed_chunks)
 
-    insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
+    insert_metric(pool, Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
     # Prepare system prompt for the LLM
     system = (
@@ -242,6 +242,6 @@ QUESTION:
 
     messages.append(HumanMessage(content=user_message))
 
-    insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user_message))
+    insert_metric(pool, Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user_message))
 
     return messages, available_sources, allowed_chunks, lang_code

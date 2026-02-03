@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
+from src.metrics.connection import get_questdb_pool
 from src.connectors.store import get_vectordb
 from src.utils.rag import *
 
@@ -9,6 +10,7 @@ from src.utils.rag import *
 async def lifespan(app: FastAPI):
     app.state.vectorstore = get_vectordb()
     app.state.reranker = get_reranker()
+    app.state.questdb_pool = get_questdb_pool()
     yield
 
 
@@ -18,15 +20,18 @@ app = FastAPI(title="ASM2", lifespan=lifespan)
 @app.get("/chat")
 async def chat(query: str, chat_id: str):
     sources = []        # TODO: get authenticated sources from QuestDB
-    vectorstore = []    # TODO: get global VDB
+    
+    vectorstore = app.state.vectorstore
+    reranker = app.state.reranker
+    questdb_pool = app.state.questdb_pool
 
-    messages, _, _, lang_code = prepare_rag_context(query, app.state.vectorstore, app.state.reranker, sources)
+    messages, _, _, lang_code = prepare_rag_context(query, questdb_pool, vectorstore, reranker, sources)
 
     # Prepare LLM with structured output
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
     structured_llm = llm.with_structured_output(RAGResponse)
 
-    with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
+    with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
         response: RAGResponse = structured_llm.invoke(messages)
 
     full_response = response.answer
@@ -39,7 +44,7 @@ async def chat(query: str, chat_id: str):
         }
         full_response = fallback_messages.get(lang_code, fallback_messages["es"])
 
-    insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, len(full_response.split()))
+    insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_OUT.value, len(full_response.split()))
 
     # Add only the sources that the LLM selected
     if response.sources:

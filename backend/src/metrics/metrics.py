@@ -1,6 +1,8 @@
 import time
 from enum import Enum
 
+from psycopg2.pool import ThreadedConnectionPool
+
 from src.config.auth import USER_ID, USER_ROLE
 from src.metrics.connection import execute_query
 
@@ -27,16 +29,16 @@ class Metrics(Enum):
 # Metric storage
 # ---------------------------------
 
-def insert_metric(tag: str, value: float):
+def insert_metric(pool: ThreadedConnectionPool, tag: str, value: float):
     query = """
     INSERT INTO metrics (ts, user_id, user_role, tag, value)
     VALUES (NOW(), %s, %s, %s, %s)
     """
 
-    execute_query(query, (USER_ID, USER_ROLE, tag, value))
+    execute_query(pool, query, (USER_ID, USER_ROLE, tag, value))
 
 
-def register_words(words: set[str]):
+def register_words(pool: ThreadedConnectionPool, words: set[str]):
     if not words:
         return
 
@@ -54,10 +56,10 @@ def register_words(words: set[str]):
     for w in words:
         params.extend([USER_ID, USER_ROLE, w])
 
-    execute_query(query, tuple(params))
+    execute_query(pool, query, tuple(params))
 
 
-def register_topics(topics: set[str]):
+def register_topics(pool: ThreadedConnectionPool, topics: set[str]):
     if not topics:
         return
 
@@ -75,25 +77,25 @@ def register_topics(topics: set[str]):
     for t in topics:
         params.extend([USER_ID, USER_ROLE, t])
 
-    execute_query(query, tuple(params))
+    execute_query(pool, query, tuple(params))
 
 
-def register_user_activity():
+def register_user_activity(pool: ThreadedConnectionPool):
     query = """
     INSERT INTO user_activity (ts, user_id, user_role)
     VALUES (NOW(), %s, %s)
     """
 
-    execute_query(query, (USER_ID, USER_ROLE))
+    execute_query(pool, query, (USER_ID, USER_ROLE))
 
 
-def log_request(endpoint: str, method: str, status: int, latency: float):
+def log_request(pool: ThreadedConnectionPool, endpoint: str, method: str, status: int, latency: float):
     query = """
     INSERT INTO requests (ts, user_id, user_role, endpoint, method, status, latency)
     VALUES (NOW(), %s, %s, %s, %s, %s, %s)
     """
 
-    execute_query(query, (USER_ID, USER_ROLE, endpoint, method, status, latency))
+    execute_query(pool, query, (USER_ID, USER_ROLE, endpoint, method, status, latency))
 
 # ---------------------------------
 # Helpers
@@ -117,8 +119,9 @@ class TimedMetric:
     Parameters:
         metric (str): The name of the metric to record. Use the `Metrics` enum.
     """
-    def __init__(self, metric):
+    def __init__(self, pool: ThreadedConnectionPool, metric):
         self.metric = metric
+        self.pool = pool
 
     def __enter__(self):
         self.start = time.perf_counter()
@@ -128,6 +131,6 @@ class TimedMetric:
         # Only insert the metric if no exception occurred
         if exception_type is None:
             elapsed = time.perf_counter() - self.start
-            insert_metric(self.metric, elapsed)
+            insert_metric(self.pool, self.metric, elapsed)
 
         return False
