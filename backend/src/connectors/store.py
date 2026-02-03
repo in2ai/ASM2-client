@@ -1,4 +1,5 @@
 import os
+from typing import List
 import uuid
 
 from langchain_community.vectorstores import Qdrant
@@ -58,6 +59,27 @@ def iterate_qdrant_docs(
             break
 
 
+def get_vectordb():
+    client = QdrantClient(
+        url=f"http://{QDRANT_HOST}:6333",
+        grpc_port=6334,
+        prefer_grpc=True,
+    )
+
+    vectorstore = Qdrant(client, QDRANT_COL, EMBEDDINGS)
+
+    return vectorstore
+
+
+def build_vectordb_from_sources(sources: List[DataSource]):
+    vectordb = None
+
+    for source in sources:
+        vectordb = build_vectorstore(source)
+
+    return vectordb
+
+
 def build_vectorstore(source: DataSource, batch_size=200):
     # Get files
     files = source.list_files()
@@ -66,13 +88,7 @@ def build_vectorstore(source: DataSource, batch_size=200):
     manifest = VDBManifest(QDRANT_PATH)
 
     # Check if the part for this source is already constructed
-    client = QdrantClient(
-        url=f"http://{QDRANT_HOST}:6333",
-        grpc_port=6334,
-        prefer_grpc=True,
-    )
-
-    vectorstore = Qdrant(client, QDRANT_COL, EMBEDDINGS)
+    vectorstore = get_vectordb()
 
     if not vectorstore.client.collection_exists(QDRANT_COL):
         # Create collection
