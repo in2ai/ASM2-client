@@ -164,7 +164,7 @@ def prepare_rag_context(query, pool, vectordb, reranker, sources: Dict[str, Data
             allowed_chunks = rerank_documents(reranker, expanded_query, allowed_chunks, top_k=k)
 
     if not allowed_chunks:
-        return None
+        return RAGResponse('', []), None, None, lang_code
 
     # Register found chunk topics
     topic_indices = {t for d in allowed_chunks for t, _ in d.metadata.get("topics", {}).items()}

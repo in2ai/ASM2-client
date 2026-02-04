@@ -35,7 +35,9 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
+        app.state.questdb_pool.closeall()
 
+        
 app = FastAPI(title="ASM2", lifespan=lifespan)
 
 # ---------------------------------
