@@ -2,6 +2,7 @@ import { getLogtoContext } from "@logto/next/server-actions";
 import { logtoConfig } from "@/lib/logto";
 
 export interface LogtoUser {
+  sub: string;
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
@@ -45,7 +46,12 @@ export async function getUser(): Promise<LogtoUser | null> {
     }
   }
 
+  if (!userInfo.sub) {
+    throw new Error("Logto user subject (sub) is missing");
+  }
+
   return {
+    sub: userInfo.sub,
     firstName,
     lastName,
     email: userInfo.email ?? null,

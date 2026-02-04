@@ -54,7 +54,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
 
   // Create UserContext for authentication and tracking
   const userContext: UserContext = {
-    userId: user.email ?? "unknown",
+    userId: user.sub,
     email: user.email ?? "",
     firstName: user.firstName,
     lastName: user.lastName,
