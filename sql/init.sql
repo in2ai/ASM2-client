@@ -26,13 +26,3 @@ CREATE TABLE IF NOT EXISTS user_activity (
     user_id SYMBOL,       -- user identifier
     user_role SYMBOL
 ) TIMESTAMP(ts) PARTITION BY DAY;
-
-CREATE TABLE IF NOT EXISTS requests (
-    ts TIMESTAMP,
-    user_id SYMBOL,
-    user_role SYMBOL,
-    endpoint SYMBOL,
-    method SYMBOL,
-    status INT,
-    latency DOUBLE
-) TIMESTAMP(ts) PARTITION BY DAY;
