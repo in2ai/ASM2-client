@@ -57,6 +57,18 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        # All env vars needed at build time for Next.js prerendering
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+        LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+        LOGTO_APP_ID: ${LOGTO_APP_ID}
+        LOGTO_APP_SECRET: ${LOGTO_APP_SECRET}
+        LOGTO_COOKIE_SECRET: ${LOGTO_COOKIE_SECRET}
+        QUESTDB_HOST: ${QUESTDB_HOST}
+        QUESTDB_PORT: ${QUESTDB_PORT}
+        QUESTDB_USER: ${QUESTDB_USER}
+        QUESTDB_PASSWORD: ${QUESTDB_PASSWORD}
+        QUESTDB_DB: ${QUESTDB_DB}
     image: dashboard:latest
     container_name: dashboard
     # No depends_on: questdb - connecting to remote VPS instance
@@ -64,11 +76,4 @@ services:
       - "3001:3001"
     env_file:
       - .env
-    environment:
-      - NODE_ENV=production
-      - LOGTO_ENDPOINT=${LOGTO_ENDPOINT}
-      - LOGTO_APP_ID=${LOGTO_APP_ID}
-      - LOGTO_APP_SECRET=${LOGTO_APP_SECRET}
-      - LOGTO_COOKIE_SECRET=${LOGTO_COOKIE_SECRET}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
     restart: unless-stopped
