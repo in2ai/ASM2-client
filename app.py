@@ -310,7 +310,7 @@ def preparar_contexto_rag(query, vectordb, services, k=6, chunk_chars=1600):
 
     # Register search terms
     search_terms = extract_search_terms(query, lang_code)
-    register_words(search_terms)
+    register_words(search_terms, lang_code)
 
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
