@@ -129,15 +129,6 @@ export function AppLayout({ children, user }: AppLayoutProps) {
                 collapsed={!sidebarOpen}
               />
             </nav>
-
-            {sidebarOpen && (
-              <div className="bg-primary/5 mb-4 rounded-xl p-4">
-                <p className="text-muted-foreground text-[10px] font-bold tracking-widest uppercase">
-                  Version
-                </p>
-                <p className="mt-1 text-xs font-medium">v2.4.0-production</p>
-              </div>
-            )}
           </div>
         </aside>
 
