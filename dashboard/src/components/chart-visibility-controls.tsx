@@ -37,17 +37,18 @@ export function ChartVisibilityControls({
           { id: "hourlyActivityPattern" as const, label: "Patrón horario" },
         ];
       case "rag-quality":
-        return [{ id: "metricsByTag" as const, label: "Métricas por tipo" }];
+        return [
+          {
+            id: "metricsByTag" as const,
+            label: "Tendencia de tiempos de respuesta",
+          },
+          { id: "tokenUsage" as const, label: "Consumo de tokens" },
+          { id: "resourceConsumption" as const, label: "Salud del sistema" },
+        ];
       case "insights":
         return [
-          { id: "commonWords" as const, label: "Palabras más buscadas" },
-          { id: "topQueries" as const, label: "Temas más frecuentes" },
-          { id: "topWordsBarChart" as const, label: "Gráfico de palabras" },
-          { id: "topicsBarChart" as const, label: "Gráfico de temas" },
-          {
-            id: "thematicDistribution" as const,
-            label: "Distribución de roles",
-          },
+          { id: "topWordsBarChart" as const, label: "Palabras más buscadas" },
+          { id: "topicsBarChart" as const, label: "Temas más frecuentes" },
         ];
       default:
         return [];

@@ -79,6 +79,17 @@ function formatDateForQuery(date?: Date): string | undefined {
 }
 
 /**
+ * Formats end date for query by adding 1 day to include the full end day
+ * Since queries use ts < endDate, we need the day after to include all records from endDate
+ */
+function formatEndDateForQuery(date?: Date): string | undefined {
+  if (!date) return undefined;
+  const nextDay = new Date(date);
+  nextDay.setDate(nextDay.getDate() + 1);
+  return formatDateForQuery(nextDay);
+}
+
+/**
  * Builds query parameters from input (date range only, no user filtering)
  */
 function buildQueryParams(input: {
@@ -87,7 +98,7 @@ function buildQueryParams(input: {
 }): MetricsQueryParams {
   return {
     startDate: formatDateForQuery(input.startDate),
-    endDate: formatDateForQuery(input.endDate),
+    endDate: formatEndDateForQuery(input.endDate),
   };
 }
 

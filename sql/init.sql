@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS metrics (
 
 CREATE TABLE IF NOT EXISTS word_counts (
     ts TIMESTAMP,      -- timestamp of the count update
+    lang SYMBOL,
     user_id SYMBOL,
     user_role SYMBOL,
     word SYMBOL        -- the word being counted
@@ -24,14 +25,4 @@ CREATE TABLE IF NOT EXISTS user_activity (
     ts TIMESTAMP,        -- event timestamp
     user_id SYMBOL,       -- user identifier
     user_role SYMBOL
-) TIMESTAMP(ts) PARTITION BY DAY;
-
-CREATE TABLE IF NOT EXISTS requests (
-    ts TIMESTAMP,
-    user_id SYMBOL,
-    user_role SYMBOL,
-    endpoint SYMBOL,
-    method SYMBOL,
-    status INT,
-    latency DOUBLE
 ) TIMESTAMP(ts) PARTITION BY DAY;
