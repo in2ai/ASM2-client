@@ -69,7 +69,7 @@ def extract_usage_metrics():
 
 @app.get("/chat")
 async def chat(query: str, chat_id: str):
-    sources = []        # TODO: get authenticated sources from QuestDB
+    sources = [] # TODO: get authenticated sources from QuestDB
 
     vectorstore = app.state.vectorstore
     reranker = app.state.reranker
@@ -84,27 +84,18 @@ async def chat(query: str, chat_id: str):
     with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
         response: RAGResponse = structured_llm.invoke(messages)
 
-    full_response = response.answer
-
-    if not full_response.strip():
+    # Fallback response
+    if not response.answer.strip():
         fallback_messages = {
             "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
             "en": "I couldn't find relevant information about that topic in the available sources.",
             "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
         }
-        full_response = fallback_messages.get(lang_code, fallback_messages["es"])
 
-    insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_OUT.value, len(full_response.split()))
+        response.answer = fallback_messages.get(lang_code, fallback_messages["es"])
 
-    # Add only the sources that the LLM selected
-    if response.sources:
-        sources_html = "<br><br><b>Fuentes:</b><ul>"
-        for src in response.sources:
-            if src.link:
-                sources_html += f'<li><a href="{src.link}" target="_blank">{src.title}</a> ({src.source_type})</li>'
-            else:
-                sources_html += f"<li>{src.title} ({src.source_type})</li>"
-        sources_html += "</ul>"
-        full_response += sources_html
+    # TODO: collect usage metadata from the structured output instead
+    num_out_tokens = llm.get_num_tokens(response.answer)
+    insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_OUT.value, num_out_tokens)
 
-    return full_response
+    return response
