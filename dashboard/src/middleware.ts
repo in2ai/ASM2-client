@@ -3,6 +3,8 @@ import type { NextRequest } from "next/server";
 import { getLogtoContext } from "@logto/next/server-actions";
 import { logtoConfig } from "@/lib/logto";
 
+export const runtime = 'nodejs';
+
 const publicPaths = [
   "/sign-in",
   "/callback",
