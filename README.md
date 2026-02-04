@@ -12,7 +12,7 @@ El proyecto se compone ahora de varios módulos integrados:
 
 1. **Cliente Python (Streamlit)**: Interfaz de usuario para la interacción directa con modelos y gestión de documentos.
 2. **Base de Datos (QuestDB)**: Base de datos de series temporales para almacenar métricas de alto rendimiento.
-3. **Dashboard (Next.js)**: Nueva interfaz de administración y visualización de analíticas avanzada, con autenticación gestionada por WorkOS.
+3. **Dashboard (Next.js)**: Nueva interfaz de administración y visualización de analíticas avanzada, con autenticación gestionada por Logto.
 
 Este sistema permite:
 
@@ -70,15 +70,15 @@ cp .env.example .env
 | `QUESTDB_PASSWORD` | Contraseña de base de datos                          | `quest`   |
 | `QUESTDB_DB`       | Nombre de la base de datos                           | `qdb`     |
 
-#### WorkOS (Autenticación Dashboard)
+#### Logto (Autenticación Dashboard)
 
-| Variable                          | Descripción                                                         |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `WORKOS_API_KEY`                  | API Key de WorkOS (ej. `sk_test_...` o `sk_live_...`)               |
-| `WORKOS_CLIENT_ID`                | Client ID de la aplicación (ej. `client_...`)                       |
-| `WORKOS_COOKIE_PASSWORD`          | Contraseña segura para encriptación de cookies (mín. 32 caracteres) |
-| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | URI de redirección (ej. `http://localhost:3001/api/auth/callback`)  |
-| `REDIRECT_URI`                    | URI de redirección para Streamlit (ej. `http://localhost:8501/`)    |
+| Variable              | Descripción                                                         |
+| --------------------- | ------------------------------------------------------------------- |
+| `LOGTO_APP_ID`        | ID de aplicación de Logto                                           |
+| `LOGTO_APP_SECRET`    | Secret de aplicación de Logto                                       |
+| `LOGTO_ENDPOINT`      | Endpoint de Logto (ej. `http://localhost:3002`)                     |
+| `LOGTO_COOKIE_SECRET` | Contraseña segura para encriptación de cookies (mín. 32 caracteres) |
+| `REDIRECT_URI`        | URI de redirección para Streamlit (ej. `http://localhost:8501/`)    |
 
 #### Aplicación
 
