@@ -83,7 +83,6 @@ def get_doc_by_id(vdb: Qdrant, id):
 
 def extract_initial_topics(vdb: Qdrant, vdb_path: str):
     if not CALCULATE_TOPICS:
-        print("La detección de temas está desactivada")
         return
 
     # Iteration variables
@@ -195,8 +194,6 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
                 name = f"Topic {topic_index}"
             topic_mapping[lang][str(topic_index)] = name
 
-        print(f'Topic: {topic_mapping.get("es", {}).get(str(topic_index))}')
-
         for m in members:
             m_id = ids[m]
             topics.setdefault(m_id, [])
@@ -252,7 +249,6 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
 
 def assign_topics(vdb: Qdrant, ids):
     if not CALCULATE_TOPICS:
-        print("La detección de temas está desactivada")
         return
 
     min_cosine = 0.3
