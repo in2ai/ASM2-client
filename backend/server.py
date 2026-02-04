@@ -2,11 +2,13 @@ import asyncio
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from langchain_openai import ChatOpenAI
 
 from src.utils.helpers import periodic_task
 from src.metrics.connection import get_questdb_pool
 from src.connectors.store import get_vectordb
-from src.utils.rag import *
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric
+from src.utils.rag import RAGResponse, prepare_rag_context, get_reranker
 
 # ---------------------------------
 # App configuration
