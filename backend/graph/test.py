@@ -97,7 +97,9 @@ if __name__ == "__main__":
     if summary:
         print("  [OK] Summarization triggered successfully")
     else:
-        print("  [FAIL] WARNING: Summary is empty -- summarization may not have triggered")
+        print(
+            "  [FAIL] WARNING: Summary is empty -- summarization may not have triggered"
+        )
 
     # Verify the assistant can recall earlier topics via the summary
     print('  User: "What topics have we discussed so far?"')

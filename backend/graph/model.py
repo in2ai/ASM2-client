@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from dotenv.main import load_dotenv
+from langchain_openai.chat_models.base import ChatOpenAI
 from tools.test_tool import test_tool
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
