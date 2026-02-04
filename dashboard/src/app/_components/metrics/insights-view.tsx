@@ -44,10 +44,7 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
   const topicsBarData = useMemo(
     () =>
       topTopics.map((item) => ({
-        topic:
-          item.topic.length > 20
-            ? item.topic.substring(0, 20) + "..."
-            : item.topic,
+        topic: item.topic,
         fullTopic: item.topic,
         count: item.count,
       })),
@@ -157,12 +154,12 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
                   config={{
                     count: { label: "Menciones", color: "oklch(0.7 0.2 330)" },
                   }}
-                  className="h-[300px] w-full"
+                  className="h-[400px] w-full"
                 >
                   <BarChart
                     data={topicsBarData}
                     layout="vertical"
-                    margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
+                    margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
                   >
                     <CartesianGrid
                       horizontal={false}
@@ -181,13 +178,37 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
                       dataKey="topic"
                       tickLine={false}
                       axisLine={false}
-                      width={100}
-                      style={{ fontSize: 10, fontWeight: 600 }}
+                      width={180}
+                      style={{ fontSize: 11 }}
+                      tick={(props: {
+                        x: number;
+                        y: number;
+                        payload: { value: string };
+                      }) => (
+                        <text
+                          x={props.x}
+                          y={props.y}
+                          dy={4}
+                          textAnchor="end"
+                          fill="currentColor"
+                          style={{ fontSize: 11 }}
+                        >
+                          <title>{props.payload.value}</title>
+                          {props.payload.value.length > 28
+                            ? props.payload.value.substring(0, 28) + "..."
+                            : props.payload.value}
+                        </text>
+                      )}
                     />
                     <ChartTooltip
                       content={
                         <ChartTooltipContent
-                          labelKey="fullTopic"
+                          labelFormatter={(_, payload) => {
+                            const data = payload?.[0]?.payload as
+                              | { fullTopic?: string }
+                              | undefined;
+                            return data?.fullTopic ?? "";
+                          }}
                           hideIndicator
                           className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                         />

@@ -43,7 +43,8 @@ from src.connectors.onedrive import (
     onedrive_can_read,
     onedrive_device_login,
 )
-from src.connectors.store import EMBEDDINGS, create_hybrid_retriever
+from src.connectors.search import hybrid_search
+from src.connectors.store import EMBEDDINGS, QDRANT_PATH, extract_topics
 
 # Metrics
 from src.metrics.metrics import (
@@ -56,7 +57,11 @@ from src.metrics.metrics import (
 )
 
 # Utils
-from src.utils.nlp import extract_search_terms
+from src.utils.nlp import detect_language, extract_search_terms, init_nlp
+from src.utils.topic import resolve_topic_names
+
+# Inicializar recursos NLP al arrancar la app
+init_nlp()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -210,24 +215,24 @@ def rewrite_query_with_context(query: str, history: list) -> str:
     if not history or len(history) < 2:
         return query
 
-    # Coger los últimos 4 mensajes como contexto
+    # Get the last 4 messages as context
     recent = history[-4:]
     history_text = "\n".join(
-        f"{'Usuario' if m['role'] == 'user' else 'Asistente'}: {m['content'][:300]}"
+        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content'][:300]}"
         for m in recent
     )
 
     rewriter_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    prompt = f"""Dado este historial de conversación:
+    prompt = f"""Given this conversation history:
 {history_text}
 
-Tu tarea: Si la siguiente consulta contiene pronombres o referencias ambiguas (como "eso", "ese documento", "lo mismo", "más sobre eso"), reescríbela para que sea autocontenida.
-Si la consulta ya es clara y autocontenida, devuélvela tal cual.
+Your task: If the following query contains ambiguous pronouns or references (like "it", "that document", "the same", "more about that"), rewrite it to be self-contained.
+If the query is already clear and self-contained, return it as is.
 
 
-Consulta original: {query}
+Original query: {query}
 
-Responde SOLO con la consulta reescrita, sin explicaciones:"""
+Respond ONLY with the rewritten query, without explanations:"""
 
     try:
         rewritten = rewriter_llm.invoke([HumanMessage(content=prompt)]).content.strip()
@@ -291,7 +296,7 @@ def reindex_all_sources():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=1600):
+def preparar_contexto_rag(query, vectordb, services, k=6, chunk_chars=1600):
     """
     Prepara el contexto RAG: busca documentos, filtra por permisos, reordena.
     Retorna (messages, available_sources, allowed_chunks) o None si no hay resultados.
@@ -299,8 +304,12 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
     # Register that the user is still active
     register_user_activity()
 
+    # Detectar idioma
+    lang_code = detect_language(query)
+    print("IDIOMA DETECTADO: ", lang_code)
+
     # Register search terms
-    search_terms = extract_search_terms(query)
+    search_terms = extract_search_terms(query, lang_code)
     register_words(search_terms)
 
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
@@ -320,7 +329,7 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
         if "drive" in services:
             drive_user = get_current_user_drive(services["drive"])
 
-        search_results = hybrid_retriever.invoke(expanded_query)
+        search_results = hybrid_search(vectordb, expanded_query, k, 25)
 
         # 1.5) Filtrar por permisos
         for f in search_results:
@@ -355,10 +364,11 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
     if not allowed_chunks:
         return None
 
-    topics = {
+    topic_indices = {
         t for d in allowed_chunks for t, _ in d.metadata.get("topics", {}).items()
     }
-    register_topics(topics)
+    topics_for_db = resolve_topic_names(topic_indices, "es", QDRANT_PATH)
+    register_topics(topics_for_db)
 
     insert_metric(Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
 
@@ -394,59 +404,58 @@ def preparar_contexto_rag(query, hybrid_retriever, services, k=6, chunk_chars=16
     insert_metric(Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
 
     # 3) Preparar mensajes para el LLM
-    # Nota: El prompt instruye al LLM a seleccionar solo las fuentes que realmente utiliza
     system = (
-        "Eres un asistente conversacional RAG en ESPAÑOL. Responde SOLO con el CONTEXTO proporcionado. "
-        "No improvises si no tienes información en el contexto. "
-        'En tu respuesta, no uses la palabra "CONTEXTO", sino usa "las fuentes". '
-        "Redacta en lenguaje natural, claro y directo. "
-        "IMPORTANTE: En el campo 'sources', incluye SOLO las fuentes que realmente hayas utilizado para responder. "
-        "Si la pregunta es un saludo, agradecimiento o no requiere información de las fuentes, deja 'sources' vacío. "
-        "Usa el historial de conversación para seguir el hilo."
+        "You are a RAG conversational assistant. Respond ONLY with the provided CONTEXT. "
+        "Respond EXCLUSIVELY in the language of the last message of the user, "
+        f"which has been detected to have the following language code: {lang_code}. "
+        "Do not improvise if you don't have information in the context. "
+        'In your response, do not use the word "CONTEXT", instead use "the sources". '
+        "Write in natural, clear, and direct language. "
+        "IMPORTANT: In the 'sources' field, include ONLY the sources you actually used to respond. "
+        "If the question is a greeting, thanks, or does not require information from the sources, leave 'sources' empty. "
+        "Use the conversation history to follow the thread."
     )
 
-    # Incluir enlaces en la lista de fuentes para que el LLM pueda devolverlos
+    # Include links in the sources list so the LLM can return them
     sources_info = "\n".join(
         [
-            f"- título: {s['title']}, tipo: {s['source_type']}, link: {s.get('link') or 'N/A'}"
+            f"- title: {s['title']}, type: {s['source_type']}, link: {s.get('link') or 'N/A'}"
             for s in available_sources
         ]
     )
     print(sources_info)
 
-    # Construir lista de mensajes para el LLM desde st.session_state.messages
+    # Build list of messages for the LLM from st.session_state.messages
     messages = [SystemMessage(content=system)]
-    for m in history[:-1][-10:]:  # Últimos 10 mensajes excluyendo el actual
+    for m in history[:-1][-10:]:  # Last 10 messages excluding current
         if m["role"] == "user":
             messages.append(HumanMessage(content=m["content"]))
         else:
             messages.append(AIMessage(content=m["content"]))
 
-    user_message = f"""CONTEXTO:
+    user_message = f"""CONTEXT:
 {contexto}
 
-FUENTES DISPONIBLES:
+AVAILABLE SOURCES:
 {sources_info}
 
-PREGUNTA:
+QUESTION:
 {query}"""
 
     messages.append(HumanMessage(content=user_message))
 
     insert_metric(Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user_message))
 
-    return messages, available_sources, allowed_chunks
+    return messages, available_sources, allowed_chunks, lang_code
 
 
-def responder_streaming(
-    query, hybrid_retriever, services, placeholder, k=6, chunk_chars=1600
-):
+def responder_streaming(query, vectordb, services, placeholder, k=6, chunk_chars=1600):
     """
     Genera respuesta usando structured output para que el LLM seleccione las fuentes relevantes.
     Retorna la respuesta completa al final.
     """
     # Preparar contexto
-    result = preparar_contexto_rag(query, hybrid_retriever, services, k, chunk_chars)
+    result = preparar_contexto_rag(query, vectordb, services, k, chunk_chars)
 
     if result is None:
         msg = "No hay contenido accesible relacionado con tu consulta en las fuentes seleccionadas."
@@ -455,7 +464,7 @@ def responder_streaming(
         )
         return msg
 
-    messages, available_sources, allowed_chunks = result
+    messages, available_sources, allowed_chunks, lang_code = result
 
     # LLM con structured output para que seleccione solo las fuentes que realmente usa
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
@@ -464,7 +473,17 @@ def responder_streaming(
     with TimedMetric(Metrics.LLM_RESPONSE_TIME.value):
         response: RAGResponse = structured_llm.invoke(messages)
 
+    print(f"DEBUG LLM response: {response}")
     full_response = response.answer
+
+    if not full_response.strip():
+        fallback_messages = {
+            "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
+            "en": "I couldn't find relevant information about that topic in the available sources.",
+            "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
+        }
+        full_response = fallback_messages.get(lang_code, fallback_messages["es"])
+
     insert_metric(Metrics.NUM_LLM_TOKENS_OUT.value, len(full_response.split()))
 
     # Añadir solo las fuentes que el LLM seleccionó (no todas las disponibles)
@@ -558,14 +577,11 @@ def get_vectordb():
             print(f"[OneDrive ERROR] {type(e).__name__}: {e}")
             st.error(f"❌ Error indexando OneDrive: {e}")
 
-    # Crear retriever híbrido (BM25 + Vector)
-    hybrid_retriever = None
+    # Extraer temas de chunks si es necesario
     if vectordb is not None:
-        with st.spinner("Construyendo índice híbrido BM25…"):
-            # Reducido de k=50 a k=25 para mejor rendimiento en reranking
-            hybrid_retriever, _ = create_hybrid_retriever(vectordb, k=25)
+        extract_topics(vectordb)
 
-    return vectordb, hybrid_retriever
+    return vectordb
 
 
 get_vectordb()
@@ -788,7 +804,7 @@ if prompt:
         if "OneDrive" in sel and "onedrive_token" in st.session_state:
             services["onedrive_token"] = st.session_state.onedrive_token
 
-        vectordb, hybrid_retriever = get_vectordb()
+        vectordb = get_vectordb()
 
         # Check the vector DB
         if vectordb is None:
@@ -800,7 +816,7 @@ if prompt:
             # Mostrar spinner mientras prepara el contexto, luego streaming
             with st.spinner("Pensando…"):
                 ans = responder_streaming(
-                    prompt, hybrid_retriever, services, response_placeholder, k=6
+                    prompt, vectordb, services, response_placeholder, k=6
                 )
 
     except Exception as e:

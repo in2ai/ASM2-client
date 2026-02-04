@@ -1,62 +1,157 @@
 import igraph as ig
-import numpy as np
-import math
 import random
 import json
 import os
+from typing import Iterable
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Qdrant
+from langchain.schema import Document
+
+from qdrant_client.http import models
+
+from src.config.config import APPROX_SEARCH_PARAMS
+from src.utils.nlp import SUPPORTED_LANGUAGES
+
 
 TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
 TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
+TOPIC_MAPPING_FILENAME = "topics.json"
+CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
 
-def extract_initial_topics(vdb: FAISS):
+
+def get_topic_mapping_path(vdb_path: str) -> str:
+    return os.path.join(vdb_path, TOPIC_MAPPING_FILENAME)
+
+
+def load_topic_mapping(vdb_path: str) -> dict:
+    path = get_topic_mapping_path(vdb_path)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_topic_mapping(vdb_path: str, mapping: dict) -> None:
+    os.makedirs(vdb_path, exist_ok=True)
+    path = get_topic_mapping_path(vdb_path)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(mapping, f, ensure_ascii=False, indent=2)
+
+
+def resolve_topic_names(
+    topic_indices: Iterable[int], lang_code: str, vdb_path: str
+) -> set[str]:
+    mapping = load_topic_mapping(vdb_path)
+    if not mapping:
+        return {str(idx) for idx in topic_indices}
+
+    lang_map = mapping.get(lang_code) or mapping.get("es") or {}
+    fallback_map = mapping.get("es", {})
+    resolved = set()
+
+    for idx in topic_indices:
+        key = str(idx)
+        name = None
+        if isinstance(lang_map, dict):
+            name = lang_map.get(key)
+        if not name and isinstance(fallback_map, dict):
+            name = fallback_map.get(key)
+        resolved.add(name if name else str(idx))
+
+    return resolved
+
+
+def get_doc_by_id(vdb: Qdrant, id):
+    point = vdb.client.retrieve(
+        collection_name=vdb.collection_name,
+        ids=[id],
+        with_payload=True,
+    )[0]
+
+    payload = point.payload or {}
+
+    return Document(
+        page_content=payload.get("page_content", ""),
+        metadata=payload.get("metadata", ""),
+    )
+
+
+def extract_initial_topics(vdb: Qdrant, vdb_path: str):
+    if not CALCULATE_TOPICS:
+        print("La detección de temas está desactivada")
+        return
+
     # Iteration variables
-    num_vectors = vdb.index.ntotal
     batch_size = 1024
     min_cosine = 0.3
 
-    d = vdb.index.d
-    n_batches = math.ceil(num_vectors / batch_size)
+    ids = []
     edges = []
+    offset = None
 
-    for b in range(n_batches):
-        # Batch limits
-        start = b * batch_size
-        end = min(num_vectors, start + batch_size)
-        qsize = end - start
+    while True:
+        batch, offset = vdb.client.scroll(
+            collection_name=vdb.collection_name,
+            offset=offset,
+            limit=batch_size,
+            with_payload=False,
+            with_vectors=True
+        )
 
-        # Search vectors
-        queries = np.empty((qsize, d), dtype=np.float32)
-        vdb.index.reconstruct_n(start, qsize, queries)
-        D, I = vdb.index.search(queries, k=200)
+        requests = [
+            models.QueryRequest(
+                query=i.vector['embedding'],
+                using='embedding',
+                limit=200,
+                with_payload=False,
+                with_vector=False,
+                params=APPROX_SEARCH_PARAMS
+            )
+            for i in batch
+        ]
 
-        # Add edges to list
-        for row_idx, (distances, neighbors) in enumerate(zip(D, I)):
-            src_idx = start + row_idx
-            for dist, c in zip(distances, neighbors):
-                if c == src_idx:
+        hits = vdb.client.query_batch_points(
+            vdb.collection_name,
+            requests
+        )
+
+        for point, nearest in zip(batch, hits):
+            ids.append(point.id)
+
+            for n in nearest.points:
+                if n.id == point.id:
                     continue  # skip self-loops
-                if dist < min_cosine:
-                    continue  # skip neighbors beyond threshold
-                edges.append((int(src_idx), int(c)))
 
+                if n.score < min_cosine:
+                    continue  # skip neighbors beyond threshold
+
+                edges.append((point.id, n.id))
+
+        if offset is None:
+            break
 
     # Construct graph
+    num_vectors = vdb.client.count(vdb.collection_name).count
+    id_to_idx = {j: i for i, j in enumerate(ids)}
+
+    edges = [(id_to_idx[i], id_to_idx[j]) for i, j in edges]
     edges = list({(min(a, b), max(a, b)) for a, b in edges})
 
     g = ig.Graph(n=num_vectors, edges=edges, directed=False)
-
-    idx_to_doc = [vdb.index_to_docstore_id[i] for i in range(num_vectors)]
-    g.vs["name"] = idx_to_doc
+    g.vs["name"] = ids
 
     # Calculate communities
     communities = g.community_leiden(resolution=TOPIC_RESOLUTION)
 
     # Calculate representative docs
     topics = {}
+    topic_mapping = {lang: {} for lang in SUPPORTED_LANGUAGES}
+    topic_index = 0
 
     for members in communities:
         if not members or len(members) < 100:
@@ -64,12 +159,12 @@ def extract_initial_topics(vdb: FAISS):
 
         sample_count = 20
         sampled = random.sample(members, sample_count)
-        comm_samples = [idx_to_doc[int(i)] for i in sampled]
+        comm_samples = [ids[int(i)] for i in sampled]
 
         texts = []
 
         for sample in comm_samples:
-            doc = vdb.docstore.search(sample)
+            doc = get_doc_by_id(vdb, sample)
             texts.append(doc.page_content)
 
         topic_json = get_topic(texts)
@@ -77,14 +172,37 @@ def extract_initial_topics(vdb: FAISS):
         if topic_json is None:
             continue
 
-        topic_name = topic_json['Tema']
+        topic_names = topic_json.get("Tema")
+        if isinstance(topic_names, str):
+            topic_names = {lang: topic_names for lang in SUPPORTED_LANGUAGES}
+        if not isinstance(topic_names, dict):
+            continue
 
-        print(f'Topic: {topic_name}')
+        for lang in SUPPORTED_LANGUAGES:
+            name = topic_names.get(lang) if isinstance(topic_names, dict) else None
+            if not name:
+                name = topic_names.get("es")
+            if not name:
+                name = next(
+                    (
+                        v
+                        for v in topic_names.values()
+                        if isinstance(v, str) and v.strip()
+                    ),
+                    None,
+                )
+            if not name:
+                name = f"Topic {topic_index}"
+            topic_mapping[lang][str(topic_index)] = name
+
+        print(f'Topic: {topic_mapping.get("es", {}).get(str(topic_index))}')
 
         for m in members:
-            m_id = idx_to_doc[m]
+            m_id = ids[m]
             topics.setdefault(m_id, [])
-            topics[m_id].append(topic_name)
+            topics[m_id].append(topic_index)
+
+        topic_index += 1
 
     # Calculate multiple topics
     aggregated_topics = {}
@@ -116,44 +234,59 @@ def extract_initial_topics(vdb: FAISS):
             if weight >= TOPIC_MIN_CONTRIB:
                 aggregated_topics[v_name][t] = max(weight, aggregated_topics[v_name].get(t, 0.0))
 
-    # Update metadata
+    # Actualizar metadatos
     for id, ts in aggregated_topics.items():
-        doc = vdb.docstore.search(id)
-        doc.metadata['topics'] = ts 
+        # Convertir claves enteras a strings para compatibilidad con JSON de Qdrant
+        topics_str_keys = {str(k): v for k, v in ts.items()}
+        vdb.client.set_payload(
+            collection_name=vdb.collection_name,
+            key='metadata',
+            payload={'topics': topics_str_keys},
+            points=[id]
+        )
+
+    save_topic_mapping(vdb_path, topic_mapping)
 
     return communities
 
 
-def assign_topics(vdb: FAISS, ids):
-    print("Assigning topics...")
-    # Get embeddings
-    d = vdb.index.d
-    num_vectors = vdb.index.ntotal
-    qsize = len(ids)
+def assign_topics(vdb: Qdrant, ids):
+    if not CALCULATE_TOPICS:
+        print("La detección de temas está desactivada")
+        return
 
-    embs = np.empty((qsize, d), dtype=np.float32)
-    vdb.index.reconstruct_n(num_vectors - qsize, qsize, embs)
-
-    # Get topic connections
     min_cosine = 0.3
 
-    D, I = vdb.index.search(embs, k=200)
+    requests = [
+        models.QueryRequest(
+            query=i,
+            using='embedding',
+            limit=200,
+            with_payload=True,
+            with_vector=False,
+            params=APPROX_SEARCH_PARAMS
+        )
+        for i in ids
+    ]
 
-    for row_idx, (distances, neighbors) in enumerate(zip(D, I)):
-        abs_idx = num_vectors - qsize + row_idx
+    hits = vdb.client.query_batch_points(
+        vdb.collection_name,
+        requests
+    )
+
+    # Get topic connections
+    for point, nearest in zip(ids, hits):
         n_topics = []
 
-        for dist, c in zip(distances, neighbors):
-            if c == abs_idx:
+        for n in nearest.points:
+            if n.id == point:
                 continue  # skip self-loops
-            if dist < min_cosine:
+
+            if n.score < min_cosine:
                 continue  # skip neighbors beyond threshold
 
-            n_id = vdb.index_to_docstore_id[c]
-            doc = vdb.docstore.search(n_id)
-
-            if 'topics' in doc.metadata:
-                n_topics.append(doc.metadata['topics'])
+            if 'topics' in n.payload['metadata']:
+                n_topics.append(n.payload['metadata']['topics'])
 
         # Ensure enough neighbors with topics
         if len(n_topics) < 20:
@@ -169,22 +302,33 @@ def assign_topics(vdb: FAISS, ids):
                 topics[t] += weight * contrib
 
         # Assign topics to chunk
-        doc = vdb.docstore.search(vdb.index_to_docstore_id[abs_idx])
-        doc.metadata['topics'] = {}
+        topics_dict = {}
 
         for t, weight in topics.items():
             if weight >= TOPIC_MIN_CONTRIB:
-                doc.metadata['topics'][t] = weight
+                topics_dict[t] = weight
+
+        # Save chunk to VDB
+        vdb.client.set_payload(
+            collection_name=vdb.collection_name,
+            key='metadata',
+            payload={'topics': topics_dict},
+            points=[point]
+        )
 
 
 def get_topic(texts):
     system = """
     Eres un asistente que dados una serie de fragmentos de textos tiene que decidir un tema general para los mismos en un contexto de empresa.
-    Los textos pueden estar en múltiples idiomas, pero el tema resultante siempre tiene que estar en español y debe hacer alusión al contenido, no a la forma.
+    Los textos pueden estar en múltiples idiomas. Devuelve el nombre del tema en español, inglés y gallego, y debe hacer alusión al contenido, no a la forma.
     la respuesta debe ser únicamente un JSON válido con la siguiente forma:
 
     {
-        "Tema": "Tema de los textos (Ejemplos: Recursos Humanos, Contabilidad, Ingeniería de Software, ...)",
+        "Tema": {
+            "es": "Tema de los textos (Ejemplos: Recursos Humanos, Contabilidad, Ingeniería de Software, ...)",
+            "en": "Topic of the texts (Examples: Human Resources, Accounting, Software Engineering, ...)",
+            "gl": "Tema dos textos (Exemplos: Recursos Humanos, Contabilidade, Enxeñaría de Software, ...)"
+        },
         "Razonamiento": "Razonamiento corto de por qué se ha elegido ese tema en particular"
     }
 
@@ -198,7 +342,7 @@ def get_topic(texts):
     tries = 0
 
     while res is None and tries < 5:
-        try:    
+        try:
             tries += 1
             llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
             ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
