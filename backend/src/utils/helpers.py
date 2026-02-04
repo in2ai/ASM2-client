@@ -51,10 +51,6 @@ def periodic_task(job_func, interval: int):
     while True:
         with process_lock(lock_path) as locked:
             if locked:
-                try:
-                    job_func()
-
-                except Exception:
-                    raise
+                job_func()
                 
             time.sleep(interval)
