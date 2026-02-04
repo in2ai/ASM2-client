@@ -12,7 +12,7 @@ const publicPaths = [
 ];
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
 
   // Allow public paths
   if (publicPaths.some((path) => pathname.startsWith(path))) {
@@ -24,7 +24,7 @@ export async function middleware(request: NextRequest) {
 
   if (!isAuthenticated) {
     const signInUrl = new URL("/sign-in", request.url);
-    signInUrl.searchParams.set("returnTo", pathname);
+    signInUrl.searchParams.set("returnTo", `${pathname}${search}`);
     return NextResponse.redirect(signInUrl);
   }
 
