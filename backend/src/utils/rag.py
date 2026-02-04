@@ -130,7 +130,7 @@ def prepare_rag_context(query, pool, vectordb, reranker, sources: Dict[str, Data
 
     # Register search terms
     search_terms = extract_search_terms(query, lang_code)
-    register_words(pool, search_terms)
+    register_words(pool, search_terms, lang_code)
 
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
 
