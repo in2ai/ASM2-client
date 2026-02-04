@@ -58,8 +58,6 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
     image: dashboard:latest
     container_name: dashboard
     # No depends_on: questdb - connecting to remote VPS instance
@@ -69,4 +67,9 @@ services:
       - .env
     environment:
       - NODE_ENV=production
+      - LOGTO_ENDPOINT=${LOGTO_ENDPOINT}
+      - LOGTO_APP_ID=${LOGTO_APP_ID}
+      - LOGTO_APP_SECRET=${LOGTO_APP_SECRET}
+      - LOGTO_COOKIE_SECRET=${LOGTO_COOKIE_SECRET}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
     restart: unless-stopped
