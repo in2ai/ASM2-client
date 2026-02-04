@@ -5,6 +5,7 @@ export interface MetricsQueryParams {
   endDate?: string;
   userId?: string;
   userRole?: string;
+  lang?: string;
 }
 
 // =================================
@@ -142,6 +143,12 @@ export async function topKSearchTerms(
   if (params.userRole) {
     query += ` AND user_role = $${paramIndex}`;
     queryParams.push(params.userRole);
+    paramIndex++;
+  }
+
+  if (params.lang) {
+    query += ` AND lang = $${paramIndex}`;
+    queryParams.push(params.lang);
     paramIndex++;
   }
 
