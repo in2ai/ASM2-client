@@ -42,13 +42,33 @@ COPY . .
 
 # Set build-time environment variables
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV SKIP_ENV_VALIDATION=true
 ENV NODE_ENV=production
 
-# NEXT_PUBLIC_* variables must be available at build time
-# because they are inlined into the client-side JavaScript bundle
+# All environment variables needed at build time for Next.js prerendering
+# NEXT_PUBLIC_* vars are inlined into client JS bundle
+# Logto vars are needed because getLogtoContext() runs during static generation
+# QuestDB vars are needed for env validation
 ARG NEXT_PUBLIC_APP_URL
+ARG LOGTO_ENDPOINT
+ARG LOGTO_APP_ID
+ARG LOGTO_APP_SECRET
+ARG LOGTO_COOKIE_SECRET
+ARG QUESTDB_HOST
+ARG QUESTDB_PORT
+ARG QUESTDB_USER
+ARG QUESTDB_PASSWORD
+ARG QUESTDB_DB
+
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV LOGTO_ENDPOINT=${LOGTO_ENDPOINT}
+ENV LOGTO_APP_ID=${LOGTO_APP_ID}
+ENV LOGTO_APP_SECRET=${LOGTO_APP_SECRET}
+ENV LOGTO_COOKIE_SECRET=${LOGTO_COOKIE_SECRET}
+ENV QUESTDB_HOST=${QUESTDB_HOST}
+ENV QUESTDB_PORT=${QUESTDB_PORT}
+ENV QUESTDB_USER=${QUESTDB_USER}
+ENV QUESTDB_PASSWORD=${QUESTDB_PASSWORD}
+ENV QUESTDB_DB=${QUESTDB_DB}
 
 # Build the application
 RUN pnpm run build
