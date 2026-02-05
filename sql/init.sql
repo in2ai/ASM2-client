@@ -1,3 +1,7 @@
+----------------------------
+-- Metrics
+----------------------------
+
 CREATE TABLE IF NOT EXISTS metrics (
     ts TIMESTAMP,
     user_id SYMBOL,
@@ -22,7 +26,20 @@ CREATE TABLE IF NOT EXISTS topic_counts (
 ) TIMESTAMP(ts) PARTITION BY DAY;
 
 CREATE TABLE IF NOT EXISTS user_activity (
-    ts TIMESTAMP,        -- event timestamp
+    ts TIMESTAMP,         -- event timestamp
     user_id SYMBOL,       -- user identifier
     user_role SYMBOL
 ) TIMESTAMP(ts) PARTITION BY DAY;
+
+----------------------------
+-- Authentication
+----------------------------
+
+CREATE TABLE credentials (
+  user_id SYMBOL,
+  source SYMBOL,            -- 'GDrive', 'Dropbox'...
+  credentials VARCHAR,      -- JSON with arbitrary fields depending on source
+  issued_at TIMESTAMP,
+  needs_refresh_at TIMESTAMP,
+  expires_at TIMESTAMP
+) timestamp(issued_at) PARTITION BY HOUR;
