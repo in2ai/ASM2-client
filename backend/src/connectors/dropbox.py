@@ -30,11 +30,14 @@ def guess_mime_from_name(name: str) -> str:
 
 
 class DropboxSource(DataSource):
-    def __init__(self):
-        super().__init__('Dropbox', DROPBOX_ROOT)
+    name = 'Dropbox'
+
+
+    def __init__(self, raw_creds: str):
+        super().__init__(self.name, raw_creds, DROPBOX_ROOT)
 
     
-    def login(self):
+    def login(self) -> bool:
         # TODO: store service somehow (waiting for global auth)
         self.service = None
 

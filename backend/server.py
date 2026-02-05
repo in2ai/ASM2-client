@@ -1,9 +1,12 @@
 import asyncio
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from langchain_openai import ChatOpenAI
 
+from src.config.auth import add_credentials, get_user_id, get_authenticated_sources
+from src.connectors.source import DataSource
+from src.config.sources import SOURCES
 from src.utils.helpers import periodic_task
 from src.metrics.connection import get_questdb_pool
 from src.connectors.store import get_vectordb
@@ -71,13 +74,32 @@ def extract_usage_metrics():
 # App endpoints
 # ---------------------------------
 
-@app.get("/chat")
-async def chat(query: str, chat_id: str):
-    sources = [] # TODO: get authenticated sources from QuestDB
+@app.get("/login-source", status_code=200)
+async def login_source(logto_token: str, source_token: str, source: str):
+    # Check source name
+    if source not in SOURCES:
+        raise HTTPException(500, detail=f'Source {source} does not exist')
 
+    # Check source token validity 
+    source_instance: DataSource = SOURCES[source](source_token)
+
+    if not source_instance.login():
+        raise HTTPException(500, detail=f'Authentication failed for source {source}')
+    
+    # Store credentials in database
+    questdb_pool = app.state.questdb_pool
+    user_id = get_user_id(logto_token)
+
+    add_credentials(questdb_pool, user_id, source, source_token)
+
+
+@app.get("/chat")
+async def chat(logto_token: str, query: str, chat_id: str):
     vectorstore = app.state.vectorstore
     reranker = app.state.reranker
     questdb_pool = app.state.questdb_pool
+
+    sources = get_authenticated_sources(questdb_pool, logto_token)
 
     messages, _, _, lang_code = prepare_rag_context(query, questdb_pool, vectorstore, reranker, sources)
 

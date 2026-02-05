@@ -6,12 +6,13 @@ from src.connectors.vdb_file import VDBFile
 
 
 class DataSource:
-    def __init__(self, name: str, root: str):
+    def __init__(self, name: str, raw_creds: str, root: str):
         self.name = name
+        self.raw_creds = raw_creds
         self.root = root
 
 
-    def login(self):
+    def login(self) -> bool:
         ...
 
 

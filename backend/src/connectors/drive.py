@@ -25,11 +25,14 @@ SUPPORTED_MIMES = (
 
 
 class GoogleDriveSource(DataSource):
-    def __init__(self):
-        super().__init__('GDrive', GDRIVE_ROOT)
+    name = 'GDrive'
 
 
-    def login(self):
+    def __init__(self, raw_creds: str):
+        super().__init__(self.name, raw_creds, GDRIVE_ROOT)
+
+
+    def login(self) -> bool:
         # TODO: store service and credentials somehow (waiting for global auth)
         self.service = None
         self.credentials = None
