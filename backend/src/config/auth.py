@@ -25,10 +25,10 @@ def get_user_credentials(pool: ThreadedConnectionPool, user_id: str):
     query = """
     SELECT source, credentials
     FROM credentials
-    LATEST ON issued_at PARTITION BY user_id, source
     WHERE 
         user_id = %s
         AND (expires_at IS NULL OR expires_at > NOW())
+    LATEST ON issued_at PARTITION BY user_id, source
     """
 
     return execute_query(pool, query, (user_id,))
@@ -38,13 +38,18 @@ def get_credentials_to_refresh(pool: ThreadedConnectionPool):
     query = """
     SELECT user_id, source, credentials
     FROM credentials
-    LATEST ON issued_at PARTITION BY user_id, source
     WHERE 
         expires_at > NOW()
         AND needs_refresh_at < NOW()
+    LATEST ON issued_at PARTITION BY user_id, source
     """
 
     return execute_query(pool, query)
+
+
+def user_is_admin(logto_token: str):
+    # TODO: get info from Logto
+    return True
 
 
 def get_user_id(logto_token: str):

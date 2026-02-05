@@ -18,6 +18,7 @@ from src.utils.topic import assign_topics, extract_initial_topics
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant")
 QDRANT_PATH = "qdrant_index"
 BM25_MODEL = "qdrant/bm25"
+VDB_LOCK = 'vdb.lock'
 
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 QDRANT_COL = "documents"

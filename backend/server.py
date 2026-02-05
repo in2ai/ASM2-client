@@ -1,15 +1,16 @@
 import asyncio
+import os
 
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from langchain_openai import ChatOpenAI
 
-from src.config.auth import add_credentials, get_user_id, get_authenticated_sources
+from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, user_is_admin
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.utils.helpers import periodic_task
 from src.metrics.connection import get_questdb_pool
-from src.connectors.store import get_vectordb
+from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric
 from src.utils.rag import RAGResponse, prepare_rag_context, get_reranker
 
@@ -19,24 +20,33 @@ from src.utils.rag import RAGResponse, prepare_rag_context, get_reranker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Global shared data
     app.state.vectorstore = get_vectordb()
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
     
+    # Async periodic jobs
+    jobs = [
+        extract_usage_metrics,  # Store CPU, RAM and GPU metrics
+        update_vdb,             # Update VDB contents by scanning sources
+    ]
+
     loop = asyncio.get_running_loop()
-    app.state.metrics_task = loop.create_task(asyncio.to_thread(extract_usage_metrics))
+    app.state.periodic_tasks = [loop.create_task(asyncio.to_thread(j)) for j in jobs]
 
     try:
         yield
 
     finally:
-        app.state.metrics_task.cancel()
+        # Cleanup before closing
+        for j in app.state.periodic_tasks:
+            j.cancel()
 
-        try:
-            await app.state.metrics_task
-        
-        except asyncio.CancelledError:
-            pass
+            try:
+                await j
+            
+            except asyncio.CancelledError:
+                pass
 
         app.state.questdb_pool.closeall()
 
@@ -46,6 +56,20 @@ app = FastAPI(title="ASM2", lifespan=lifespan)
 # ---------------------------------
 # Periodic tasks
 # ---------------------------------
+
+def update_vdb():
+    def update():
+        if os.path.isfile(VDB_LOCK):
+            questdb_pool = app.state.questdb_pool
+            admin_id = '' # TODO: find way to get admin user id
+
+            # Get admin authenticated sources and update DB
+            sources = get_authenticated_sources(questdb_pool, admin_id)
+
+            build_vectordb_from_sources(sources)
+
+    periodic_task(update, 3600) # Once an hour
+
 
 def extract_usage_metrics():
     import GPUtil
@@ -73,6 +97,27 @@ def extract_usage_metrics():
 # ---------------------------------
 # App endpoints
 # ---------------------------------
+
+@app.get("/start-vdb-update", status_code=200)
+async def start_vdb_update(logto_token: str):
+    if not user_is_admin(logto_token):
+        raise HTTPException(400)
+    
+    with open(VDB_LOCK, 'w+'):
+        pass
+
+
+@app.get("/stop-vdb-update", status_code=200)
+async def start_vdb_update(logto_token: str):
+    if not user_is_admin(logto_token):
+        raise HTTPException(400)
+    
+    try:
+        os.remove(VDB_LOCK)
+
+    except:
+        pass
+
 
 @app.get("/login-source", status_code=200)
 async def login_source(logto_token: str, source_token: str, source: str):
