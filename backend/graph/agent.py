@@ -10,10 +10,11 @@ from state import State
 
 # Here we import our tools/plug-ins for the agent system
 from tools.test_tool import test_tool
+from tools.vectordb_search import vectordb_search
 
 # 2. Add tools (hybrid search, specific uses)
 
-tool_list = [test_tool]
+tool_list = [test_tool, vectordb_search]
 llm_with_tools = llm.bind_tools(tool_list, parallel_tool_calls=False)
 
 # 3.

@@ -213,7 +213,7 @@ async def chat(logto_token: str, query: str, chat_id: str):
 
     config = {
         "configurable": {
-            "thread_id": chat_id,  # For checkpointing conversation
+            "thread_id": chat_id,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
             "pool": app.state.questdb_pool,
