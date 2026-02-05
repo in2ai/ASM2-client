@@ -1,20 +1,27 @@
 import asyncio
-import os
 import logging
+import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from contextlib import asynccontextmanager
 from langchain_openai import ChatOpenAI
 
 from src.config.log import setup_logging
-from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, get_authenticated_admin_sources, user_is_admin, get_credentials_to_refresh
+from src.config.auth import (
+    add_credentials,
+    get_authenticated_admin_sources,
+    get_authenticated_sources,
+    get_credentials_to_refresh,
+    get_user_id,
+    user_is_admin,
+)
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.utils.helpers import periodic_task
 from src.metrics.connection import get_questdb_pool
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric
-from src.utils.rag import RAGResponse, prepare_rag_context, get_reranker
+from src.utils.rag import RAGResponse, get_reranker, prepare_rag_context
 
 # ---------------------------------
 # App configuration
@@ -29,6 +36,7 @@ async def lifespan(app: FastAPI):
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
     
+
     # Async periodic jobs
     jobs = [
         extract_usage_metrics,  # Store CPU, RAM and GPU metrics
@@ -52,10 +60,15 @@ async def lifespan(app: FastAPI):
             
             except asyncio.CancelledError:
                 pass
+            try:
+                await j
+
+            except asyncio.CancelledError:
+                pass
 
         app.state.questdb_pool.closeall()
 
-        
+
 app = FastAPI(title="ASM2", lifespan=lifespan)
 
 # ---------------------------------
@@ -113,11 +126,11 @@ def extract_usage_metrics():
     import GPUtil
     import psutil
 
-    def calc():    
+    def calc():
         logging.info('Collecting hardware usage metrics...')
 
         questdb_pool = app.state.questdb_pool
-    
+
         # CPU
         cpu_usage = psutil.cpu_percent(interval=1)
         insert_metric(questdb_pool, Metrics.CPU_USAGE.value, cpu_usage)
@@ -133,7 +146,8 @@ def extract_usage_metrics():
             insert_metric(questdb_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100)
 
     periodic_task(calc, 30)
-    
+
+
 # ---------------------------------
 # App endpoints
 # ---------------------------------
@@ -197,14 +211,26 @@ async def chat(logto_token: str, query: str, chat_id: str):
 
     sources = get_authenticated_sources(questdb_pool, logto_token)
 
-    messages, _, _, lang_code = prepare_rag_context(query, questdb_pool, vectorstore, reranker, sources)
+    config = {
+        "configurable": {
+            "thread_id": chat_id,  # For checkpointing conversation
+            "vectorstore": app.state.vectorstore,
+            "reranker": app.state.reranker,
+            "pool": app.state.questdb_pool,
+            "sources": sources,
+        }
+    }
+
+    messages, _, _, lang_code = prepare_rag_context(
+        query, questdb_pool, vectorstore, reranker, sources
+    )
 
     # Prepare LLM with structured output
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
     structured_llm = llm.with_structured_output(RAGResponse)
 
     with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
-        response: RAGResponse = structured_llm.invoke(messages)
+        response: RAGResponse = structured_llm.invoke(messages, config=config)
 
     # Fallback response
     if not response.answer.strip():
