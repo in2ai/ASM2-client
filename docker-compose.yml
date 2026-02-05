@@ -64,18 +64,14 @@ services:
     entrypoint: ["sh", "/init/init.sh"]
 
   qdrant:
-    image: qdrant/qdrant:gpu-nvidia-latest
+    image: qdrant/qdrant:latest
     container_name: qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"   # HTTP / REST API
-      - "6334:6334"   # gRPC
-    environment:
-      # enable GPU indexing inside Qdrant
-      - QDRANT__GPU__INDEXING=1
+      - "6333:6333" # HTTP / REST API
+      - "6334:6334" # gRPC
     volumes:
       - ./qdrant_index:/qdrant/storage
-    gpus: all
 
   dashboard:
     build:

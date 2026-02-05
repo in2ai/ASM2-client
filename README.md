@@ -113,11 +113,13 @@ QUESTDB_HOST=localhost
 
 ### Archivos Docker Compose Disponibles
 
-| Archivo                     | Descripción                                              |
-| --------------------------- | -------------------------------------------------------- |
-| `docker-compose.yml`        | Stack completo local (app, questdb, dashboard, init)     |
-| `docker-compose.remote.yml` | Solo app y dashboard, conecta a QuestDB remoto           |
-| `docker-compose.gpu.yml`    | Override para habilitar soporte GPU en el servicio `app` |
+| Archivo                            | Descripción                                              |
+| ---------------------------------- | -------------------------------------------------------- |
+| `docker-compose.yml`               | Stack completo local (app, questdb, dashboard, init)     |
+| `docker-compose.remote.yml`        | Solo app y dashboard, conecta a QuestDB remoto           |
+| `docker-compose.gpu.yml`           | Override para habilitar soporte GPU en el servicio `app` |
+| `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA                      |
+| `docker-compose.qdrant-amd.yml`    | Override para Qdrant con GPU AMD (ROCm)                  |
 
 ### Opción 1: Docker Stack Completo (Recomendada)
 
@@ -172,7 +174,7 @@ Esto iniciará:
 - **Dashboard**: [http://localhost:3001](http://localhost:3001)
 - **Cliente Streamlit**: [http://localhost:8501](http://localhost:8501)
 
-### Opción 3: Docker con Soporte GPU
+### Opción 3: Docker con Soporte GPU (App)
 
 El servicio `app` puede utilizar GPU para acelerar el procesamiento. Para habilitar GPU:
 
@@ -206,7 +208,45 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 > - En **Linux/macOS** se utiliza el signo de dos puntos (`:`) como separador.
 > - En **Windows** se debe utilizar el punto y coma (`;`) como separador.
 
-### Opción 4: Desarrollo Local
+### Opción 4: Qdrant con Aceleración GPU
+
+Qdrant soporta aceleración GPU para indexación vectorial. Por defecto, se usa la versión CPU. Puedes habilitar GPU utilizando los archivos de override correspondientes:
+
+#### GPU NVIDIA
+
+```bash
+# Usando variable de entorno (en .env):
+COMPOSE_FILE=docker-compose.yml:docker-compose.qdrant-nvidia.yml
+
+# O mediante línea de comandos:
+docker compose -f docker-compose.yml -f docker-compose.qdrant-nvidia.yml up
+
+# Combinando con GPU para app:
+COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml:docker-compose.qdrant-nvidia.yml
+```
+
+**Requisitos NVIDIA:**
+
+- Drivers NVIDIA instalados
+- [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+
+#### GPU AMD (ROCm)
+
+```bash
+# Usando variable de entorno (en .env):
+COMPOSE_FILE=docker-compose.yml:docker-compose.qdrant-amd.yml
+
+# O mediante línea de comandos:
+docker compose -f docker-compose.yml -f docker-compose.qdrant-amd.yml up
+```
+
+**Requisitos AMD:**
+
+- Drivers AMD ROCm instalados
+- Dispositivos `/dev/kfd` y `/dev/dri` accesibles
+- Usuario en los grupos `video` y `render`
+
+### Opción 5: Desarrollo Local
 
 #### Cliente Python
 
@@ -249,7 +289,9 @@ ASM2-client/
 ├── questdb/               # Datos persistentes de QuestDB (generado)
 ├── docker-compose.yml     # Stack completo local
 ├── docker-compose.remote.yml  # Configuración para QuestDB remoto
-├── docker-compose.gpu.yml # Override para soporte GPU
+├── docker-compose.gpu.yml # Override para soporte GPU (app)
+├── docker-compose.qdrant-nvidia.yml # Override para Qdrant GPU NVIDIA
+├── docker-compose.qdrant-amd.yml    # Override para Qdrant GPU AMD
 ├── .env.example           # Plantilla de variables de entorno
 └── Dockerfile             # Imagen del cliente Python
 ```

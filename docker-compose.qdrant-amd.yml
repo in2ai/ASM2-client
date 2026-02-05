@@ -1,0 +1,16 @@
+# Qdrant AMD GPU override configuration
+# Usage:
+#   - Via COMPOSE_FILE env var: Set COMPOSE_FILE=docker-compose.yml:docker-compose.qdrant-amd.yml in .env
+#   - Via command line: docker compose -f docker-compose.yml -f docker-compose.qdrant-amd.yml up
+services:
+  qdrant:
+    image: qdrant/qdrant:gpu-amd-latest
+    environment:
+      # enable GPU indexing inside Qdrant
+      - QDRANT__GPU__INDEXING=1
+    devices:
+      - /dev/kfd:/dev/kfd # AMD Kernel Fusion Driver
+      - /dev/dri:/dev/dri # Direct Rendering Infrastructure
+    group_add:
+      - video
+      - render
