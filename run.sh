@@ -13,4 +13,4 @@ for f in "${REQUIRED_FILES[@]}"; do
   fi
 done
 
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.qdrant-nvidia.yml up --build
