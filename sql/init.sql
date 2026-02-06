@@ -41,5 +41,6 @@ CREATE TABLE credentials (
   credentials VARCHAR,      -- JSON with arbitrary fields depending on source
   issued_at TIMESTAMP,
   needs_refresh_at TIMESTAMP,
-  expires_at TIMESTAMP
+  expires_at TIMESTAMP,
+  is_admin BOOLEAN
 ) timestamp(issued_at) PARTITION BY HOUR;

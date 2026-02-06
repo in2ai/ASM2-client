@@ -10,15 +10,15 @@ USER_ID = 'user in2ai'
 USER_ROLE = 'admin in2ai'
 
 
-def add_credentials(pool: ThreadedConnectionPool, user_id: str, source: str, credentials: str):
+def add_credentials(pool: ThreadedConnectionPool, user_id: str, source: str, credentials: str, is_admin: bool):
     query = """
-    INSERT INTO credentials (user_id, source, credentials, issued_at, needs_refresh_at, expired_at)
-    VALUES (%s, %s, %s, NOW(), NOW(), NOW())
+    INSERT INTO credentials (user_id, source, credentials, issued_at, needs_refresh_at, expired_at, is_admin)
+    VALUES (%s, %s, %s, NOW(), NOW(), NOW(), %s)
     """
 
     # TODO: use correct times (fix after frontend is working)
 
-    execute_query(pool, query, (user_id, source, credentials))
+    execute_query(pool, query, (user_id, source, credentials, is_admin))
 
 
 def get_user_credentials(pool: ThreadedConnectionPool, user_id: str):
@@ -32,6 +32,19 @@ def get_user_credentials(pool: ThreadedConnectionPool, user_id: str):
     """
 
     return execute_query(pool, query, (user_id,))
+
+
+def get_admin_credentials(pool: ThreadedConnectionPool):
+    query = """
+    SELECT source, credentials
+    FROM credentials
+    WHERE 
+        is_admin = true
+        AND (expires_at IS NULL OR expires_at > NOW())
+    LATEST ON issued_at PARTITION BY user_id, source
+    """
+
+    return execute_query(pool, query)
 
 
 def get_credentials_to_refresh(pool: ThreadedConnectionPool):

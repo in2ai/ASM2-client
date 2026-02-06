@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from langchain_openai import ChatOpenAI
 
-from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, user_is_admin
+from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, get_admin_credentials, user_is_admin
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.utils.helpers import periodic_task
@@ -61,10 +61,9 @@ def update_vdb():
     def update():
         if os.path.isfile(VDB_LOCK):
             questdb_pool = app.state.questdb_pool
-            admin_id = '' # TODO: find way to get admin user id
 
             # Get admin authenticated sources and update DB
-            sources = get_authenticated_sources(questdb_pool, admin_id)
+            sources = get_admin_credentials(questdb_pool)
 
             build_vectordb_from_sources(sources)
 
@@ -108,7 +107,7 @@ async def start_vdb_update(logto_token: str):
 
 
 @app.get("/stop-vdb-update", status_code=200)
-async def start_vdb_update(logto_token: str):
+async def stop_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(400)
     
@@ -117,6 +116,16 @@ async def start_vdb_update(logto_token: str):
 
     except:
         pass
+
+
+@app.get("/vdb-update-status", status_code=200)
+async def is_vdb_update_active(logto_token: str):
+    if not user_is_admin(logto_token):
+        raise HTTPException(400)
+    
+    return {
+        'active': os.path.isfile(VDB_LOCK)
+    }
 
 
 @app.get("/login-source", status_code=200)
@@ -134,8 +143,9 @@ async def login_source(logto_token: str, source_token: str, source: str):
     # Store credentials in database
     questdb_pool = app.state.questdb_pool
     user_id = get_user_id(logto_token)
+    is_admin = user_is_admin(logto_token)
 
-    add_credentials(questdb_pool, user_id, source, source_token)
+    add_credentials(questdb_pool, user_id, source, source_token, is_admin)
 
 
 @app.get("/chat")
