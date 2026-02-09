@@ -18,8 +18,13 @@ def build_graph(checkpointer=None):
 
     builder.add_edge(START, "pre_process")
     builder.add_edge("pre_process", "assistant")
-    builder.add_conditional_edges("assistant", should_continue)
+    builder.add_conditional_edges(
+        "assistant",
+        should_continue,
+        {"tools": "tools", "summarize_conversation": "summarize_conversation", END: END},
+    )
     builder.add_edge("tools", "assistant")
+    builder.add_edge("summarize_conversation", "assistant")
 
     return builder.compile(checkpointer=checkpointer)
 

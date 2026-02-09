@@ -17,5 +17,11 @@ def summarize_conversation(state: State):
     messages = state.messages + [HumanMessage(content=summary_message)]
     response = llm.invoke(messages)
 
-    delete_messages = [RemoveMessage(id=m.id) for m in state.messages[:-2]]
+    # Keep from the last HumanMessage onward to avoid orphaning tool messages
+    keep_from = 0
+    for i, m in enumerate(state.messages):
+        if isinstance(m, HumanMessage):
+            keep_from = i
+
+    delete_messages = [RemoveMessage(id=m.id) for m in state.messages[:keep_from]]
     return {"summary": response.content, "messages": delete_messages}
