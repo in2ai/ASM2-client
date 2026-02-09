@@ -9,9 +9,10 @@ from src.utils.rag import retrieve_and_rerank
 def vectordb_search(query: str, config: RunnableConfig) -> str:
     """Searches for documents relevant to the user's query through hybrid-search in a database."""
 
-    vectorstore = config["configurable"]["vectorstore"]
-    sources = config["configurable"]["sources"]
-    reranker = config["configurable"]["reranker"]
+    configurable = config.get("configurable", {})
+    vectorstore = configurable["vectorstore"]
+    sources = configurable["sources"]
+    reranker = configurable["reranker"]
 
     try:
         chunks, available_sources, lang_code = retrieve_and_rerank(
