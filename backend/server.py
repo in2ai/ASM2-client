@@ -4,7 +4,6 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from langchain_openai import ChatOpenAI
 
 from src.utils.nlp import init_nlp
 
@@ -23,9 +22,17 @@ from src.utils.helpers import periodic_task
 from src.metrics.connection import get_questdb_pool
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric
-from src.utils.rag import RAGResponse, get_reranker, prepare_rag_context
+from src.utils.rag import get_reranker
+
 from graph.agent import build_graph
 from graph.checkpointer import get_checkpointer
+from langchain_core.messages import HumanMessage
+from src.connectors.store import get_vectordb
+from src.metrics.connection import get_questdb_pool
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric
+from src.utils.helpers import periodic_task
+from src.utils.nlp import init_nlp
+from src.utils.rag import get_reranker
 
 
 # ---------------------------------
@@ -217,36 +224,21 @@ async def chat(logto_token: str, query: str, chat_id: str):
     config = {
         "configurable": {
             "thread_id": chat_id,
-            "vectorstore": app.state.vectorstore,
-            "reranker": app.state.reranker,
-            "questdb_pool": app.state.questdb_pool,
+            "vectorstore": vectorstore,
+            "reranker": reranker,
+            "questdb_pool": questdb_pool,
             "sources": sources,
         }
     }
 
-    messages, _, _, lang_code = prepare_rag_context(
-        query, questdb_pool, vectorstore, reranker, sources
-    )
-
-    # Prepare LLM with structured output
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-    structured_llm = llm.with_structured_output(RAGResponse)
-
     with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
-        response: RAGResponse = structured_llm.invoke(messages, config=config)
 
-    # Fallback response
-    if not response.answer.strip():
-        fallback_messages = {
-            "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
-            "en": "I couldn't find relevant information about that topic in the available sources.",
-            "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
-        }
+        result = await app.state.graph.ainvoke(
+            {"messages": [HumanMessage(content=query)]}, config
+        )
 
-        response.answer = fallback_messages.get(lang_code, fallback_messages["es"])
+    answer = result["messages"][-1].content
+    detected_lang = result.get("detected_lang", "es")
 
-    # TODO: collect usage metadata from the structured output instead
-    num_out_tokens = llm.get_num_tokens(response.answer)
-    insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_OUT.value, num_out_tokens)
-
-    return response
+    # TODO: collect token usage from AIMessage.usage_metadata
+    return {"answer": answer, "detected_lang": detected_lang}
