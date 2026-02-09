@@ -82,7 +82,7 @@ def refresh_tokens():
 
                 # Add new credentials entry
                 new_creds = source.raw_creds
-                add_credentials(questdb_pool, user_id, source, new_creds, is_admin)
+                add_credentials(questdb_pool, user_id, source.name, new_creds, is_admin)
 
             logging.info('Finished token refesh job', len(credentials))
 
