@@ -28,6 +28,7 @@ if __name__ == "__main__":
         config,
     )
     print(f"Assistant: {response['messages'][-1].content}\n")
+    print(f"Detected language: {response['detected_lang']}\n")
 
     # 2. Tool invocation — ask the LLM to run the test tool
     print("User: Please perform the test")
