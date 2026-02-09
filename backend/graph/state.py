@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 class State(BaseModel):

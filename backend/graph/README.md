@@ -1,8 +1,12 @@
 # LangGraph Backend
 
-## PostgreSQL Setup (Local Development)
+## Checkpointing (Local Development)
 
-LangGraph requires PostgreSQL for checkpointing (storing conversation state).
+By default, the graph uses **in-memory** checkpointing for development/tests.
+PostgreSQL checkpointing is **optional** and can be added later if you need
+durable conversation state.
+
+If you choose PostgreSQL checkpointing, use the steps below.
 
 ### Start Container
 

@@ -1,4 +1,6 @@
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.memory import MemorySaver
+
+# Expected for current LangGraph versions; adjust if the API changes.
 
 _checkpointer = None
 
@@ -6,5 +8,5 @@ _checkpointer = None
 def get_checkpointer():
     global _checkpointer
     if _checkpointer is None:
-        _checkpointer = InMemorySaver()
+        _checkpointer = MemorySaver()
     return _checkpointer

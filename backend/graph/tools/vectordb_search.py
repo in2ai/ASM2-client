@@ -43,7 +43,14 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     output = "\n---\n".join(result)
 
     if available_sources:
-        sources_summary = ", ".join(available_sources)
-        output += f"\n\nAVAILABLE SOURCES: {sources_summary}"
+        sources_lines = []
+        for source in available_sources:
+            title = source.get("title", "Untitled")
+            source_type = source.get("source_type", "Unknown")
+            link = source.get("link") or "N/A"
+            sources_lines.append(
+                f"- type: {source_type}, title: {title}, link: {link}"
+            )
+        output += "\n\nAVAILABLE SOURCES:\n" + "\n".join(sources_lines)
 
     return output
