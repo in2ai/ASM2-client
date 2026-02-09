@@ -1,11 +1,13 @@
 import asyncio
 import os
+import logging
 
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from langchain_openai import ChatOpenAI
 
-from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, get_admin_credentials, user_is_admin, get_credentials_to_refresh
+from src.config.log import setup_logging
+from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, get_authenticated_admin_sources, user_is_admin, get_credentials_to_refresh
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.utils.helpers import periodic_task
@@ -17,6 +19,8 @@ from src.utils.rag import RAGResponse, prepare_rag_context, get_reranker
 # ---------------------------------
 # App configuration
 # ---------------------------------
+
+setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,10 +65,14 @@ app = FastAPI(title="ASM2", lifespan=lifespan)
 def refresh_tokens():
     def refresh():
         if os.path.isfile(VDB_LOCK):
+            logging.info('Refreshing access tokens...')
+
             questdb_pool = app.state.questdb_pool
 
             # Get admin authenticated sources and update DB
             credentials = get_credentials_to_refresh(questdb_pool)
+
+            logging.info('Found %s tokens to refresh', len(credentials))
 
             for user_id, s, creds, is_admin in credentials:
                 source: DataSource = SOURCES[s](creds)
@@ -76,6 +84,8 @@ def refresh_tokens():
                 new_creds = source.raw_creds
                 add_credentials(questdb_pool, user_id, source, new_creds, is_admin)
 
+            logging.info('Finished token refesh job', len(credentials))
+
 
     periodic_task(refresh, 300) # Once every five minutes
 
@@ -83,12 +93,18 @@ def refresh_tokens():
 def update_vdb():
     def update():
         if os.path.isfile(VDB_LOCK):
+            logging.info('Updating VDB...')
+
             questdb_pool = app.state.questdb_pool
 
             # Get admin authenticated sources and update DB
-            sources = get_admin_credentials(questdb_pool)
+            sources = get_authenticated_admin_sources(questdb_pool)
+
+            logging.info('Found %s valid sources', len(sources))
 
             build_vectordb_from_sources(sources)
+
+            logging.info('VDB update job finished', len(sources))
 
     periodic_task(update, 3600) # Once an hour
 
@@ -98,6 +114,8 @@ def extract_usage_metrics():
     import psutil
 
     def calc():    
+        logging.info('Collecting hardware usage metrics...')
+
         questdb_pool = app.state.questdb_pool
     
         # CPU

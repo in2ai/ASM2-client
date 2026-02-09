@@ -2,6 +2,7 @@ import igraph as ig
 import random
 import json
 import os
+import logging
 from typing import Iterable
 
 from langchain_openai import ChatOpenAI
@@ -84,6 +85,8 @@ def get_doc_by_id(vdb: Qdrant, id):
 def extract_initial_topics(vdb: Qdrant, vdb_path: str):
     if not CALCULATE_TOPICS:
         return
+    
+    logging.info('Executing topic extraction...')
 
     # Iteration variables
     batch_size = 1024
@@ -92,6 +95,8 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
     ids = []
     edges = []
     offset = None
+
+    logging.info('Generating similarity graph...')
 
     while True:
         batch, offset = vdb.client.scroll(
@@ -145,9 +150,13 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
     g.vs["name"] = ids
 
     # Calculate communities
+    logging.info('Clustering entries...')
+
     communities = g.community_leiden(resolution=TOPIC_RESOLUTION)
 
     # Calculate representative docs
+    logging.info('Clarifying topic names...')
+
     topics = {}
     topic_mapping = {lang: {} for lang in SUPPORTED_LANGUAGES}
     topic_index = 0
@@ -231,9 +240,11 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
             if weight >= TOPIC_MIN_CONTRIB:
                 aggregated_topics[v_name][t] = max(weight, aggregated_topics[v_name].get(t, 0.0))
 
-    # Actualizar metadatos
+    # Update metadata
+    logging.info('Updating VDB metadata...')
+
     for id, ts in aggregated_topics.items():
-        # Convertir claves enteras a strings para compatibilidad con JSON de Qdrant
+        # Transform ints to strings for Qdrant compatibility reasons
         topics_str_keys = {str(k): v for k, v in ts.items()}
         vdb.client.set_payload(
             collection_name=vdb.collection_name,
@@ -243,6 +254,8 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
         )
 
     save_topic_mapping(vdb_path, topic_mapping)
+
+    logging.info('Finished topic extraction')
 
     return communities
 

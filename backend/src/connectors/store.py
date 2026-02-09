@@ -1,6 +1,7 @@
 import os
 from typing import List
 import uuid
+import logging
 
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
@@ -78,6 +79,8 @@ def build_vectordb_from_sources(sources: List[DataSource]):
     for source in sources:
         vectordb = build_vectorstore(source)
 
+    extract_topics(vectordb)
+
     return vectordb
 
 
@@ -92,6 +95,8 @@ def build_vectorstore(source: DataSource, batch_size=200):
     vectorstore = get_vectordb()
 
     if not vectorstore.client.collection_exists(QDRANT_COL):
+        logging.info('Creating Qdrant collection...')
+
         # Create collection
         vectorstore.client.create_collection(
             collection_name=QDRANT_COL,
@@ -102,6 +107,8 @@ def build_vectorstore(source: DataSource, batch_size=200):
                 "bm25": SparseVectorParams(modifier=Modifier.IDF),
             },
         )
+
+        logging.info('Creating Qdrant indexes...')
 
         # Create indexes
         vectorstore.client.create_payload_index(
@@ -124,6 +131,8 @@ def build_vectorstore(source: DataSource, batch_size=200):
 
     # Update file permissions
     for file in files:
+        logging.info('Updating file permissions for source %s...', source.name)
+
         update_file_permissions(
             vectorstore, file.metadata["id"], file.metadata["permissions"]
         )
@@ -145,7 +154,7 @@ def build_vectorstore(source: DataSource, batch_size=200):
 
     # Early return if no changes are needed
     if len(files_to_delete) == 0 and len(files_to_add) == 0:
-        print(f"📂 ({source.name}) El índice no necesita cambios")
+        logging.info('VDB does not need any changes for source %s', source.name)
 
         return vectorstore
 
@@ -159,6 +168,8 @@ def build_vectorstore(source: DataSource, batch_size=200):
     ).count
 
     if num_ids_to_delete > 0:
+        logging.info('Deleting VDB stale entries for source %s', source.name)
+
         manifest.remove_processed_ids(source.name, files_to_delete)
         manifest.remove_chunks(num_ids_to_delete)
 
@@ -206,7 +217,7 @@ def build_vectorstore(source: DataSource, batch_size=200):
         manifest.add_chunks(len(docs_batch))
         manifest.save()
 
-        print(f"🧩 ({source.name}) Persistidos {len(docs_batch)} chunks [{reason}]")
+        logging.info('Persisted %s chunks from source %s', len(docs_batch), source.name)
 
         docs_batch, pending_ids = [], []
 
@@ -274,7 +285,6 @@ def extract_topics(vectorstore: Qdrant):
     # Add topics if needed
     if not manifest.has_topics():
         if manifest.num_chunks() > TOPIC_MIN_SIZE:
-            print(f"💾 Detectando temas...")
             extract_initial_topics(vectorstore, QDRANT_PATH)
 
             if CALCULATE_TOPICS:
@@ -282,4 +292,4 @@ def extract_topics(vectorstore: Qdrant):
                 manifest.save()
 
         else:
-            print(f"El índice es demasiado pequeño para detectar temas")
+            logging.info('Not enough data in VDB for topic detection')

@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 
 import chardet
 import requests
@@ -29,7 +30,7 @@ def extract_docx_text(data: bytes) -> str:
                     tables_text.append(" | ".join(row_text))
         return "\n".join(paragraphs + tables_text).strip()
     except Exception as e:
-        print(f"Error extrayendo DOCX: {e}")
+        logging.error(f"Error while extracting DOCX: {e}")
         return None
 
 
@@ -44,7 +45,7 @@ def extract_pptx_text(data: bytes) -> str:
                     text_runs.append(shape.text.strip())
         return "\n".join(text_runs).strip()
     except Exception as e:
-        print(f"Error extrayendo PPTX: {e}")
+        logging.error(f"Error while extracting PPTX: {e}")
         return None
 
 
@@ -62,7 +63,7 @@ def extract_excel_text(data: bytes) -> str:
                     text_rows.append(row_text)
         return "\n".join(text_rows).strip()
     except Exception as e:
-        print(f"Error extrayendo Excel: {e}")
+        logging.error(f"Error while extracting Excel: {e}")
         return None
 
 
@@ -78,7 +79,7 @@ def extract_html_text(data: bytes) -> str:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         return "\n".join(lines).strip()
     except Exception as e:
-        print(f"Error extrayendo HTML: {e}")
+        logging.error(f"Error while extracting HTML: {e}")
         return None
 
 
@@ -98,7 +99,7 @@ def extract_csv_text(data: bytes) -> str:
                 rows.append(row_text)
         return "\n".join(rows).strip()
     except Exception as e:
-        print(f"Error extrayendo CSV: {e}")
+        logging.error(f"Error while extracting CSV: {e}")
         return None
 
 
@@ -109,7 +110,7 @@ def extract_pdf_text(data: bytes) -> str:
         reader = PdfReader(fh)
         return "\n".join([(p.extract_text() or "") for p in reader.pages]).strip()
     except Exception as e:
-        print(f"Error extrayendo PDF: {e}")
+        logging.error(f"Error while extracting PDF: {e}")
         return None
 
 

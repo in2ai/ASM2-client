@@ -80,3 +80,14 @@ def get_authenticated_sources(pool: ThreadedConnectionPool, logto_token: str):
     checked_sources = [s for s in unchecked_sources if s.login()]
 
     return checked_sources
+
+
+def get_authenticated_admin_sources(pool: ThreadedConnectionPool):
+    # Extract raw credentials from the database
+    stored_credentials = get_admin_credentials(pool)
+
+    # Return only sources that were confirmed to be working
+    unchecked_sources = [SOURCES[s](c) for s, c in stored_credentials]
+    checked_sources = [s for s in unchecked_sources if s.login()]
+
+    return checked_sources
