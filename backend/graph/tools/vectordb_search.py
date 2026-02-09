@@ -1,6 +1,7 @@
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
 from src.utils.rag import retrieve_and_rerank
+from tools.query_rewrite import rewrite_query_if_needed
 
 # TODO: turn into subgraph
 
@@ -13,6 +14,10 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     vectorstore = configurable["vectorstore"]
     sources = configurable["sources"]
     reranker = configurable["reranker"]
+
+    # Rewrite ambiguous queries using conversation context
+    conversation_history = configurable.get("conversation_history", [])
+    query = rewrite_query_if_needed(query, conversation_history)
 
     try:
         chunks, available_sources, lang_code = retrieve_and_rerank(
@@ -48,9 +53,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
             title = source.get("title", "Untitled")
             source_type = source.get("source_type", "Unknown")
             link = source.get("link") or "N/A"
-            sources_lines.append(
-                f"- type: {source_type}, title: {title}, link: {link}"
-            )
+            sources_lines.append(f"- type: {source_type}, title: {title}, link: {link}")
         output += "\n\nAVAILABLE SOURCES:\n" + "\n".join(sources_lines)
 
     return output
