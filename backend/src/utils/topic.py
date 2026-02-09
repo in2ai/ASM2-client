@@ -1,25 +1,23 @@
-import igraph as ig
-import random
 import json
 import os
 import logging
+import random
 from typing import Iterable
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
+import igraph as ig
 from langchain_community.vectorstores import Qdrant
-from langchain.schema import Document
-
+from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 from qdrant_client.http import models
 
 from src.config.search_config import APPROX_SEARCH_PARAMS
 from src.utils.nlp import SUPPORTED_LANGUAGES
 
-
 TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
 TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
 TOPIC_MAPPING_FILENAME = "topics.json"
-CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
+CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", "") == "True"
 
 
 def get_topic_mapping_path(vdb_path: str) -> str:
@@ -105,25 +103,22 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
             offset=offset,
             limit=batch_size,
             with_payload=False,
-            with_vectors=True
+            with_vectors=True,
         )
 
         requests = [
             models.QueryRequest(
-                query=i.vector['embedding'],
-                using='embedding',
+                query=i.vector["embedding"],
+                using="embedding",
                 limit=200,
                 with_payload=False,
                 with_vector=False,
-                params=APPROX_SEARCH_PARAMS
+                params=APPROX_SEARCH_PARAMS,
             )
             for i in batch
         ]
 
-        hits = vdb.client.query_batch_points(
-            vdb.collection_name,
-            requests
-        )
+        hits = vdb.client.query_batch_points(vdb.collection_name, requests)
 
         for point, nearest in zip(batch, hits):
             ids.append(point.id)
@@ -204,7 +199,7 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
                 name = f"Topic {topic_index}"
             topic_mapping[lang][str(topic_index)] = name
 
-        print(f'Topic: {topic_mapping.get("es", {}).get(str(topic_index))}')
+        print(f"Topic: {topic_mapping.get('es', {}).get(str(topic_index))}")
 
         for m in members:
             m_id = ids[m]
@@ -241,7 +236,9 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
             aggregated_topics.setdefault(v_name, {})
 
             if weight >= TOPIC_MIN_CONTRIB:
-                aggregated_topics[v_name][t] = max(weight, aggregated_topics[v_name].get(t, 0.0))
+                aggregated_topics[v_name][t] = max(
+                    weight, aggregated_topics[v_name].get(t, 0.0)
+                )
 
     # Update metadata
     logging.info('Updating VDB metadata...')
@@ -251,9 +248,9 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
         topics_str_keys = {str(k): v for k, v in ts.items()}
         vdb.client.set_payload(
             collection_name=vdb.collection_name,
-            key='metadata',
-            payload={'topics': topics_str_keys},
-            points=[id]
+            key="metadata",
+            payload={"topics": topics_str_keys},
+            points=[id],
         )
 
     save_topic_mapping(vdb_path, topic_mapping)
@@ -273,19 +270,16 @@ def assign_topics(vdb: Qdrant, ids):
     requests = [
         models.QueryRequest(
             query=i,
-            using='embedding',
+            using="embedding",
             limit=200,
             with_payload=True,
             with_vector=False,
-            params=APPROX_SEARCH_PARAMS
+            params=APPROX_SEARCH_PARAMS,
         )
         for i in ids
     ]
 
-    hits = vdb.client.query_batch_points(
-        vdb.collection_name,
-        requests
-    )
+    hits = vdb.client.query_batch_points(vdb.collection_name, requests)
 
     # Get topic connections
     for point, nearest in zip(ids, hits):
@@ -298,8 +292,8 @@ def assign_topics(vdb: Qdrant, ids):
             if n.score < min_cosine:
                 continue  # skip neighbors beyond threshold
 
-            if 'topics' in n.payload['metadata']:
-                n_topics.append(n.payload['metadata']['topics'])
+            if "topics" in n.payload["metadata"]:
+                n_topics.append(n.payload["metadata"]["topics"])
 
         # Ensure enough neighbors with topics
         if len(n_topics) < 20:
@@ -324,9 +318,9 @@ def assign_topics(vdb: Qdrant, ids):
         # Save chunk to VDB
         vdb.client.set_payload(
             collection_name=vdb.collection_name,
-            key='metadata',
-            payload={'topics': topics_dict},
-            points=[point]
+            key="metadata",
+            payload={"topics": topics_dict},
+            points=[point],
         )
 
 
@@ -349,7 +343,7 @@ def get_topic(texts):
     Evita temas compuestos separados por nexos ("Comunicaciones Unificadas y Telefonía IP" son dos temas, no uno).
     """
 
-    user = '\n\n-----------------------\n\n'.join(texts)
+    user = "\n\n-----------------------\n\n".join(texts)
 
     res = None
     tries = 0
@@ -358,7 +352,9 @@ def get_topic(texts):
         try:
             tries += 1
             llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-            ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
+            ans = llm.invoke(
+                [SystemMessage(content=system), HumanMessage(content=user)]
+            ).content
             res = json.loads(ans)
 
         except json.JSONDecodeError:
