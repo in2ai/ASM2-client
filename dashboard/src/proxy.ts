@@ -3,8 +3,6 @@ import type { NextRequest } from "next/server";
 import { getLogtoContext } from "@logto/next/server-actions";
 import { logtoConfig } from "@/lib/logto";
 
-export const runtime = 'nodejs';
-
 const publicPaths = [
   "/sign-in",
   "/callback",
@@ -13,7 +11,7 @@ const publicPaths = [
   "/api/health",
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   // Allow public paths

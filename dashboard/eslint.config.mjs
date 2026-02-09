@@ -1,22 +1,17 @@
-import { FlatCompat } from "@eslint/eslintrc";
-import tseslint from "typescript-eslint";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
 
-const compat = new FlatCompat({
-  baseDirectory: import.meta.dirname,
-});
-
-export default tseslint.config(
-  {
-    ignores: [".next", "src/components/ui/chart.tsx"],
-  },
-  ...compat.extends("next/core-web-vitals"),
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
   {
     files: ["**/*.ts", "**/*.tsx"],
-    extends: [
-      ...tseslint.configs.recommended,
-      ...tseslint.configs.recommendedTypeChecked,
-      ...tseslint.configs.stylisticTypeChecked,
-    ],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+      },
+    },
     rules: {
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/consistent-type-definitions": "off",
@@ -39,10 +34,17 @@ export default tseslint.config(
     linterOptions: {
       reportUnusedDisableDirectives: true,
     },
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-      },
-    },
   },
-);
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    // Custom ignores:
+    "src/components/ui/chart.tsx",
+  ]),
+]);
+
+export default eslintConfig;
