@@ -141,7 +141,7 @@ def extract_usage_metrics():
 @app.post("/start-vdb-update", status_code=200)
 async def start_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
-        raise HTTPException(400)
+        raise HTTPException(403)
     
     with open(VDB_LOCK, 'w+'):
         pass
@@ -150,7 +150,7 @@ async def start_vdb_update(logto_token: str):
 @app.post("/stop-vdb-update", status_code=200)
 async def stop_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
-        raise HTTPException(400)
+        raise HTTPException(403)
     
     try:
         os.remove(VDB_LOCK)
@@ -162,7 +162,7 @@ async def stop_vdb_update(logto_token: str):
 @app.get("/vdb-update-status", status_code=200)
 async def is_vdb_update_active(logto_token: str):
     if not user_is_admin(logto_token):
-        raise HTTPException(400)
+        raise HTTPException(403)
     
     return {
         'active': os.path.isfile(VDB_LOCK)
