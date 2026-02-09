@@ -7,7 +7,7 @@
  * need to use are documented accordingly near the end.
  */
 import { initTRPC, TRPCError } from "@trpc/server";
-import { withAuth } from "@workos-inc/authkit-nextjs";
+import { getUser } from "@/lib/auth";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
@@ -35,8 +35,8 @@ export interface UserContext {
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  // Extract WorkOS user session
-  const { user, role: userRole } = await withAuth();
+  // Extract Logto user session
+  const user = await getUser();
 
   // If no user, return context without user information
   if (!user) {
@@ -47,15 +47,15 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
     };
   }
 
-  // Extract and normalize user role from WorkOS metadata
-  // Administrator role: users with 'admin' role in WorkOS
+  // Extract and normalize user role from Logto
+  // Administrator role: users with 'admin' role in Logto
   // End User role: all other authenticated users
-  const role = userRole === "admin" ? "admin" : "user";
+  const role = user.role === "admin" ? "admin" : "user";
 
   // Create UserContext for authentication and tracking
   const userContext: UserContext = {
-    userId: user.id,
-    email: user.email,
+    userId: user.sub,
+    email: user.email ?? "",
     firstName: user.firstName,
     lastName: user.lastName,
     role,

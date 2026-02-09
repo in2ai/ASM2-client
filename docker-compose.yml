@@ -82,8 +82,20 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
-        - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+        LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+        LOGTO_APP_ID: ${LOGTO_APP_ID}
+        QUESTDB_HOST: ${QUESTDB_HOST}
+        QUESTDB_PORT: ${QUESTDB_PORT}
+        QUESTDB_USER: ${QUESTDB_USER}
+        QUESTDB_DB: ${QUESTDB_DB}
+      # SECURITY: Secrets are mounted via BuildKit during build only.
+      # They are available at /run/secrets/<id> during the build step
+      # but are NOT persisted in image layers.
+      secrets:
+        - LOGTO_APP_SECRET
+        - LOGTO_COOKIE_SECRET
+        - QUESTDB_PASSWORD
     image: dashboard:latest
     container_name: dashboard
     depends_on:
@@ -92,6 +104,55 @@ services:
       - "3001:3001"
     env_file:
       - .env
-    environment:
-      - NODE_ENV=production
     restart: unless-stopped
+
+  # Logto Authentication Service
+  logto:
+    depends_on:
+      logto-postgres:
+        condition: service_healthy
+    image: ghcr.io/logto-io/logto:1.36.0
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+    ports:
+      - "3011:3001" # Main Logto endpoint (mapped to 3011)
+      - "3002:3002" # Admin console
+    environment:
+      TRUST_PROXY_HEADER: 1
+      DB_URL: postgres://logto:${LOGTO_POSTGRES_PASSWORD}@logto-postgres:5432/logto
+      ENDPOINT: ${LOGTO_ENDPOINT}
+      ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT}
+    volumes:
+      - logto-connectors:/etc/logto/packages/core/connectors
+    restart: unless-stopped
+
+  # PostgreSQL for Logto
+  logto-postgres:
+    image: postgres:18-alpine
+    container_name: logto-postgres
+    user: postgres
+    environment:
+      POSTGRES_USER: logto
+      POSTGRES_DB: logto
+      POSTGRES_PASSWORD: ${LOGTO_POSTGRES_PASSWORD}
+    volumes:
+      - logto-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U logto -d logto"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+# Build-time secrets (read from environment variables)
+# These are used during docker build only and are NOT stored in image layers
+secrets:
+  LOGTO_APP_SECRET:
+    environment: LOGTO_APP_SECRET
+  LOGTO_COOKIE_SECRET:
+    environment: LOGTO_COOKIE_SECRET
+  QUESTDB_PASSWORD:
+    environment: QUESTDB_PASSWORD
+
+volumes:
+  logto-connectors:
+  logto-postgres-data:

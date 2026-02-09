@@ -42,19 +42,40 @@ COPY . .
 
 # Set build-time environment variables
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV SKIP_ENV_VALIDATION=true
 ENV NODE_ENV=production
 
-# NEXT_PUBLIC_* variables must be available at build time
-# because they are inlined into the client-side JavaScript bundle
-ARG NEXT_PUBLIC_WORKOS_REDIRECT_URI
-ENV NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
-
+# Build-time environment variables (non-sensitive)
+# NEXT_PUBLIC_* vars are inlined into the client JS bundle at build time
 ARG NEXT_PUBLIC_APP_URL
-ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ARG LOGTO_ENDPOINT
+ARG LOGTO_APP_ID
+ARG QUESTDB_HOST
+ARG QUESTDB_PORT
+ARG QUESTDB_USER
+ARG QUESTDB_DB
 
-# Build the application
-RUN pnpm run build
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV LOGTO_ENDPOINT=${LOGTO_ENDPOINT}
+ENV LOGTO_APP_ID=${LOGTO_APP_ID}
+ENV QUESTDB_HOST=${QUESTDB_HOST}
+ENV QUESTDB_PORT=${QUESTDB_PORT}
+ENV QUESTDB_USER=${QUESTDB_USER}
+ENV QUESTDB_DB=${QUESTDB_DB}
+
+# Build the application using BuildKit secret mounts
+# SECURITY: Secrets are mounted as files during build only - they are NOT
+# persisted in image layers. After this RUN command completes, the secrets
+# are no longer accessible in the image.
+#
+# Requires: DOCKER_BUILDKIT=1 (enabled by default in Docker 23.0+)
+# Secrets are passed via docker build --secret or docker-compose secrets
+RUN --mount=type=secret,id=LOGTO_APP_SECRET \
+    --mount=type=secret,id=LOGTO_COOKIE_SECRET \
+    --mount=type=secret,id=QUESTDB_PASSWORD \
+    LOGTO_APP_SECRET=$(cat /run/secrets/LOGTO_APP_SECRET) \
+    LOGTO_COOKIE_SECRET=$(cat /run/secrets/LOGTO_COOKIE_SECRET) \
+    QUESTDB_PASSWORD=$(cat /run/secrets/QUESTDB_PASSWORD) \
+    pnpm run build
 
 # ============================================
 # Runner stage: Production image

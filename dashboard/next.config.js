@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Only load .env file manually in local development when env vars aren't already set.
-const isEnvAlreadyLoaded = !!process.env.WORKOS_API_KEY;
+const isEnvAlreadyLoaded = !!process.env.LOGTO_ENDPOINT;
 
 if (!isEnvAlreadyLoaded && !process.env.SKIP_ENV_VALIDATION) {
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -68,15 +68,14 @@ const config = {
               // Styles: self + inline (needed for styled-components/emotion)
               "style-src 'self' 'unsafe-inline'",
 
-              // Images: self, data URIs, blob URIs (WorkOS), and HTTPS sources
-              // WorkOS uses blob: for error pages and imgix/workoscdn for assets
-              "img-src 'self' data: blob: https://workos.imgix.net https://images.workoscdn.com https:",
+              // Images: self, data URIs, blob URIs, and HTTPS sources
+              "img-src 'self' data: blob: https:",
 
               // Fonts: self and data URIs
               "font-src 'self' data:",
 
-              // API connections: self + WorkOS API
-              "connect-src 'self' https://api.workos.com https://*.workos.com",
+              // API connections: self + Logto endpoints
+              "connect-src 'self'",
 
               // Prevent clickjacking
               "frame-ancestors 'self'",
@@ -84,9 +83,8 @@ const config = {
               // Restrict base URI to prevent base tag hijacking
               "base-uri 'self'",
 
-              // Form submissions: self + WorkOS authentication endpoints
-              // Required for OAuth redirects to WorkOS
-              "form-action 'self' https://api.workos.com https://*.workos.com",
+              // Form submissions: self + Logto authentication endpoints
+              "form-action 'self'",
             ].join("; "),
           },
         ],

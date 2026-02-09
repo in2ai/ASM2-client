@@ -58,8 +58,20 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_WORKOS_REDIRECT_URI=${NEXT_PUBLIC_WORKOS_REDIRECT_URI}
-        - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+        LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+        LOGTO_APP_ID: ${LOGTO_APP_ID}
+        QUESTDB_HOST: ${QUESTDB_HOST}
+        QUESTDB_PORT: ${QUESTDB_PORT}
+        QUESTDB_USER: ${QUESTDB_USER}
+        QUESTDB_DB: ${QUESTDB_DB}
+      # SECURITY: Secrets are mounted via BuildKit during build only.
+      # They are available at /run/secrets/<id> during the build step
+      # but are NOT persisted in image layers.
+      secrets:
+        - LOGTO_APP_SECRET
+        - LOGTO_COOKIE_SECRET
+        - QUESTDB_PASSWORD
     image: dashboard:latest
     container_name: dashboard
     # No depends_on: questdb - connecting to remote VPS instance
@@ -67,6 +79,14 @@ services:
       - "3001:3001"
     env_file:
       - .env
-    environment:
-      - NODE_ENV=production
     restart: unless-stopped
+
+# Build-time secrets (read from environment variables)
+# These are used during docker build only and are NOT stored in image layers
+secrets:
+  LOGTO_APP_SECRET:
+    environment: LOGTO_APP_SECRET
+  LOGTO_COOKIE_SECRET:
+    environment: LOGTO_COOKIE_SECRET
+  QUESTDB_PASSWORD:
+    environment: QUESTDB_PASSWORD

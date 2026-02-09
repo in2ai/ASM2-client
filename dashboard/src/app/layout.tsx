@@ -2,7 +2,6 @@ import { AuthErrorBoundary } from "@/components/auth-error-boundary";
 import { ErrorBoundary } from "@/components/error-boundary";
 import "@/styles/globals.css";
 import { TRPCReactProvider } from "@/trpc/react";
-import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
@@ -25,9 +24,7 @@ export default function RootLayout({
       <body>
         <ErrorBoundary>
           <AuthErrorBoundary>
-            <TRPCReactProvider>
-              <AuthKitProvider>{children}</AuthKitProvider>
-            </TRPCReactProvider>
+            <TRPCReactProvider>{children}</TRPCReactProvider>
           </AuthErrorBoundary>
         </ErrorBoundary>
       </body>

@@ -2,8 +2,8 @@
 
 import { NoMetricsEmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
+import { type LogtoUser } from "@/lib/auth";
 import { api } from "@/trpc/react";
-import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { useMemo, useState } from "react";
 import { type DateRange } from "react-day-picker";
 import { AppLayout } from "./app-layout";
@@ -12,7 +12,6 @@ import { LoadingState } from "./metrics/loading-state";
 import { OverviewHighlights } from "./metrics/overview-highlights";
 import { PersistentHeader } from "./metrics/persistent-header";
 import { RAGQualityMetrics } from "./metrics/rag-quality-metrics";
-import { type WorkOSUser } from "./metrics/types";
 import { UsageMetrics } from "./metrics/usage-metrics";
 import {
   getDateFormatter,
@@ -22,16 +21,19 @@ import {
   isRecoverableError,
 } from "./metrics/utils";
 
+interface MetricsDashboardProps {
+  readonly user: LogtoUser | null;
+}
+
 /**
  * Display the metrics dashboard UI with date-range controls, header, and view-specific metric panels.
  *
  * Manages date-range state, fetches metrics and stats for the authenticated user, and shows loading, authentication, error, or empty states as appropriate. When data is available it renders the selected view's metrics panel (overview, usage, rag-quality, or insights).
  *
+ * @param user - The authenticated user object from Logto, or null if not authenticated.
  * @returns The rendered dashboard element containing the header, controls, and the current metrics view or state screen.
  */
-export function MetricsDashboard() {
-  const { user: authUser } = useAuth();
-  const user = authUser as WorkOSUser | null;
+export function MetricsDashboard({ user }: MetricsDashboardProps) {
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
@@ -72,7 +74,7 @@ export function MetricsDashboard() {
   );
 
   return (
-    <AppLayout>
+    <AppLayout user={user}>
       {(view) => (
         <div className="mx-auto max-w-screen-2xl p-4 sm:p-6 lg:p-8">
           {user && !isPending && (
