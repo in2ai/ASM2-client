@@ -138,7 +138,7 @@ def extract_usage_metrics():
 # App endpoints
 # ---------------------------------
 
-@app.get("/start-vdb-update", status_code=200)
+@app.post("/start-vdb-update", status_code=200)
 async def start_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(400)
@@ -147,7 +147,7 @@ async def start_vdb_update(logto_token: str):
         pass
 
 
-@app.get("/stop-vdb-update", status_code=200)
+@app.post("/stop-vdb-update", status_code=200)
 async def stop_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(400)
