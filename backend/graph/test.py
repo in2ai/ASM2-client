@@ -9,6 +9,10 @@ from langchain_core.messages import HumanMessage
 config = {"configurable": {"thread_id": "1"}}
 
 if __name__ == "__main__":
+    from src.utils.nlp import init_nlp
+
+    init_nlp()
+
     # Save graph visualization to file
     png_bytes = graph.get_graph().draw_mermaid_png()
     graph_path = Path(__file__).parent / "graph_diagram.png"
@@ -20,12 +24,7 @@ if __name__ == "__main__":
     # 1. Basic conversation
     print("User: Hello, how are you?")
     response = graph.invoke(
-        {
-            "messages": [HumanMessage(content="Hello, how are you?")],
-            "user_id": "test_user",
-            "detected_lang": "en",
-            "summary": "",
-        },
+        {"messages": [HumanMessage(content="Hello, how are you?")]},
         config,
     )
     print(f"Assistant: {response['messages'][-1].content}\n")
@@ -33,12 +32,7 @@ if __name__ == "__main__":
     # 2. Tool invocation — ask the LLM to run the test tool
     print("User: Please perform the test")
     response = graph.invoke(
-        {
-            "messages": [HumanMessage(content="Please perform the test")],
-            "user_id": "test_user",
-            "detected_lang": "en",
-            "summary": "",
-        },
+        {"messages": [HumanMessage(content="Please perform the test")]},
         config,
     )
     print(f"Assistant (after tool): {response['messages'][-1].content}\n")
@@ -46,12 +40,7 @@ if __name__ == "__main__":
     # 3. Memory — same thread should remember prior messages
     print("User: What did I ask you first?")
     response = graph.invoke(
-        {
-            "messages": [HumanMessage(content="What did I ask you first?")],
-            "user_id": "test_user",
-            "detected_lang": "en",
-            "summary": "",
-        },
+        {"messages": [HumanMessage(content="What did I ask you first?")]},
         config,
     )
     print(f"Assistant (memory check): {response['messages'][-1].content}\n")
@@ -73,12 +62,7 @@ if __name__ == "__main__":
     for i, topic in enumerate(topics, 1):
         print(f'  User: "{topic}"')
         response = graph.invoke(
-            {
-                "messages": [HumanMessage(content=topic)],
-                "user_id": "test_user",
-                "detected_lang": "en",
-                "summary": "",
-            },
+            {"messages": [HumanMessage(content=topic)]},
             ltm_config,
         )
         msg_count = len(response["messages"])
@@ -107,12 +91,7 @@ if __name__ == "__main__":
     # Verify the assistant can recall earlier topics via the summary
     print('  User: "What topics have we discussed so far?"')
     response = graph.invoke(
-        {
-            "messages": [HumanMessage(content="What topics have we discussed so far?")],
-            "user_id": "test_user",
-            "detected_lang": "en",
-            "summary": "",
-        },
+        {"messages": [HumanMessage(content="What topics have we discussed so far?")]},
         ltm_config,
     )
     print(f"\n  Recall check: {response['messages'][-1].content}\n")

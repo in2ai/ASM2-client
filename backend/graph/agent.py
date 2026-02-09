@@ -1,55 +1,30 @@
-from checkpointer import checkpointer
-from edges.should_continue import should_continue
-from langchain_core.messages import SystemMessage
-from langgraph.graph import START, StateGraph
+from langgraph.graph import START, END, StateGraph
 from langgraph.prebuilt import ToolNode
-from model import llm
+from model import tool_list
 from nodes.assistant import call_model as assistant
+from nodes.pre_process import pre_process
 from nodes.summarize_conversation import summarize_conversation
+from edges.should_continue import should_continue
 from state import State
 
-# Here we import our tools/plug-ins for the agent system
-from tools.test_tool import test_tool
-from tools.vectordb_search import vectordb_search
 
-# 2. Add tools (hybrid search, specific uses)
+def build_graph(checkpointer=None):
+    builder = StateGraph(State)
 
-tool_list = [test_tool, vectordb_search]
-llm_with_tools = llm.bind_tools(tool_list, parallel_tool_calls=False)
+    builder.add_node("pre_process", pre_process)
+    builder.add_node("assistant", assistant)
+    builder.add_node("tools", ToolNode(tool_list))
+    builder.add_node("summarize_conversation", summarize_conversation)
 
-# 3.
-# # sys_msg = SystemMessage(
-#     content=(
-#         "You are a RAG conversational assistant. Respond ONLY with the provided CONTEXT. "
-#         "Respond EXCLUSIVELY in the language of the last message of the user, "
-#         f"which has been detected to have the following language code: {lang_code}. "
-#         "Do not improvise if you don't have information in the context. "
-#         'In your response, do not use the word "CONTEXT", instead use "the sources". '
-#         "Write in natural, clear, and direct language. "
-#         "IMPORTANT: In the 'sources' field, include ONLY the sources you actually used to respond. "
-#         "If the question is a greeting, thanks, or does not require information from the sources, leave 'sources' empty. "
-#         "Use the conversation history to follow the thread."
-#     )
-# )
-sys_msg = SystemMessage(
-    content=("You are a useful AI assistant. Be useful and polite.")
-)
+    builder.add_edge(START, "pre_process")
+    builder.add_edge("pre_process", "assistant")
+    builder.add_conditional_edges("assistant", should_continue)
+    builder.add_edge("tools", "assistant")
 
-# 4. Build graph
-
-builder = StateGraph(State)
-
-builder.add_node("assistant", assistant)
-builder.add_node("tools", ToolNode(tool_list))
-builder.add_node(summarize_conversation)
-
-builder.add_edge(START, "assistant")
-builder.add_conditional_edges("assistant", should_continue)
-builder.add_edge("tools", "assistant")
-
-# checkpointer = MemorySaver()
-graph = builder.compile(checkpointer=checkpointer)
+    return builder.compile(checkpointer=checkpointer)
 
 
-# Graph is ready to be invoked! graph.invoke
-# graph.get_graph().print_ascii()
+# Module-level graph for local test.py
+from checkpointer import get_checkpointer
+
+graph = build_graph(get_checkpointer())
