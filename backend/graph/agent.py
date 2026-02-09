@@ -14,17 +14,14 @@ def build_graph(checkpointer=None):
 
     def tools_with_history(state: State, config):
         """Wrap ToolNode to inject conversation history into config for tools."""
-        # LangGraph may pass either a dict-like state or a Pydantic State instance.
         if isinstance(state, dict):
-            state_dict = state
             messages = state.get("messages", [])
         else:
             messages = getattr(state, "messages", [])
-            state_dict = (
-                state.model_dump()  # Pydantic v2
-                if hasattr(state, "model_dump")
-                else state.dict()   # Pydantic v1 fallback
-            )
+
+        # Pass messages directly — model_dump() would serialize LangChain
+        # message objects to plain dicts, breaking ToolNode's isinstance checks.
+        state_dict = {"messages": messages}
 
         enhanced_config = {
             **config,
