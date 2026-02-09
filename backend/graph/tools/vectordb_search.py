@@ -1,6 +1,5 @@
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
-from model import llm
 from src.utils.rag import retrieve_and_rerank
 
 # TODO: turn into subgraph
@@ -8,37 +7,42 @@ from src.utils.rag import retrieve_and_rerank
 
 @tool
 def vectordb_search(query: str, config: RunnableConfig) -> str:
-    """Searches for documents relevant to the user's query thorugh hybrid-search in a database."""
+    """Searches for documents relevant to the user's query through hybrid-search in a database."""
 
     vectorstore = config["configurable"]["vectorstore"]
     sources = config["configurable"]["sources"]
     reranker = config["configurable"]["reranker"]
-    questdb_pool = config["configurable"]["questdb_pool"]
 
-    messages, available_sources, chunks, lang_code = retrieve_and_rerank(
-        query, questdb_pool, vectorstore, reranker, sources
-    )
+    try:
+        chunks, available_sources, lang_code = retrieve_and_rerank(
+            query, vectorstore, reranker, sources
+        )
+    except Exception as e:
+        return f"[Search error: {e}]"
 
-    # structured_llm = llm.with_structured_output(RAGResponse)
-    # response: RAGResponse = structured_llm.invoke(messages)
+    fallback_messages = {
+        "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
+        "en": "I couldn't find relevant information about that topic in the available sources.",
+        "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
+    }
 
     if not chunks:
-        fallback_messages = {
-            "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
-            "en": "I couldn't find relevant information about that topic in the available sources.",
-            "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
-        }
-
-        return fallback_messages[lang_code]
+        return fallback_messages.get(lang_code, fallback_messages["es"])
 
     result = []
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks, 1):
         meta = chunk.metadata
         result.append(
-            f"**{meta.get('title', 'Untitled')}**\n"
+            f"[{i}] {meta.get('title', 'Untitled')}\n"
             f"Source: {meta.get('source', 'Unknown')}\n"
             f"Link: {meta.get('webViewLink', 'N/A')}\n"
-            f"{chunk.page_content[:1500]}\n"
+            f"{chunk.page_content[:1500]}"
         )
 
-    return "\n---\n".join(result)
+    output = "\n---\n".join(result)
+
+    if available_sources:
+        sources_summary = ", ".join(available_sources)
+        output += f"\n\nAVAILABLE SOURCES: {sources_summary}"
+
+    return output
