@@ -1,9 +1,9 @@
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
 from model import llm
-from src.utils.rag import RAGResponse, prepare_rag_context
+from src.utils.rag import retrieve_and_rerank
 
-# TODO: tuurn into subgraph
+# TODO: turn into subgraph
 
 
 @tool
@@ -15,7 +15,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     reranker = config["configurable"]["reranker"]
     questdb_pool = config["configurable"]["questdb_pool"]
 
-    messages, available_sources, chunks, lang_code = prepare_rag_context(
+    messages, available_sources, chunks, lang_code = retrieve_and_rerank(
         query, questdb_pool, vectorstore, reranker, sources
     )
 
