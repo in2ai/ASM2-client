@@ -11,9 +11,9 @@ class State(BaseModel):
     summary: str = ""
     messages: Annotated[list[AnyMessage], add_messages]
 
-    @field_validator("user_id")
-    @classmethod
-    def user_id_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("user_id must not be empty")
-        return v
+    # @field_validator("user_id")
+    # @classmethod
+    # def user_id_not_empty(cls, v: str) -> str:
+    #     if not v.strip():
+    #         raise ValueError("user_id must not be empty")
+    #     return v
