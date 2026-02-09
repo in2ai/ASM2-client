@@ -9,7 +9,14 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 from agent import graph
 from langchain_core.messages import HumanMessage
 
-config = {"configurable": {"thread_id": "1"}}
+config = {
+    "configurable": {
+        "thread_id": "1",
+        "vectorstore": None,
+        "reranker": None,
+        "sources": {},
+    }
+}
 
 if __name__ == "__main__":
     import stanza
@@ -60,7 +67,14 @@ if __name__ == "__main__":
     print("=" * 40)
     print("Long-term memory (summarization) test\n")
 
-    ltm_config = {"configurable": {"thread_id": "2"}}
+    ltm_config = {
+        "configurable": {
+            "thread_id": "2",
+            "vectorstore": None,
+            "reranker": None,
+            "sources": {},
+        }
+    }
     topics = [
         "Tell me about black holes",
         "Now tell me about quantum computing",
