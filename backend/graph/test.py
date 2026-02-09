@@ -48,25 +48,17 @@ if __name__ == "__main__":
     print(f"Assistant: {response['messages'][-1].content}\n")
     print(f"Detected language: {response['detected_lang']}\n")
 
-    # 2. Tool invocation — ask the LLM to run the test tool
-    print("User: Please perform the test")
+    # 2. Follow-up — same thread should remember prior messages
+    print("User: What did I just say?")
     response = graph.invoke(
-        {"messages": [HumanMessage(content="Please perform the test")]},
-        config,
-    )
-    print(f"Assistant (after tool): {response['messages'][-1].content}\n")
-
-    # 3. Memory — same thread should remember prior messages
-    print("User: What did I ask you first?")
-    response = graph.invoke(
-        {"messages": [HumanMessage(content="What did I ask you first?")]},
+        {"messages": [HumanMessage(content="What did I just say?")]},
         config,
     )
     print(f"Assistant (memory check): {response['messages'][-1].content}\n")
 
     print(f"Total messages in thread: {len(response['messages'])}")
 
-    # 4. Long-term memory — trigger summarization by exceeding 6 messages
+    # 3. Long-term memory — trigger summarization by exceeding 6 messages
     print("=" * 40)
     print("Long-term memory (summarization) test\n")
 

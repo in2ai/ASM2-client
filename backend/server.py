@@ -5,8 +5,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 
-from src.utils.nlp import init_nlp
-
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
@@ -18,16 +16,11 @@ from src.config.auth import (
 )
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
-from src.utils.helpers import periodic_task
-from src.metrics.connection import get_questdb_pool
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
-from src.metrics.metrics import Metrics, TimedMetric, insert_metric
-from src.utils.rag import get_reranker
 
 from graph.agent import build_graph
 from graph.checkpointer import get_checkpointer
 from langchain_core.messages import HumanMessage
-from src.connectors.store import get_vectordb
 from src.metrics.connection import get_questdb_pool
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric
 from src.utils.helpers import periodic_task
@@ -218,7 +211,6 @@ async def chat(logto_token: str, query: str, chat_id: str):
     vectorstore = app.state.vectorstore
     reranker = app.state.reranker
     questdb_pool = app.state.questdb_pool
-
     sources = get_authenticated_sources(questdb_pool, logto_token)
 
     config = {

@@ -52,6 +52,6 @@ def build_graph(checkpointer=None):
         },
     )
     builder.add_edge("tools", "assistant")
-    builder.add_edge("summarize_conversation", "assistant")
+    builder.add_edge("summarize_conversation", END)
 
     return builder.compile(checkpointer=checkpointer)

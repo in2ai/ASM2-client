@@ -3,7 +3,7 @@
 RunnableConfig["configurable"] keys used by the agent and tools.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from langchain_core.messages import AnyMessage
 from src.connectors.source import DataSource
