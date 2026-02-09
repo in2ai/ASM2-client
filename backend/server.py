@@ -228,7 +228,7 @@ async def chat(logto_token: str, query: str, chat_id: str):
             "thread_id": chat_id,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
-            "pool": app.state.questdb_pool,
+            "questdb_pool": app.state.questdb_pool,
             "sources": sources,
         }
     }
