@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from langchain_openai import ChatOpenAI
 
-from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, get_admin_credentials, user_is_admin
+from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, get_admin_credentials, user_is_admin, get_credentials_to_refresh
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.utils.helpers import periodic_task
@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
     jobs = [
         extract_usage_metrics,  # Store CPU, RAM and GPU metrics
         update_vdb,             # Update VDB contents by scanning sources
+        refresh_tokens          # Refresh all valid access tokens near expiration
     ]
 
     loop = asyncio.get_running_loop()
@@ -56,6 +57,28 @@ app = FastAPI(title="ASM2", lifespan=lifespan)
 # ---------------------------------
 # Periodic tasks
 # ---------------------------------
+
+def refresh_tokens():
+    def refresh():
+        if os.path.isfile(VDB_LOCK):
+            questdb_pool = app.state.questdb_pool
+
+            # Get admin authenticated sources and update DB
+            credentials = get_credentials_to_refresh(questdb_pool)
+
+            for user_id, s, creds, is_admin in credentials:
+                source: DataSource = SOURCES[s](creds)
+
+                if not source.login() or not source.refresh():
+                    continue # Invalid source
+
+                # Add new credentials entry
+                new_creds = source.raw_creds
+                add_credentials(questdb_pool, user_id, source, new_creds, is_admin)
+
+
+    periodic_task(refresh, 300) # Once every five minutes
+
 
 def update_vdb():
     def update():

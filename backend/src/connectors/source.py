@@ -16,6 +16,10 @@ class DataSource:
         ...
 
 
+    def refresh(self) -> bool:
+        ...
+
+
     def update_authenticated_principals(self):
         self.authenticated_principals = self.get_authenticated_principals()
 

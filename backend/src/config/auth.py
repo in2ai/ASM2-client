@@ -49,7 +49,7 @@ def get_admin_credentials(pool: ThreadedConnectionPool):
 
 def get_credentials_to_refresh(pool: ThreadedConnectionPool):
     query = """
-    SELECT user_id, source, credentials
+    SELECT user_id, source, credentials, is_admin
     FROM credentials
     WHERE 
         expires_at > NOW()
