@@ -1,138 +1,55 @@
-"""LangGraph agent pipeline with pre/post processing wrapper.
-
-Architecture:
-    START -> pre_process -> agent (create_react_agent) -> post_process -> END
-
-The pre_process node detects language. The agent node is a prebuilt ReAct agent
-that decides when to call tools. The post_process node logs metrics.
-"""
-
+from checkpointer import checkpointer
+from edges.should_continue import should_continue
 from langchain_core.messages import SystemMessage
-from langchain_core.runnables import RunnableConfig
-from langgraph.graph import START, END, StateGraph
-from langgraph.prebuilt import create_react_agent
-
-from checkpointer import get_checkpointer
+from langgraph.graph import START, StateGraph
+from langgraph.prebuilt import ToolNode
 from model import llm
-from state import AgentState
+from nodes.assistant import call_model as assistant
+from nodes.summarize_conversation import summarize_conversation
+from state import State
+
+# Here we import our tools/plug-ins for the agent system
+from tools.test_tool import test_tool
 from tools.vectordb_search import vectordb_search
 
-from src.utils.nlp import detect_language, extract_search_terms, init_nlp
-from src.utils.rag import get_rag_system_prompt
-from src.utils.topic import resolve_topic_names
-from src.connectors.store import QDRANT_PATH
-from src.metrics.metrics import (
-    Metrics,
-    insert_metric,
-    register_topics,
-    register_user_activity,
-    register_words,
+# 2. Add tools (hybrid search, specific uses)
+
+tool_list = [test_tool, vectordb_search]
+llm_with_tools = llm.bind_tools(tool_list, parallel_tool_calls=False)
+
+# 3.
+# # sys_msg = SystemMessage(
+#     content=(
+#         "You are a RAG conversational assistant. Respond ONLY with the provided CONTEXT. "
+#         "Respond EXCLUSIVELY in the language of the last message of the user, "
+#         f"which has been detected to have the following language code: {lang_code}. "
+#         "Do not improvise if you don't have information in the context. "
+#         'In your response, do not use the word "CONTEXT", instead use "the sources". '
+#         "Write in natural, clear, and direct language. "
+#         "IMPORTANT: In the 'sources' field, include ONLY the sources you actually used to respond. "
+#         "If the question is a greeting, thanks, or does not require information from the sources, leave 'sources' empty. "
+#         "Use the conversation history to follow the thread."
+#     )
+# )
+sys_msg = SystemMessage(
+    content=("You are a useful AI assistant. Be useful and polite.")
 )
 
-# ---------------------------------------------------------------------------
-# Tools available to the agent
-# ---------------------------------------------------------------------------
+# 4. Build graph
 
-tool_list = [vectordb_search]
+builder = StateGraph(State)
 
-# ---------------------------------------------------------------------------
-# Pre-processing node: detect language
-# ---------------------------------------------------------------------------
+builder.add_node("assistant", assistant)
+builder.add_node("tools", ToolNode(tool_list))
+builder.add_node(summarize_conversation)
 
-def pre_process(state: AgentState) -> dict:
-    """Detect language from the user's last message and store in state."""
-    last_message = state["messages"][-1]
-    text = last_message.content if hasattr(last_message, "content") else str(last_message)
+builder.add_edge(START, "assistant")
+builder.add_conditional_edges("assistant", should_continue)
+builder.add_edge("tools", "assistant")
 
-    try:
-        lang_code = detect_language(text)
-    except RuntimeError:
-        # NLP not initialized — init now (safety fallback)
-        init_nlp()
-        lang_code = detect_language(text)
-
-    return {"detected_language": lang_code}
+# checkpointer = MemorySaver()
+graph = builder.compile(checkpointer=checkpointer)
 
 
-# ---------------------------------------------------------------------------
-# Agent node: create_react_agent with dynamic system prompt
-# ---------------------------------------------------------------------------
-
-def _make_system_prompt(state: AgentState) -> str:
-    """Build dynamic system prompt using detected language from state."""
-    lang_code = state.get("detected_language", "es")
-    return get_rag_system_prompt(lang_code)
-
-
-def agent_node(state: AgentState, config: RunnableConfig) -> dict:
-    """Invoke the ReAct agent with a dynamic system prompt."""
-    system_prompt = _make_system_prompt(state)
-
-    # Build agent inline — create_react_agent returns a CompiledGraph
-    agent = create_react_agent(
-        llm,
-        tool_list,
-        prompt=SystemMessage(content=system_prompt),
-    )
-
-    # Invoke the agent with the current messages
-    result = agent.invoke(
-        {"messages": state["messages"]},
-        config=config,
-    )
-
-    return {"messages": result["messages"]}
-
-
-# ---------------------------------------------------------------------------
-# Post-processing node: log metrics
-# ---------------------------------------------------------------------------
-
-def post_process(state: AgentState, config: RunnableConfig) -> dict:
-    """Log metrics after the agent has responded."""
-    pool = config["configurable"].get("questdb_pool")
-
-    if pool is None:
-        return {}
-
-    try:
-        # Register user activity
-        register_user_activity(pool)
-
-        # Extract and register search terms from the user's last human message
-        lang_code = state.get("detected_language", "es")
-        human_messages = [m for m in state["messages"] if hasattr(m, "type") and m.type == "human"]
-        if human_messages:
-            last_query = human_messages[-1].content
-            search_terms = extract_search_terms(last_query, lang_code)
-            register_words(pool, search_terms, lang_code)
-
-    except Exception as e:
-        print(f"[WARNING] Metrics logging failed: {e}")
-
-    return {}
-
-
-# ---------------------------------------------------------------------------
-# Build the full graph: pre_process -> agent -> post_process
-# ---------------------------------------------------------------------------
-
-def build_graph(checkpointer=None):
-    """Build the complete agent pipeline graph."""
-    workflow = StateGraph(AgentState)
-
-    workflow.add_node("pre_process", pre_process)
-    workflow.add_node("agent", agent_node)
-    workflow.add_node("post_process", post_process)
-
-    workflow.add_edge(START, "pre_process")
-    workflow.add_edge("pre_process", "agent")
-    workflow.add_edge("agent", "post_process")
-    workflow.add_edge("post_process", END)
-
-    return workflow.compile(checkpointer=checkpointer)
-
-
-# Build a default graph instance for direct usage / testing
-checkpointer = get_checkpointer()
-graph = build_graph(checkpointer)
+# Graph is ready to be invoked! graph.invoke
+# graph.get_graph().print_ascii()

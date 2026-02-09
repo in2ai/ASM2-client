@@ -1,64 +1,44 @@
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
+from model import llm
+from src.utils.rag import RAGResponse, prepare_rag_context
 
-from src.utils.rag import retrieve_and_rerank
+# TODO: tuurn into subgraph
 
 
 @tool
 def vectordb_search(query: str, config: RunnableConfig) -> str:
-    """Searches for documents relevant to the user's query through hybrid-search in a database.
+    """Searches for documents relevant to the user's query thorugh hybrid-search in a database."""
 
-    Use this tool whenever the user asks a question that may require information
-    from their connected documents. The tool performs hybrid search (vector + BM25),
-    filters by permissions, and reranks the results.
-
-    Args:
-        query: The search query to find relevant documents.
-    """
     vectorstore = config["configurable"]["vectorstore"]
     sources = config["configurable"]["sources"]
     reranker = config["configurable"]["reranker"]
+    questdb_pool = config["configurable"]["questdb_pool"]
 
-    try:
-        chunks, available_sources, lang_code = retrieve_and_rerank(
-            query, vectorstore, reranker, sources
-        )
-    except Exception as e:
-        return (
-            f"Error searching documents: {e}. "
-            "Please try rephrasing your query or try again later."
-        )
+    messages, available_sources, chunks, lang_code = prepare_rag_context(
+        query, questdb_pool, vectorstore, reranker, sources
+    )
+
+    # structured_llm = llm.with_structured_output(RAGResponse)
+    # response: RAGResponse = structured_llm.invoke(messages)
 
     if not chunks:
         fallback_messages = {
-            "es": "No encontre informacion relevante sobre ese tema en las fuentes disponibles.",
+            "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
             "en": "I couldn't find relevant information about that topic in the available sources.",
-            "gl": "Non atopei informacion relevante sobre ese tema nas fontes disponibles.",
+            "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
         }
-        return fallback_messages.get(lang_code, fallback_messages["en"])
 
-    # Return structured context for the agent
+        return fallback_messages[lang_code]
+
     result = []
-    for i, chunk in enumerate(chunks, 1):
+    for chunk in chunks:
         meta = chunk.metadata
-        title = meta.get("title") or meta.get("name") or "Untitled"
-        source_type = meta.get("source", "Unknown")
-        link = meta.get("webViewLink", "N/A")
-        content = (chunk.page_content or "")[:1500]
-
         result.append(
-            f"[Source {i}]\n"
-            f"Title: {title}\n"
-            f"Type: {source_type}\n"
-            f"Link: {link}\n"
-            f"Content: {content}\n"
-            f"---"
+            f"**{meta.get('title', 'Untitled')}**\n"
+            f"Source: {meta.get('source', 'Unknown')}\n"
+            f"Link: {meta.get('webViewLink', 'N/A')}\n"
+            f"{chunk.page_content[:1500]}\n"
         )
 
-    # Append available sources summary for citation
-    sources_summary = "\n".join(
-        f"- {s['title']} ({s['source_type']}) - Link: {s.get('link') or 'N/A'}"
-        for s in available_sources
-    )
-
-    return "\n".join(result) + f"\n\nAVAILABLE SOURCES:\n{sources_summary}"
+    return "\n---\n".join(result)

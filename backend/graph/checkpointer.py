@@ -1,26 +1,17 @@
-import os
-
 from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg import Connection
 
-DB_URI = os.getenv("POSTGRES_URI", "postgresql://langgraph:langgraph@localhost:5432/langgraph")
+# TODO: clarify connection to postgresSQL DB
+# # ref: https://medium.com/@dmitri.mahayana/chain-everything-with-langgraph-9a0f35b2d7a2
+DB_URI = "postgresql://langgraph:langgraph@localhost:5432/langgraph"
+# DB_URI = os.getenv("POSTGRES_URI")
 
-_checkpointer = None
+# memory_db_uri = f"postgresql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=disable"
+memory_connection_kwargs = {
+    "autocommit": True,
+    "prepare_threshold": 0,
+}
+conn = Connection.connect(DB_URI, **memory_connection_kwargs)
 
-
-def get_checkpointer() -> PostgresSaver:
-    """Lazy initialization of the PostgreSQL checkpointer."""
-    global _checkpointer
-
-    if _checkpointer is not None:
-        return _checkpointer
-
-    try:
-        _checkpointer = PostgresSaver.from_conn_string(DB_URI)
-        _checkpointer.setup()
-        return _checkpointer
-    except Exception as e:
-        print(f"[WARNING] Could not connect to PostgreSQL for checkpointing: {e}")
-        print("[WARNING] Running without persistent memory (using MemorySaver).")
-        from langgraph.checkpoint.memory import MemorySaver
-        _checkpointer = MemorySaver()
-        return _checkpointer
+checkpointer = PostgresSaver(conn)
+checkpointer.setup()
