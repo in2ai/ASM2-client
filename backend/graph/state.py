@@ -6,8 +6,8 @@ from pydantic import BaseModel, field_validator
 
 
 class State(BaseModel):
-    user_id: str
-    detected_lang: Literal["es", "en", "gl"]
+    # user_id: str // Not needed as of now
+    detected_lang: Literal["es", "en", "gl"] = "es"
     summary: str = ""
     messages: Annotated[list[AnyMessage], add_messages]
 
