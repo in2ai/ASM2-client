@@ -12,7 +12,7 @@ USER_ROLE = 'admin in2ai'
 
 def add_credentials(pool: ThreadedConnectionPool, user_id: str, source: str, credentials: str, is_admin: bool):
     query = """
-    INSERT INTO credentials (user_id, source, credentials, issued_at, needs_refresh_at, expired_at, is_admin)
+    INSERT INTO credentials (user_id, source, credentials, issued_at, needs_refresh_at, expires_at, is_admin)
     VALUES (%s, %s, %s, NOW(), NOW(), NOW(), %s)
     """
 
