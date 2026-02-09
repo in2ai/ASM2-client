@@ -130,9 +130,9 @@ def build_vectorstore(source: DataSource, batch_size=200):
         )
 
     # Update file permissions
-    for file in files:
-        logging.info('Updating file permissions for source %s...', source.name)
+    logging.info('Updating file permissions for source %s...', source.name)
 
+    for file in files:
         update_file_permissions(
             vectorstore, file.metadata["id"], file.metadata["permissions"]
         )
