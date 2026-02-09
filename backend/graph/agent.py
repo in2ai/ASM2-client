@@ -27,9 +27,3 @@ def build_graph(checkpointer=None):
     builder.add_edge("summarize_conversation", "assistant")
 
     return builder.compile(checkpointer=checkpointer)
-
-
-# Module-level graph for local test.py
-from checkpointer import get_checkpointer
-
-graph = build_graph(get_checkpointer())

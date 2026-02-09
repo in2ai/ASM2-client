@@ -5,14 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from langchain_openai import ChatOpenAI
-<<<<<<< HEAD
-=======
-from src.connectors.store import get_vectordb
-from src.metrics.connection import get_questdb_pool
-from src.utils.helpers import periodic_task
+
 from src.utils.nlp import init_nlp
-from src.utils.rag import RAGResponse, get_reranker, prepare_rag_context
->>>>>>> 594e660 (added nlp initiatiation in server.py)
 
 from src.config.log import setup_logging
 from src.config.auth import (
@@ -30,6 +24,9 @@ from src.metrics.connection import get_questdb_pool
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric
 from src.utils.rag import RAGResponse, get_reranker, prepare_rag_context
+from graph.agent import build_graph
+from graph.checkpointer import get_checkpointer
+
 
 # ---------------------------------
 # App configuration
@@ -39,22 +36,21 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-<<<<<<< HEAD
-    # Global shared data
-=======
+
     init_nlp()
->>>>>>> 594e660 (added nlp initiatiation in server.py)
     app.state.vectorstore = get_vectordb()
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
     
-
     # Async periodic jobs
     jobs = [
         extract_usage_metrics,  # Store CPU, RAM and GPU metrics
         update_vdb,             # Update VDB contents by scanning sources
         refresh_tokens          # Refresh all valid access tokens near expiration
     ]
+
+    app.state.graph = build_graph(get_checkpointer())
+
 
     loop = asyncio.get_running_loop()
     app.state.periodic_tasks = [loop.create_task(asyncio.to_thread(j)) for j in jobs]
@@ -67,11 +63,6 @@ async def lifespan(app: FastAPI):
         for j in app.state.periodic_tasks:
             j.cancel()
 
-            try:
-                await j
-            
-            except asyncio.CancelledError:
-                pass
             try:
                 await j
 

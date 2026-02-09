@@ -44,5 +44,6 @@ RUN mkdir -p /app/models/stanza /app/models/nltk && \
 # Copy project
 COPY server.py server.py
 COPY src src
+COPY graph graph
 
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

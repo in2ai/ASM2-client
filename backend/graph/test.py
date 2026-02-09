@@ -6,7 +6,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
-from agent import graph
+from agent import build_graph
+from checkpointer import get_checkpointer
+
+graph = build_graph(get_checkpointer())
 from langchain_core.messages import HumanMessage
 
 config = {
