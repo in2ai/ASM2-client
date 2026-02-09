@@ -2,18 +2,14 @@ from typing import Annotated, Literal
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, field_validator
+from typing_extensions import TypedDict
 
 
-class State(BaseModel):
-    user_id: str
-    detected_lang: Literal["es", "en", "gl"]
-    summary: str = ""
+class AgentState(TypedDict, total=False):
+    """State for the RAG agent pipeline.
+
+    - messages: Conversation history (managed by add_messages reducer)
+    - detected_language: ISO-2 language code detected from the user's last message
+    """
     messages: Annotated[list[AnyMessage], add_messages]
-
-    @field_validator("user_id")
-    @classmethod
-    def user_id_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("user_id must not be empty")
-        return v
+    detected_language: str

@@ -18,10 +18,7 @@ def load_manifest(path):
         "total_chunks": 0, 
         "completed": {},
         "topics": False,
-<<<<<<< HEAD
-=======
         "config_hash": None
->>>>>>> 178d346 (backend restructuring)
     }
 
 
@@ -90,8 +87,6 @@ class VDBManifest:
 
     def set_topics(self):
         self.manifest['topics'] = True
-<<<<<<< HEAD
-=======
 
 
     def get_config_hash(self) -> str:
@@ -111,4 +106,3 @@ class VDBManifest:
         if stored_hash is None:
             return False  # Primera vez, no hay hash anterior
         return stored_hash != current_hash
->>>>>>> 178d346 (backend restructuring)

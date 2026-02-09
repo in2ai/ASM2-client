@@ -1,23 +1,6 @@
 import os, logging
 from dotenv import load_dotenv
 
-<<<<<<< HEAD
-from qdrant_client.http.models import SearchParams
-
-# Load .env file
-load_dotenv(override=True)
-
-# Drive
-CLIENT_SECRET_FILE  = "client_secret.json"
-SCOPES              = ["https://www.googleapis.com/auth/drive.readonly"]
-GDRIVE_ROOT         = (os.getenv("GDRIVE_ROOT") or "").strip().strip('"').strip("'")
-REDIRECT_URI        = (os.getenv("REDIRECT_URI") or "").strip().strip('"').strip("'")
-
-logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
-
-# OpenAI
-OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip().strip('"').strip("'")
-=======
 import streamlit as st
 
 from qdrant_client.http.models import SearchParams
@@ -30,16 +13,12 @@ SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip().strip('"').strip("'")
 FOLDER_ID      = (os.getenv("FOLDER_ID") or "").strip().strip('"').strip("'")
 REDIRECT_URI   = (os.getenv("REDIRECT_URI") or "").strip().strip('"').strip("'")
->>>>>>> 178d346 (backend restructuring)
 
 # Dropbox
 DROPBOX_APP_KEY    = (os.getenv("DROPBOX_APP_KEY") or "").strip().strip('"').strip("'")
 DROPBOX_APP_SECRET = (os.getenv("DROPBOX_APP_SECRET") or "").strip().strip('"').strip("'")
 DROPBOX_ROOT       = (os.getenv("DROPBOX_ROOT") or "/").strip()  # carpeta a indexar
 
-<<<<<<< HEAD
-# OneDrive
-=======
 # Rutas de imágenes (relativas a la raíz del proyecto)
 LOGO_IN2AI = "img/in2ai.png"
 LOGO_IGAPE = "img/igape.png"
@@ -56,7 +35,6 @@ logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 st.set_page_config(page_title="ASM2 - Asistente Conversacional Multiempresa", page_icon="💬", layout="wide")
 
 # OneDrive (Microsoft Graph)
->>>>>>> 178d346 (backend restructuring)
 ONEDRIVE_CLIENT_ID = (os.getenv("ONEDRIVE_CLIENT_ID") or "").strip()
 ONEDRIVE_TENANT_ID = (os.getenv("ONEDRIVE_TENANT_ID") or "").strip()
 ONEDRIVE_AUTHORITY = f"https://login.microsoftonline.com/{ONEDRIVE_TENANT_ID}"

@@ -52,10 +52,6 @@ class CustomLID:
             else self.predict_limit_before_softmax
         )
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 178d346 (backend restructuring)
     def predict_limit_before_softmax(self, text, k=1):
         # sentence vector
         sentence_vector = self.model.get_sentence_vector(text)
@@ -77,10 +73,6 @@ class CustomLID:
 
         return tuple(top_k_labels), top_k_probs
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 178d346 (backend restructuring)
     def predict_limit_after_softmax(self, text, k=1):
         # sentence vector
         sentence_vector = self.model.get_sentence_vector(text)
@@ -103,10 +95,7 @@ class CustomLID:
 
         return tuple(top_k_labels), top_k_probs
 
-<<<<<<< HEAD
-=======
 
->>>>>>> 178d346 (backend restructuring)
 # Supported language filtering
 GLOTLID_TO_ISO2 = {"spa_Latn": "es", "eng_Latn": "en", "glg_Latn": "gl"}
 SUPPORTED_LABELS = [f"__label__{k}" for k in GLOTLID_TO_ISO2]
@@ -117,10 +106,7 @@ DETECTOR = None
 lang_model_dict = {}
 _NLP_INITIALIZED = False
 
-<<<<<<< HEAD
-=======
 
->>>>>>> 178d346 (backend restructuring)
 _WORD_RE = re.compile(r"\p{L}+\p{M}*|\p{N}+")
 
 
