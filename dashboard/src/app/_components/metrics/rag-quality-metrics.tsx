@@ -254,7 +254,6 @@ export function RAGQualityMetrics({
                     axisLine={false}
                     style={{ fontSize: 11 }}
                     tickFormatter={(value) =>
-                      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
                       value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
                     }
                   />
