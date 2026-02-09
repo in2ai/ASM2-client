@@ -5,6 +5,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from langchain_openai import ChatOpenAI
+<<<<<<< HEAD
+=======
+from src.connectors.store import get_vectordb
+from src.metrics.connection import get_questdb_pool
+from src.utils.helpers import periodic_task
+from src.utils.nlp import init_nlp
+from src.utils.rag import RAGResponse, get_reranker, prepare_rag_context
+>>>>>>> 594e660 (added nlp initiatiation in server.py)
 
 from src.config.log import setup_logging
 from src.config.auth import (
@@ -31,7 +39,11 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+<<<<<<< HEAD
     # Global shared data
+=======
+    init_nlp()
+>>>>>>> 594e660 (added nlp initiatiation in server.py)
     app.state.vectorstore = get_vectordb()
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
