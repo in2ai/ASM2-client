@@ -24,6 +24,7 @@ await import("./src/env.js");
 /** @type {import("next").NextConfig} */
 const config = {
   output: "standalone",
+  reactCompiler: true,
   async headers() {
     return [
       {
