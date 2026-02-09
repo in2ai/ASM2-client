@@ -5,7 +5,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -104,12 +103,30 @@ const ChartVisibilityContext = createContext<ChartVisibilityContextType | null>(
   null,
 );
 
+/**
+ * Helper to merge saved preferences with defaults
+ */
+function mergeVisibilityWithDefaults(
+  savedVisibility: Record<string, boolean> | undefined,
+): ChartVisibilityState {
+  if (!savedVisibility) {
+    return defaultVisibility;
+  }
+  const merged = { ...defaultVisibility };
+  for (const key in savedVisibility) {
+    if (key in merged && savedVisibility[key] !== undefined) {
+      merged[key as keyof ChartVisibilityState] = savedVisibility[key];
+    }
+  }
+  return merged;
+}
+
 export function ChartVisibilityProvider({
   children,
 }: Readonly<{ children: ReactNode }>) {
-  const [visibility, setVisibility] =
-    useState<ChartVisibilityState>(defaultVisibility);
-  const [isInitialized, setIsInitialized] = useState(false);
+  // Track local edits that override the server data
+  const [localOverrides, setLocalOverrides] =
+    useState<ChartVisibilityState | null>(null);
 
   // Fetch user preferences from database
   const { data: preferences, isLoading } = api.preferences.get.useQuery(
@@ -125,49 +142,32 @@ export function ChartVisibilityProvider({
   // Mutation to update preferences
   const updatePreferencesMutation = api.preferences.update.useMutation();
 
-  // Load preferences on mount
-  useEffect(() => {
-    if (!isLoading && !isInitialized) {
-      if (preferences?.chartVisibility) {
-        // Merge saved preferences with defaults (in case new charts were added)
-        const savedVisibility = preferences.chartVisibility;
-        setVisibility((prev) => {
-          const merged = { ...prev };
-          for (const key in savedVisibility) {
-            if (key in merged && savedVisibility[key] !== undefined) {
-              merged[key as keyof ChartVisibilityState] = savedVisibility[key];
-            }
-          }
-          return merged;
-        });
-      }
-      setIsInitialized(true);
+  // Compute visibility: use local overrides if present, otherwise derive from preferences
+  const visibility = useMemo(() => {
+    if (localOverrides) {
+      return { ...defaultVisibility, ...localOverrides };
     }
-  }, [preferences, isLoading, isInitialized]);
+    return mergeVisibilityWithDefaults(preferences?.chartVisibility);
+  }, [preferences?.chartVisibility, localOverrides]);
 
   const toggleChart = useCallback(
     (chartId: keyof ChartVisibilityState) => {
-      setVisibility((prev) => {
-        const newVisibility = {
-          ...prev,
-          [chartId]: !prev[chartId],
-        };
+      const newVisibility = {
+        ...visibility,
+        [chartId]: !visibility[chartId],
+      };
 
-        // Save to database
-        updatePreferencesMutation.mutate({
-          chartVisibility: newVisibility,
-        });
-
-        return newVisibility;
+      // Store locally and save to database
+      setLocalOverrides(newVisibility);
+      updatePreferencesMutation.mutate({
+        chartVisibility: newVisibility,
       });
     },
-    [updatePreferencesMutation],
+    [visibility, updatePreferencesMutation],
   );
 
   const showAllCharts = useCallback(() => {
-    setVisibility(defaultVisibility);
-
-    // Save to database
+    setLocalOverrides(defaultVisibility);
     updatePreferencesMutation.mutate({
       chartVisibility: defaultVisibility,
     });
@@ -182,9 +182,7 @@ export function ChartVisibilityProvider({
       {} as ChartVisibilityState,
     );
 
-    setVisibility(allHidden);
-
-    // Save to database
+    setLocalOverrides(allHidden);
     updatePreferencesMutation.mutate({
       chartVisibility: allHidden,
     });
@@ -196,7 +194,7 @@ export function ChartVisibilityProvider({
       toggleChart,
       showAllCharts,
       hideAllCharts,
-      isLoading: isLoading || !isInitialized,
+      isLoading,
       isSaving: updatePreferencesMutation.isPending,
     }),
     [
@@ -205,7 +203,6 @@ export function ChartVisibilityProvider({
       showAllCharts,
       hideAllCharts,
       isLoading,
-      isInitialized,
       updatePreferencesMutation.isPending,
     ],
   );

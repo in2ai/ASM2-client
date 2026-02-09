@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarIcon, Check, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { type DateRange } from "react-day-picker";
 
 interface DateRangeSelectorProps {
@@ -40,12 +40,13 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
   const [draftRange, setDraftRange] = useState<DateRange | undefined>(value);
   const [isOpen, setIsOpen] = useState(false);
 
-  // Sync draft with external value when popover opens or value changes externally
-  useEffect(() => {
-    if (isOpen) {
+  // Handle popover open/close - sync draft with external value when opening
+  const handleOpenChange = (open: boolean) => {
+    if (open) {
       setDraftRange(value);
     }
-  }, [isOpen, value]);
+    setIsOpen(open);
+  };
 
   const handlePresetClick = (days: number) => {
     const to = new Date();
@@ -93,7 +94,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
           <span className="sm:hidden">{preset.days}d</span>
         </Button>
       ))}
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
