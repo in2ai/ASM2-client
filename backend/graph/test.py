@@ -12,6 +12,11 @@ from langchain_core.messages import HumanMessage
 config = {"configurable": {"thread_id": "1"}}
 
 if __name__ == "__main__":
+    import stanza
+    stanza.download("es", package="ancora", processors="tokenize,mwt,pos,lemma")
+    stanza.download("en", processors="tokenize,mwt,pos,lemma")
+    stanza.download("gl", package="ctg", processors="tokenize,mwt,pos,lemma")
+
     from src.utils.nlp import init_nlp
 
     init_nlp()
