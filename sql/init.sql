@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS user_activity (
 -- Authentication
 ----------------------------
 
-CREATE TABLE credentials (
+CREATE TABLE IF NOT EXISTS credentials (
   user_id SYMBOL,
   source SYMBOL,            -- 'GDrive', 'Dropbox'...
   credentials VARCHAR,      -- JSON with arbitrary fields depending on source
