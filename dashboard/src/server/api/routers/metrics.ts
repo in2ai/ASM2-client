@@ -29,10 +29,40 @@ import {
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-const metricsQuerySchema = z.object({
-  startDate: z.date().optional(),
-  endDate: z.date().optional(),
-});
+const optionalDateInputSchema = z
+  .preprocess(
+    (value) => (value === "" || value === null ? undefined : value),
+    z.coerce.date().optional(),
+  )
+  .optional();
+
+const optionalTrimmedStringSchema = z
+  .preprocess((value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const trimmedValue = value.trim();
+    return trimmedValue.length > 0 ? trimmedValue : undefined;
+  }, z.string().optional())
+  .optional();
+
+const metricsQuerySchema = z
+  .object({
+    startDate: optionalDateInputSchema,
+    endDate: optionalDateInputSchema,
+    userId: optionalTrimmedStringSchema,
+    userRole: optionalTrimmedStringSchema,
+    lang: optionalTrimmedStringSchema,
+  })
+  .refine(
+    (input) =>
+      !(input.startDate && input.endDate && input.startDate > input.endDate),
+    {
+      message: "startDate must be before or equal to endDate",
+      path: ["endDate"],
+    },
+  );
 
 type MetricsQueryInput = z.infer<typeof metricsQuerySchema>;
 
@@ -120,12 +150,15 @@ function formatEndDateForQuery(date?: Date): string | undefined {
 }
 
 /**
- * Builds query parameters from input (date range only, no user filtering)
+ * Builds query parameters from validated router input.
  */
 function buildQueryParams(input: MetricsQueryInput): MetricsQueryParams {
   return {
     startDate: formatDateForQuery(input.startDate),
     endDate: formatEndDateForQuery(input.endDate),
+    userId: input.userId,
+    userRole: input.userRole,
+    lang: input.lang,
   };
 }
 
