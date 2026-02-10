@@ -28,7 +28,9 @@ import {
   YAxis,
 } from "recharts";
 import { ChartHint } from "./chart-hint";
+import { ragResponseTimeChartConfig, tokenUsageChartConfig } from "./constants";
 import { type MetricsResponse } from "./types";
+import { formatShortDate } from "./utils";
 
 interface RAGQualityMetricsProps {
   metrics: MetricsResponse;
@@ -40,17 +42,16 @@ interface RAGQualityMetricsProps {
 export function RAGQualityMetrics({
   metrics,
 }: Readonly<RAGQualityMetricsProps>) {
-  const { visibility } = useChartVisibility();
+  const {
+    state: { visibility },
+  } = useChartVisibility();
   const ragQuality = metrics.rag_quality;
 
   const responseTimeData = useMemo(
     () =>
       ragQuality.response_time_trend.map((item) => ({
         ...item,
-        date: new Date(item.date).toLocaleDateString("es-ES", {
-          day: "2-digit",
-          month: "short",
-        }),
+        date: formatShortDate(item.date),
         // Convert from seconds to milliseconds for display
         llm_ms: item.llm_response_time * 1000,
         doc_ms: item.doc_response_time * 1000,
@@ -118,16 +119,7 @@ export function RAGQualityMetrics({
             </CardHeader>
             <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
-                config={{
-                  llm_ms: {
-                    label: "LLM (ms)",
-                    color: "oklch(0.6 0.25 250)",
-                  },
-                  doc_ms: {
-                    label: "RAG (ms)",
-                    color: "oklch(0.7 0.2 150)",
-                  },
-                }}
+                config={ragResponseTimeChartConfig}
                 className="h-[300px] w-full"
               >
                 <AreaChart
@@ -227,10 +219,7 @@ export function RAGQualityMetrics({
             </CardHeader>
             <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
-                config={{
-                  input: { label: "Entrada", color: "oklch(0.6 0.2 220)" },
-                  output: { label: "Salida", color: "oklch(0.7 0.25 280)" },
-                }}
+                config={tokenUsageChartConfig}
                 className="h-[250px] w-full"
               >
                 <BarChart

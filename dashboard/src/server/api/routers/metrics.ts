@@ -34,6 +34,12 @@ const metricsQuerySchema = z.object({
   endDate: z.date().optional(),
 });
 
+type MetricsQueryInput = z.infer<typeof metricsQuerySchema>;
+
+const DEFAULT_TOP_RESULTS_LIMIT = 10;
+const EXPORT_TOP_RESULTS_LIMIT = 100;
+const SESSION_GAP_MINUTES = 10;
+
 /**
  * Dashboard metrics data structure matching the SQL schema
  * Maps directly to the 4 tables: metrics, word_counts, topic_counts, user_activity
@@ -70,36 +76,132 @@ interface DashboardMetrics {
   };
 }
 
+interface SharedMetricsData {
+  meanResponseTime: number | null;
+  searchTerms: SearchTerm[];
+  topics: TopicCount[];
+  sessionLength: number | null;
+  uniqueUsersCount: number;
+  totalEvents: number;
+  roleDistribution: Record<string, number>;
+  activityByDay: ActivityByDay[];
+  hourlyPattern: HourlyActivity[];
+  responseTimeTrend: ResponseTimeTrend[];
+  tokenUsage: TokenUsageStats;
+  systemHealth: SystemHealthStats;
+  avgDocsPerQuery: number;
+}
+
 function formatDateForQuery(date?: Date): string | undefined {
-  if (!date) return undefined;
+  if (!date) {
+    return undefined;
+  }
+
   const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
   const day = date.getDate().toString().padStart(2, "0");
+
   return `${year}-${month}-${day}`;
 }
 
 /**
- * Formats end date for query by adding 1 day to include the full end day
- * Since queries use ts < endDate, we need the day after to include all records from endDate
+ * Formats end date for query by adding 1 day to include the full end day.
+ * Query filters compare timestamps against this date-boundary string.
  */
 function formatEndDateForQuery(date?: Date): string | undefined {
-  if (!date) return undefined;
+  if (!date) {
+    return undefined;
+  }
+
   const nextDay = new Date(date);
   nextDay.setDate(nextDay.getDate() + 1);
+
   return formatDateForQuery(nextDay);
 }
 
 /**
  * Builds query parameters from input (date range only, no user filtering)
  */
-function buildQueryParams(input: {
-  startDate?: Date;
-  endDate?: Date;
-}): MetricsQueryParams {
+function buildQueryParams(input: MetricsQueryInput): MetricsQueryParams {
   return {
     startDate: formatDateForQuery(input.startDate),
     endDate: formatEndDateForQuery(input.endDate),
   };
+}
+
+async function fetchSharedMetricsData(
+  params: MetricsQueryParams,
+  {
+    searchTermsLimit,
+    topicsLimit,
+  }: {
+    searchTermsLimit: number;
+    topicsLimit: number;
+  },
+): Promise<SharedMetricsData> {
+  const [
+    meanResponseTime,
+    searchTerms,
+    topics,
+    sessionLength,
+    uniqueUsersCount,
+    totalEvents,
+    roleDistribution,
+    activityByDay,
+    hourlyPattern,
+    responseTimeTrend,
+    tokenUsage,
+    systemHealth,
+    avgDocsPerQuery,
+  ] = await Promise.all([
+    meanMetric(Metrics.LLM_RESPONSE_TIME, params),
+    topKSearchTerms(searchTermsLimit, params),
+    topKTopics(topicsLimit, params),
+    meanSessionLength(SESSION_GAP_MINUTES, params),
+    getUniqueUsers(params),
+    getTotalActivityEvents(params),
+    getUserRoleDistribution(params),
+    getActivityByDay(params),
+    getHourlyActivityPattern(params),
+    getResponseTimeTrend(params),
+    getTokenUsageStats(params),
+    getSystemHealthStats(params),
+    getAvgDocsPerQuery(params),
+  ]);
+
+  return {
+    meanResponseTime,
+    searchTerms,
+    topics,
+    sessionLength,
+    uniqueUsersCount,
+    totalEvents,
+    roleDistribution,
+    activityByDay,
+    hourlyPattern,
+    responseTimeTrend,
+    tokenUsage,
+    systemHealth,
+    avgDocsPerQuery,
+  };
+}
+
+function rethrowMetricsRouterError(
+  scope: string,
+  message: string,
+  error: unknown,
+): never {
+  console.error(`[Metrics Router] ${scope}:`, error);
+
+  if (error instanceof TRPCError) {
+    throw error;
+  }
+
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message,
+    cause: error,
+  });
 }
 
 export const metricsRouter = createTRPCRouter({
@@ -110,37 +212,16 @@ export const metricsRouter = createTRPCRouter({
         const params = buildQueryParams(input);
 
         const [
-          meanResponseTime,
+          { meanResponseTime, ...sharedData },
           metricsCount,
           metricsByTag,
-          searchTerms,
-          topics,
-          sessionLength,
-          uniqueUsersCount,
-          totalEvents,
-          roleDistribution,
-          activityByDay,
-          hourlyPattern,
-          responseTimeTrend,
-          tokenUsage,
-          systemHealth,
-          avgDocsPerQuery,
         ] = await Promise.all([
-          meanMetric(Metrics.LLM_RESPONSE_TIME, params),
+          fetchSharedMetricsData(params, {
+            searchTermsLimit: DEFAULT_TOP_RESULTS_LIMIT,
+            topicsLimit: DEFAULT_TOP_RESULTS_LIMIT,
+          }),
           countMetrics(params),
           getMetricsByTag(params),
-          topKSearchTerms(10, params),
-          topKTopics(10, params),
-          meanSessionLength(10, params),
-          getUniqueUsers(params),
-          getTotalActivityEvents(params),
-          getUserRoleDistribution(params),
-          getActivityByDay(params),
-          getHourlyActivityPattern(params),
-          getResponseTimeTrend(params),
-          getTokenUsageStats(params),
-          getSystemHealthStats(params),
-          getAvgDocsPerQuery(params),
         ]);
 
         return {
@@ -149,38 +230,32 @@ export const metricsRouter = createTRPCRouter({
             total_count: metricsCount,
             by_tag: metricsByTag,
           },
-          top_words: searchTerms,
-          top_topics: topics,
+          top_words: sharedData.searchTerms,
+          top_topics: sharedData.topics,
           user_activity: {
-            mean_session_length_seconds: sessionLength,
-            unique_users: uniqueUsersCount,
-            total_events: totalEvents,
-            role_distribution: roleDistribution,
-            by_day: activityByDay,
-            hourly_pattern: hourlyPattern,
+            mean_session_length_seconds: sharedData.sessionLength,
+            unique_users: sharedData.uniqueUsersCount,
+            total_events: sharedData.totalEvents,
+            role_distribution: sharedData.roleDistribution,
+            by_day: sharedData.activityByDay,
+            hourly_pattern: sharedData.hourlyPattern,
           },
           rag_quality: {
-            response_time_trend: responseTimeTrend,
-            token_usage: tokenUsage,
-            system_health: systemHealth,
-            avg_docs_per_query: avgDocsPerQuery,
+            response_time_trend: sharedData.responseTimeTrend,
+            token_usage: sharedData.tokenUsage,
+            system_health: sharedData.systemHealth,
+            avg_docs_per_query: sharedData.avgDocsPerQuery,
           },
           metadata: {
             updatedAt: new Date().toISOString(),
           },
         };
       } catch (error) {
-        console.error("[Metrics Router] Error fetching metrics:", error);
-
-        if (error instanceof TRPCError) {
-          throw error;
-        }
-
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Unable to load metrics. Please try again later.",
-          cause: error,
-        });
+        rethrowMetricsRouterError(
+          "Error fetching metrics",
+          "Unable to load metrics. Please try again later.",
+          error,
+        );
       }
     }),
 
@@ -193,7 +268,7 @@ export const metricsRouter = createTRPCRouter({
         const [meanResponseTime, sessionLength, uniqueUsersCount, totalEvents] =
           await Promise.all([
             meanMetric(Metrics.LLM_RESPONSE_TIME, params),
-            meanSessionLength(10, params),
+            meanSessionLength(SESSION_GAP_MINUTES, params),
             getUniqueUsers(params),
             getTotalActivityEvents(params),
           ]);
@@ -205,17 +280,11 @@ export const metricsRouter = createTRPCRouter({
           uniqueUsers: uniqueUsersCount,
         };
       } catch (error) {
-        console.error("[Metrics Router] Error fetching stats:", error);
-
-        if (error instanceof TRPCError) {
-          throw error;
-        }
-
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to calculate aggregated statistics",
-          cause: error,
-        });
+        rethrowMetricsRouterError(
+          "Error fetching stats",
+          "Failed to calculate aggregated statistics",
+          error,
+        );
       }
     }),
 
@@ -225,7 +294,7 @@ export const metricsRouter = createTRPCRouter({
       try {
         const params = buildQueryParams(input);
 
-        const [
+        const {
           meanResponseTime,
           searchTerms,
           topics,
@@ -239,25 +308,12 @@ export const metricsRouter = createTRPCRouter({
           tokenUsage,
           systemHealth,
           avgDocsPerQuery,
-        ] = await Promise.all([
-          meanMetric(Metrics.LLM_RESPONSE_TIME, params),
-          topKSearchTerms(100, params),
-          topKTopics(100, params),
-          meanSessionLength(10, params),
-          getUniqueUsers(params),
-          getTotalActivityEvents(params),
-          getUserRoleDistribution(params),
-          getActivityByDay(params),
-          getHourlyActivityPattern(params),
-          getResponseTimeTrend(params),
-          getTokenUsageStats(params),
-          getSystemHealthStats(params),
-          getAvgDocsPerQuery(params),
-        ]);
+        } = await fetchSharedMetricsData(params, {
+          searchTermsLimit: EXPORT_TOP_RESULTS_LIMIT,
+          topicsLimit: EXPORT_TOP_RESULTS_LIMIT,
+        });
 
-        // Build comprehensive export data with sections
         const exportData = {
-          // Summary metrics
           summary: {
             unique_users: uniqueUsersCount,
             total_events: totalEvents,
@@ -265,8 +321,6 @@ export const metricsRouter = createTRPCRouter({
             avg_llm_response_time_ms: meanResponseTime ?? 0,
             avg_docs_per_query: avgDocsPerQuery,
           },
-
-          // Token usage
           token_usage: {
             llm_tokens_in: tokenUsage.llm_tokens_in,
             llm_tokens_out: tokenUsage.llm_tokens_out,
@@ -278,8 +332,6 @@ export const metricsRouter = createTRPCRouter({
               tokenUsage.rag_tokens_in +
               tokenUsage.rag_tokens_out,
           },
-
-          // System health
           system_health: {
             avg_cpu_percent: systemHealth.avg_cpu,
             max_cpu_percent: systemHealth.max_cpu,
@@ -288,24 +340,12 @@ export const metricsRouter = createTRPCRouter({
             avg_gpu_percent: systemHealth.avg_gpu,
             max_gpu_percent: systemHealth.max_gpu,
           },
-
-          // Role distribution
           role_distribution: roleDistribution,
-
-          // Activity by day
           activity_by_day: activityByDay,
-
-          // Hourly pattern
           hourly_pattern: hourlyPattern,
-
-          // Response time trends
           response_time_trend: responseTimeTrend,
-
-          // Search terms
           search_terms: searchTerms,
-
-          // Topics
-          topics: topics,
+          topics,
         };
 
         return {
@@ -318,17 +358,11 @@ export const metricsRouter = createTRPCRouter({
           },
         };
       } catch (error) {
-        console.error("[Metrics Router] Error exporting metrics:", error);
-
-        if (error instanceof TRPCError) {
-          throw error;
-        }
-
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to export metrics data",
-          cause: error,
-        });
+        rethrowMetricsRouterError(
+          "Error exporting metrics",
+          "Failed to export metrics data",
+          error,
+        );
       }
     }),
 });

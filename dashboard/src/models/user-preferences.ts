@@ -1,4 +1,4 @@
-import type { ChartVisibilityState } from "@/contexts/chart-visibility-context";
+import type { ChartVisibilityState } from "@/contexts/chart-visibility-config";
 
 /**
  * User preferences interface
@@ -12,4 +12,3 @@ export interface IUserPreferences {
   createdAt: Date;
   updatedAt: Date;
 }
-

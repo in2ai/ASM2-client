@@ -8,6 +8,72 @@ export interface MetricsQueryParams {
   lang?: string;
 }
 
+type QueryParam = string | number;
+
+interface FilterOptions {
+  includeUserId?: boolean;
+  includeUserRole?: boolean;
+  includeLang?: boolean;
+  startIndex?: number;
+}
+
+function buildFilterConditions(
+  params: MetricsQueryParams,
+  {
+    includeUserId = false,
+    includeUserRole = false,
+    includeLang = false,
+    startIndex = 1,
+  }: FilterOptions = {},
+): { conditions: string[]; queryParams: QueryParam[] } {
+  const conditions: string[] = [];
+  const queryParams: QueryParam[] = [];
+  let paramIndex = startIndex;
+
+  const addCondition = (
+    column: string,
+    operator: ">=" | "<=" | "=",
+    value: string | undefined,
+  ) => {
+    if (!value) {
+      return;
+    }
+
+    conditions.push(`${column} ${operator} $${paramIndex}`);
+    queryParams.push(value);
+    paramIndex += 1;
+  };
+
+  addCondition("ts", ">=", params.startDate);
+  addCondition("ts", "<=", params.endDate);
+
+  if (includeUserId) {
+    addCondition("user_id", "=", params.userId);
+  }
+
+  if (includeUserRole) {
+    addCondition("user_role", "=", params.userRole);
+  }
+
+  if (includeLang) {
+    addCondition("lang", "=", params.lang);
+  }
+
+  return { conditions, queryParams };
+}
+
+function appendAndConditions(query: string, conditions: string[]): string {
+  if (conditions.length === 0) {
+    return query;
+  }
+
+  return `${query} AND ${conditions.join(" AND ")}`;
+}
+
+function parseCount(value: string | undefined): number {
+  return Number.parseInt(value ?? "0", 10);
+}
+
 // =================================
 // Queries for metrics table
 // =================================
@@ -19,38 +85,24 @@ export async function meanMetric(
   tag: string,
   params: MetricsQueryParams = {},
 ): Promise<number | null> {
-  const queryParams: (string | number)[] = [tag];
-  let query = "SELECT AVG(value) as avg FROM metrics WHERE tag = $1";
-  let paramIndex = 2;
+  const baseParams: QueryParam[] = [tag];
+  const { conditions, queryParams } = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+    startIndex: 2,
+  });
 
-  if (params.startDate) {
-    query += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
+  const query = appendAndConditions(
+    "SELECT AVG(value) as avg FROM metrics WHERE tag = $1",
+    conditions,
+  );
 
-  if (params.endDate) {
-    query += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
+  const rows = await executeQuery<{ avg: number | null }>(query, [
+    ...baseParams,
+    ...queryParams,
+  ]);
 
-  if (params.userId) {
-    query += ` AND user_id = $${paramIndex}`;
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    query += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
-
-  const rows = await executeQuery<{ avg: number | null }>(query, queryParams);
-  const avg = rows[0]?.avg;
-
-  return avg ?? null;
+  return rows[0]?.avg ?? null;
 }
 
 /**
@@ -59,47 +111,28 @@ export async function meanMetric(
 export async function countMetrics(
   params: MetricsQueryParams & { tag?: string } = {},
 ): Promise<number> {
-  const queryParams: (string | number)[] = [];
+  const queryParams: QueryParam[] = [];
   let query = "SELECT COUNT(*) as cnt FROM metrics WHERE 1=1";
-  let paramIndex = 1;
 
   if (params.tag) {
-    query += ` AND tag = $${paramIndex}`;
+    query += ` AND tag = $${queryParams.length + 1}`;
     queryParams.push(params.tag);
-    paramIndex++;
   }
 
-  if (params.startDate) {
-    query += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+    startIndex: queryParams.length + 1,
+  });
 
-  if (params.endDate) {
-    query += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
+  query = appendAndConditions(query, filterData.conditions);
 
-  if (params.userId) {
-    query += ` AND user_id = $${paramIndex}`;
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
+  const rows = await executeQuery<{ cnt: string }>(query, [
+    ...queryParams,
+    ...filterData.queryParams,
+  ]);
 
-  if (params.userRole) {
-    query += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
-
-  const rows = await executeQuery<{ cnt: string }>(query, queryParams);
-
-  if (!rows.length) {
-    return 0;
-  }
-
-  return Number.parseInt(rows[0]?.cnt ?? "0", 10);
+  return parseCount(rows[0]?.cnt);
 }
 
 // =================================
@@ -118,51 +151,27 @@ export async function topKSearchTerms(
   k = 10,
   params: MetricsQueryParams = {},
 ): Promise<SearchTerm[]> {
-  const queryParams: (string | number)[] = [];
-  let query = "SELECT word, COUNT(*) as cnt FROM word_counts WHERE 1=1";
-  let paramIndex = 1;
+  const filterData = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+    includeLang: true,
+  });
 
-  if (params.startDate) {
-    query += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    query += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  if (params.userId) {
-    query += ` AND user_id = $${paramIndex}`;
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    query += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
-
-  if (params.lang) {
-    query += ` AND lang = $${paramIndex}`;
-    queryParams.push(params.lang);
-    paramIndex++;
-  }
-
-  query += ` GROUP BY word ORDER BY cnt DESC LIMIT $${paramIndex}`;
-  queryParams.push(k);
-
-  const rows = await executeQuery<{ word: string; cnt: string }>(
-    query,
-    queryParams,
+  let query = appendAndConditions(
+    "SELECT word, COUNT(*) as cnt FROM word_counts WHERE 1=1",
+    filterData.conditions,
   );
+
+  query += ` GROUP BY word ORDER BY cnt DESC LIMIT $${filterData.queryParams.length + 1}`;
+
+  const rows = await executeQuery<{ word: string; cnt: string }>(query, [
+    ...filterData.queryParams,
+    k,
+  ]);
 
   return rows.map((row) => ({
     word: row.word,
-    count: Number.parseInt(row.cnt, 10),
+    count: parseCount(row.cnt),
   }));
 }
 
@@ -182,45 +191,26 @@ export async function topKTopics(
   k = 10,
   params: MetricsQueryParams = {},
 ): Promise<TopicCount[]> {
-  const queryParams: (string | number)[] = [];
-  let query = "SELECT word, COUNT(*) as cnt FROM topic_counts WHERE 1=1";
-  let paramIndex = 1;
+  const filterData = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+  });
 
-  if (params.startDate) {
-    query += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    query += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  if (params.userId) {
-    query += ` AND user_id = $${paramIndex}`;
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    query += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
-
-  query += ` GROUP BY word ORDER BY cnt DESC LIMIT $${paramIndex}`;
-  queryParams.push(k);
-
-  const rows = await executeQuery<{ word: string; cnt: string }>(
-    query,
-    queryParams,
+  let query = appendAndConditions(
+    "SELECT word, COUNT(*) as cnt FROM topic_counts WHERE 1=1",
+    filterData.conditions,
   );
+
+  query += ` GROUP BY word ORDER BY cnt DESC LIMIT $${filterData.queryParams.length + 1}`;
+
+  const rows = await executeQuery<{ word: string; cnt: string }>(query, [
+    ...filterData.queryParams,
+    k,
+  ]);
 
   return rows.map((row) => ({
     topic: row.word,
-    count: Number.parseInt(row.cnt, 10),
+    count: parseCount(row.cnt),
   }));
 }
 
@@ -241,36 +231,15 @@ export async function meanSessionLength(
   }
 
   const gapMicros = sessionGapMinutes * 60 * 1000 * 1000;
-  const queryParams: (string | number)[] = [];
-  const whereClauses: string[] = [];
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    whereClauses.push(`ts >= $${paramIndex}`);
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    whereClauses.push(`ts <= $${paramIndex}`);
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  if (params.userId) {
-    whereClauses.push(`user_id = $${paramIndex}`);
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    whereClauses.push(`user_role = $${paramIndex}`);
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+  });
 
   const timeFilter =
-    whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+    filterData.conditions.length > 0
+      ? `WHERE ${filterData.conditions.join(" AND ")}`
+      : "";
 
   const query = `
     WITH user_events AS (
@@ -303,11 +272,10 @@ export async function meanSessionLength(
 
   const rows = await executeQuery<{ mean_session_seconds: number | null }>(
     query,
-    queryParams,
+    filterData.queryParams,
   );
-  const meanSeconds = rows[0]?.mean_session_seconds;
 
-  return meanSeconds ?? null;
+  return rows[0]?.mean_session_seconds ?? null;
 }
 
 /**
@@ -316,36 +284,20 @@ export async function meanSessionLength(
 export async function getUniqueUsers(
   params: MetricsQueryParams = {},
 ): Promise<number> {
-  const queryParams: (string | number)[] = [];
-  let query =
-    "SELECT COUNT(DISTINCT user_id) as cnt FROM user_activity WHERE 1=1";
-  let paramIndex = 1;
+  const filterData = buildFilterConditions(params, {
+    includeUserRole: true,
+  });
 
-  if (params.startDate) {
-    query += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
+  const query = appendAndConditions(
+    "SELECT COUNT(DISTINCT user_id) as cnt FROM user_activity WHERE 1=1",
+    filterData.conditions,
+  );
 
-  if (params.endDate) {
-    query += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    query += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
-
-  const rows = await executeQuery<{ cnt: string }>(query, queryParams);
-
-  if (!rows.length) {
-    return 0;
-  }
-
-  return Number.parseInt(rows[0]?.cnt ?? "0", 10);
+  const rows = await executeQuery<{ cnt: string }>(
+    query,
+    filterData.queryParams,
+  );
+  return parseCount(rows[0]?.cnt);
 }
 
 /**
@@ -354,87 +306,49 @@ export async function getUniqueUsers(
 export async function getTotalActivityEvents(
   params: MetricsQueryParams = {},
 ): Promise<number> {
-  const queryParams: (string | number)[] = [];
-  let query = "SELECT COUNT(*) as cnt FROM user_activity WHERE 1=1";
-  let paramIndex = 1;
+  const filterData = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+  });
 
-  if (params.startDate) {
-    query += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
+  const query = appendAndConditions(
+    "SELECT COUNT(*) as cnt FROM user_activity WHERE 1=1",
+    filterData.conditions,
+  );
 
-  if (params.endDate) {
-    query += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  if (params.userId) {
-    query += ` AND user_id = $${paramIndex}`;
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    query += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
-
-  const rows = await executeQuery<{ cnt: string }>(query, queryParams);
-
-  if (!rows.length) {
-    return 0;
-  }
-
-  return Number.parseInt(rows[0]?.cnt ?? "0", 10);
+  const rows = await executeQuery<{ cnt: string }>(
+    query,
+    filterData.queryParams,
+  );
+  return parseCount(rows[0]?.cnt);
 }
 
 /**
  * Return a mapping of user roles to the number of distinct users with that role from the user_activity table.
- *
- * Filters by the optional `startDate` and `endDate` in `params` when provided; rows with a null `user_role` are excluded.
- *
- * @param params - Optional query filters; recognized keys include `startDate` and `endDate` to restrict the time range (inclusive).
- * @returns A record where keys are user roles and values are the count of distinct users for that role.
  */
 export async function getUserRoleDistribution(
   params: MetricsQueryParams = {},
 ): Promise<Record<string, number>> {
-  const queryParams: (string | number)[] = [];
-  let query = `
+  const filterData = buildFilterConditions(params);
+
+  const query = appendAndConditions(
+    `
     SELECT user_role, COUNT(DISTINCT user_id) as cnt 
     FROM user_activity 
     WHERE user_role IS NOT NULL
-  `;
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    query += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    query += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  query += " GROUP BY user_role ORDER BY cnt DESC";
-
-  const rows = await executeQuery<{ user_role: string; cnt: string }>(
-    query,
-    queryParams,
+  `,
+    filterData.conditions,
   );
 
-  const result: Record<string, number> = {};
-  for (const row of rows) {
-    result[row.user_role] = Number.parseInt(row.cnt, 10);
-  }
+  const rows = await executeQuery<{ user_role: string; cnt: string }>(
+    `${query} GROUP BY user_role ORDER BY cnt DESC`,
+    filterData.queryParams,
+  );
 
-  return result;
+  return rows.reduce<Record<string, number>>((acc, row) => {
+    acc[row.user_role] = parseCount(row.cnt);
+    return acc;
+  }, {});
 }
 
 // =================================
@@ -449,48 +363,14 @@ export interface ActivityByDay {
 
 /**
  * Retrieve daily user activity for up to 30 days.
- *
- * @param params - Optional filters:
- *   - `startDate`: include events occurring at or after this timestamp
- *   - `endDate`: include events occurring at or before this timestamp
- *   - `userId`: restrict to events for the specified user
- *   - `userRole`: restrict to events for users with the specified role
- * @returns An array of ActivityByDay objects with properties:
- *   - `date`: date string for the day
- *   - `event_count`: total events on that day
- *   - `unique_users`: number of distinct users who had events that day
- *   The array is ordered from oldest to newest.
  */
 export async function getActivityByDay(
   params: MetricsQueryParams = {},
 ): Promise<ActivityByDay[]> {
-  const queryParams: (string | number)[] = [];
-  let whereClause = "WHERE 1=1";
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    whereClause += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    whereClause += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  if (params.userId) {
-    whereClause += ` AND user_id = $${paramIndex}`;
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    whereClause += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+  });
 
   const query = `
     SELECT 
@@ -498,7 +378,7 @@ export async function getActivityByDay(
       COUNT(*) as event_count,
       COUNT(DISTINCT user_id) as unique_users
     FROM user_activity
-    ${whereClause}
+    ${appendAndConditions("WHERE 1=1", filterData.conditions)}
     GROUP BY to_str(ts, 'yyyy-MM-dd')
     ORDER BY date DESC
     LIMIT 30
@@ -508,13 +388,13 @@ export async function getActivityByDay(
     date: string;
     event_count: string;
     unique_users: string;
-  }>(query, queryParams);
+  }>(query, filterData.queryParams);
 
   return rows
     .map((row) => ({
       date: row.date,
-      event_count: Number.parseInt(row.event_count, 10),
-      unique_users: Number.parseInt(row.unique_users, 10),
+      event_count: parseCount(row.event_count),
+      unique_users: parseCount(row.unique_users),
     }))
     .reverse();
 }
@@ -526,49 +406,21 @@ export interface HourlyActivity {
 
 /**
  * Compute activity counts for each hour of the day using optional time and user filters.
- *
- * The result always contains 24 entries (hours 0 through 23); hours with no events are included with `event_count` set to `0`.
- *
- * @param params - Optional filters: `startDate`, `endDate`, `userId`, and `userRole`
- * @returns An array of `HourlyActivity` objects for hours 0–23 where `event_count` is the number of events in that hour
  */
 export async function getHourlyActivityPattern(
   params: MetricsQueryParams = {},
 ): Promise<HourlyActivity[]> {
-  const queryParams: (string | number)[] = [];
-  let whereClause = "WHERE 1=1";
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    whereClause += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    whereClause += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  if (params.userId) {
-    whereClause += ` AND user_id = $${paramIndex}`;
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    whereClause += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+  });
 
   const query = `
     SELECT 
       EXTRACT(HOUR FROM ts) as hour,
       COUNT(*) as event_count
     FROM user_activity
-    ${whereClause}
+    ${appendAndConditions("WHERE 1=1", filterData.conditions)}
     GROUP BY EXTRACT(HOUR FROM ts)
     ORDER BY hour
   `;
@@ -576,23 +428,17 @@ export async function getHourlyActivityPattern(
   const rows = await executeQuery<{
     hour: number;
     event_count: string;
-  }>(query, queryParams);
+  }>(query, filterData.queryParams);
 
-  // Fill missing hours with 0
   const hourlyMap = new Map<number, number>();
   for (const row of rows) {
-    hourlyMap.set(row.hour, Number.parseInt(row.event_count, 10));
+    hourlyMap.set(row.hour, parseCount(row.event_count));
   }
 
-  const result: HourlyActivity[] = [];
-  for (let h = 0; h < 24; h++) {
-    result.push({
-      hour: h,
-      event_count: hourlyMap.get(h) ?? 0,
-    });
-  }
-
-  return result;
+  return Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    event_count: hourlyMap.get(hour) ?? 0,
+  }));
 }
 
 export interface MetricsByTag {
@@ -603,40 +449,14 @@ export interface MetricsByTag {
 
 /**
  * Retrieve up to 20 metric aggregates grouped by tag, ordered by frequency.
- *
- * @param params - Optional filters to restrict the metrics by `startDate`, `endDate`, `userId`, or `userRole`
- * @returns An array of `MetricsByTag` objects each containing `tag`, `avg_value` (average metric value, 0 if absent), and `count` (number of samples)
  */
 export async function getMetricsByTag(
   params: MetricsQueryParams = {},
 ): Promise<MetricsByTag[]> {
-  const queryParams: (string | number)[] = [];
-  let whereClause = "WHERE tag IS NOT NULL";
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    whereClause += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    whereClause += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
-
-  if (params.userId) {
-    whereClause += ` AND user_id = $${paramIndex}`;
-    queryParams.push(params.userId);
-    paramIndex++;
-  }
-
-  if (params.userRole) {
-    whereClause += ` AND user_role = $${paramIndex}`;
-    queryParams.push(params.userRole);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params, {
+    includeUserId: true,
+    includeUserRole: true,
+  });
 
   const query = `
     SELECT 
@@ -644,7 +464,7 @@ export async function getMetricsByTag(
       AVG(value) as avg_value,
       COUNT(*) as cnt
     FROM metrics
-    ${whereClause}
+    ${appendAndConditions("WHERE tag IS NOT NULL", filterData.conditions)}
     GROUP BY tag
     ORDER BY cnt DESC
     LIMIT 20
@@ -654,12 +474,12 @@ export async function getMetricsByTag(
     tag: string;
     avg_value: number;
     cnt: string;
-  }>(query, queryParams);
+  }>(query, filterData.queryParams);
 
   return rows.map((row) => ({
     tag: row.tag,
     avg_value: row.avg_value ?? 0,
-    count: Number.parseInt(row.cnt, 10),
+    count: parseCount(row.cnt),
   }));
 }
 
@@ -679,21 +499,7 @@ export interface ResponseTimeTrend {
 export async function getResponseTimeTrend(
   params: MetricsQueryParams = {},
 ): Promise<ResponseTimeTrend[]> {
-  const queryParams: (string | number)[] = [];
-  let whereClause = "WHERE tag IN ('LLM_RESPONSE_TIME', 'DOC_RESPONSE_TIME')";
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    whereClause += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    whereClause += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params);
 
   const query = `
     SELECT 
@@ -701,7 +507,10 @@ export async function getResponseTimeTrend(
       AVG(CASE WHEN tag = 'LLM_RESPONSE_TIME' THEN value ELSE NULL END) as llm_response_time,
       AVG(CASE WHEN tag = 'DOC_RESPONSE_TIME' THEN value ELSE NULL END) as doc_response_time
     FROM metrics
-    ${whereClause}
+    ${appendAndConditions(
+      "WHERE tag IN ('LLM_RESPONSE_TIME', 'DOC_RESPONSE_TIME')",
+      filterData.conditions,
+    )}
     GROUP BY to_str(ts, 'yyyy-MM-dd')
     ORDER BY date DESC
     LIMIT 30
@@ -711,7 +520,7 @@ export async function getResponseTimeTrend(
     date: string;
     llm_response_time: number | null;
     doc_response_time: number | null;
-  }>(query, queryParams);
+  }>(query, filterData.queryParams);
 
   return rows
     .map((row) => ({
@@ -739,22 +548,7 @@ export interface TokenUsageStats {
 export async function getTokenUsageStats(
   params: MetricsQueryParams = {},
 ): Promise<TokenUsageStats> {
-  const queryParams: (string | number)[] = [];
-  let whereClause =
-    "WHERE tag IN ('NUM_LLM_TOKENS_IN', 'NUM_LLM_TOKENS_OUT', 'NUM_RAG_TOKENS_IN', 'NUM_RAG_TOKENS_OUT')";
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    whereClause += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    whereClause += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params);
 
   const query = `
     SELECT 
@@ -763,7 +557,10 @@ export async function getTokenUsageStats(
       SUM(CASE WHEN tag = 'NUM_RAG_TOKENS_IN' THEN value ELSE 0 END) as rag_tokens_in,
       SUM(CASE WHEN tag = 'NUM_RAG_TOKENS_OUT' THEN value ELSE 0 END) as rag_tokens_out
     FROM metrics
-    ${whereClause}
+    ${appendAndConditions(
+      "WHERE tag IN ('NUM_LLM_TOKENS_IN', 'NUM_LLM_TOKENS_OUT', 'NUM_RAG_TOKENS_IN', 'NUM_RAG_TOKENS_OUT')",
+      filterData.conditions,
+    )}
   `;
 
   const rows = await executeQuery<{
@@ -771,9 +568,10 @@ export async function getTokenUsageStats(
     llm_tokens_out: number | null;
     rag_tokens_in: number | null;
     rag_tokens_out: number | null;
-  }>(query, queryParams);
+  }>(query, filterData.queryParams);
 
   const row = rows[0];
+
   return {
     llm_tokens_in: row?.llm_tokens_in ?? 0,
     llm_tokens_out: row?.llm_tokens_out ?? 0,
@@ -801,21 +599,7 @@ export interface SystemHealthStats {
 export async function getSystemHealthStats(
   params: MetricsQueryParams = {},
 ): Promise<SystemHealthStats> {
-  const queryParams: (string | number)[] = [];
-  let whereClause = "WHERE tag IN ('CPU_USAGE', 'RAM_USAGE', 'GPU_USAGE')";
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    whereClause += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    whereClause += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params);
 
   const query = `
     SELECT 
@@ -826,7 +610,10 @@ export async function getSystemHealthStats(
       MAX(CASE WHEN tag = 'RAM_USAGE' THEN value ELSE NULL END) as max_ram,
       MAX(CASE WHEN tag = 'GPU_USAGE' THEN value ELSE NULL END) as max_gpu
     FROM metrics
-    ${whereClause}
+    ${appendAndConditions(
+      "WHERE tag IN ('CPU_USAGE', 'RAM_USAGE', 'GPU_USAGE')",
+      filterData.conditions,
+    )}
   `;
 
   const rows = await executeQuery<{
@@ -836,9 +623,10 @@ export async function getSystemHealthStats(
     max_cpu: number | null;
     max_ram: number | null;
     max_gpu: number | null;
-  }>(query, queryParams);
+  }>(query, filterData.queryParams);
 
   const row = rows[0];
+
   return {
     avg_cpu: row?.avg_cpu ?? 0,
     avg_ram: row?.avg_ram ?? 0,
@@ -855,31 +643,18 @@ export async function getSystemHealthStats(
 export async function getAvgDocsPerQuery(
   params: MetricsQueryParams = {},
 ): Promise<number> {
-  const queryParams: (string | number)[] = [];
-  let whereClause = "WHERE tag = 'NUM_DOCS_RAG'";
-  let paramIndex = 1;
-
-  if (params.startDate) {
-    whereClause += ` AND ts >= $${paramIndex}`;
-    queryParams.push(params.startDate);
-    paramIndex++;
-  }
-
-  if (params.endDate) {
-    whereClause += ` AND ts <= $${paramIndex}`;
-    queryParams.push(params.endDate);
-    paramIndex++;
-  }
+  const filterData = buildFilterConditions(params);
 
   const query = `
     SELECT AVG(value) as avg_docs
     FROM metrics
-    ${whereClause}
+    ${appendAndConditions("WHERE tag = 'NUM_DOCS_RAG'", filterData.conditions)}
   `;
 
   const rows = await executeQuery<{ avg_docs: number | null }>(
     query,
-    queryParams,
+    filterData.queryParams,
   );
+
   return rows[0]?.avg_docs ?? 0;
 }

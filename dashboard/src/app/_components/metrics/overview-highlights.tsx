@@ -13,10 +13,13 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Activity } from "lucide-react";
+import { useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartHint } from "./chart-hint";
+import { overviewActivityChartConfig } from "./constants";
 import { StatsRow } from "./stats-row";
 import { type MetricsResponse } from "./types";
+import { formatShortDate } from "./utils";
 
 interface OverviewHighlightsProps {
   metrics: MetricsResponse;
@@ -28,6 +31,15 @@ interface OverviewHighlightsProps {
 export function OverviewHighlights({
   metrics,
 }: Readonly<OverviewHighlightsProps>) {
+  const recentActivityData = useMemo(
+    () =>
+      metrics.user_activity.by_day.slice(-7).map((item) => ({
+        ...item,
+        date: formatShortDate(item.date),
+      })),
+    [metrics.user_activity.by_day],
+  );
+
   return (
     <div className="space-y-8">
       <div>
@@ -56,19 +68,11 @@ export function OverviewHighlights({
           </CardHeader>
           <CardContent className="h-[300px] p-0 pt-4">
             <ChartContainer
-              config={{
-                event_count: { label: "Eventos", color: "oklch(0.6 0.25 250)" },
-              }}
+              config={overviewActivityChartConfig}
               className="h-full w-full"
             >
               <AreaChart
-                data={metrics.user_activity.by_day.slice(-7).map((item) => ({
-                  ...item,
-                  date: new Date(item.date).toLocaleDateString("es-ES", {
-                    day: "2-digit",
-                    month: "short",
-                  }),
-                }))}
+                data={recentActivityData}
                 margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
               >
                 <defs>

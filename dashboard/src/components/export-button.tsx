@@ -70,11 +70,9 @@ export function ExportButton({ dateRange }: ExportButtonProps) {
         <Download className="h-4 w-4" />
       )}
       <span className="hidden sm:inline">
-        {exportQuery.isFetching ? "Exportando..." : "Exportar CSV"}
+        {exportQuery.isFetching ? "Exportando…" : "Exportar CSV"}
       </span>
-      <span className="sm:hidden">
-        {exportQuery.isFetching ? "..." : "CSV"}
-      </span>
+      <span className="sm:hidden">{exportQuery.isFetching ? "…" : "CSV"}</span>
     </Button>
   );
 }

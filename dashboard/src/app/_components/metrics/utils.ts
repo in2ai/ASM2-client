@@ -6,6 +6,16 @@ export const getDateFormatter = () =>
     timeStyle: "short",
   });
 
+const shortDateFormatter = new Intl.DateTimeFormat("es-ES", {
+  day: "2-digit",
+  month: "short",
+});
+
+export function formatShortDate(dateValue: string | Date): string {
+  const date = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
+  return shortDateFormatter.format(date);
+}
+
 /**
  * Determines whether the provided metrics response contains no user activity.
  *
