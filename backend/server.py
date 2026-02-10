@@ -20,12 +20,15 @@ from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sou
 
 from graph.agent import build_graph
 from graph.checkpointer import get_checkpointer
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
+from src.connectors.store import get_vectordb
 from src.metrics.connection import get_questdb_pool
-from src.metrics.metrics import Metrics, TimedMetric, insert_metric
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity
 from src.utils.helpers import periodic_task
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------
@@ -213,6 +216,11 @@ async def chat(logto_token: str, query: str, chat_id: str):
     questdb_pool = app.state.questdb_pool
     sources = get_authenticated_sources(questdb_pool, logto_token)
 
+    try:
+        register_user_activity(questdb_pool)
+    except Exception:
+        logger.warning("Failed to record user activity", exc_info=True)
+
     config = {
         "configurable": {
             "thread_id": chat_id,
@@ -232,5 +240,14 @@ async def chat(logto_token: str, query: str, chat_id: str):
     answer = result["messages"][-1].content
     detected_lang = result.get("detected_lang", "es")
 
-    # TODO: collect token usage from AIMessage.usage_metadata
+    # Extract token usage from AIMessages
+    try:
+        for msg in result["messages"]:
+            if isinstance(msg, AIMessage) and msg.usage_metadata:
+                usage = msg.usage_metadata
+                insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_IN.value, usage.get("input_tokens", 0))
+                insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_OUT.value, usage.get("output_tokens", 0))
+    except Exception:
+        logger.warning("Failed to record token usage metrics", exc_info=True)
+
     return {"answer": answer, "detected_lang": detected_lang}

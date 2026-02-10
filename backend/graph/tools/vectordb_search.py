@@ -1,6 +1,14 @@
+import logging
+
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
+from src.connectors.store import QDRANT_PATH
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_topics, register_words
+from src.utils.nlp import extract_search_terms
 from src.utils.rag import retrieve_and_rerank
+from src.utils.topic import resolve_topic_names
+
+logger = logging.getLogger(__name__)
 
 # TODO: turn into subgraph
 
@@ -13,14 +21,37 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     vectorstore = configurable["vectorstore"]
     sources = configurable["sources"]
     reranker = configurable["reranker"]
+    pool = configurable.get("questdb_pool")
 
     try:
-        chunks, available_sources, lang_code = retrieve_and_rerank(
-            query, vectorstore, reranker, sources
-        )
+        with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
+            chunks, available_sources, lang_code = retrieve_and_rerank(
+                query, vectorstore, reranker, sources
+            )
     except Exception as e:
         return f"[Search error: {e}]"
 
+    # --- Metrics (fire-and-forget, never break the tool) ---
+    try:
+        insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
+    except Exception:
+        logger.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
+
+    try:
+        search_terms = extract_search_terms(query, lang_code)
+        register_words(pool, search_terms, lang_code)
+    except Exception:
+        logger.warning("Failed to record search terms", exc_info=True)
+
+    try:
+        topic_indices = {t for c in chunks for t in c.metadata.get("topics", {})}
+        if topic_indices:
+            topics = resolve_topic_names(topic_indices, lang_code, QDRANT_PATH)
+            register_topics(pool, topics)
+    except Exception:
+        logger.warning("Failed to record topics", exc_info=True)
+
+    # --- Build response ---
     fallback_messages = {
         "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
         "en": "I couldn't find relevant information about that topic in the available sources.",
