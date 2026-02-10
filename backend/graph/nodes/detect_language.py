@@ -6,7 +6,7 @@ from src.utils.nlp import detect_language
 def detect_language_node(state: State):
     """Detect the language of the last user message."""
     for msg in reversed(state.messages):
-        if isinstance(msg, HumanMessage):
+        if isinstance(msg, HumanMessage) and isinstance(msg.content, str):
             try:
                 detected = detect_language(msg.content)
             except RuntimeError:
