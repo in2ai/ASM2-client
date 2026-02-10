@@ -25,7 +25,7 @@ import {
   type SystemHealthStats,
   type TokenUsageStats,
   type TopicCount,
-} from "@/server/db";
+} from "@/server/db/queries";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
