@@ -1,6 +1,7 @@
 import asyncio
-import logging
 import os
+import logging
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -18,15 +19,15 @@ from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
 
+from src.utils.helpers import periodic_task
+from src.metrics.connection import get_questdb_pool
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity
+from src.utils.nlp import init_nlp
+from src.utils.rag import get_reranker
+
 from graph.agent import build_graph
 from graph.checkpointer import get_checkpointer
 from langchain_core.messages import AIMessage, HumanMessage
-from src.connectors.store import get_vectordb
-from src.metrics.connection import get_questdb_pool
-from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity
-from src.utils.helpers import periodic_task
-from src.utils.nlp import init_nlp
-from src.utils.rag import get_reranker
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ setup_logging()
 async def lifespan(app: FastAPI):
 
     init_nlp()
+    # Global shared data
     app.state.vectorstore = get_vectordb()
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
@@ -153,7 +155,6 @@ def extract_usage_metrics():
 
     periodic_task(calc, 30)
 
-
 # ---------------------------------
 # App endpoints
 # ---------------------------------
@@ -162,7 +163,7 @@ def extract_usage_metrics():
 async def start_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(403)
-    
+        
     with open(VDB_LOCK, 'w+'):
         pass
 
@@ -171,7 +172,7 @@ async def start_vdb_update(logto_token: str):
 async def stop_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(403)
-    
+
     try:
         os.remove(VDB_LOCK)
 
@@ -183,7 +184,6 @@ async def stop_vdb_update(logto_token: str):
 async def is_vdb_update_active(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(403)
-    
     return {
         'active': os.path.isfile(VDB_LOCK)
     }
@@ -195,12 +195,11 @@ async def login_source(logto_token: str, source_token: str, source: str):
     if source not in SOURCES:
         raise HTTPException(500, detail=f'Source {source} does not exist')
 
-    # Check source token validity 
     source_instance: DataSource = SOURCES[source](source_token)
 
     if not source_instance.login():
         raise HTTPException(500, detail=f'Authentication failed for source {source}')
-    
+
     # Store credentials in database
     questdb_pool = app.state.questdb_pool
     user_id = get_user_id(logto_token)
@@ -213,6 +212,7 @@ async def login_source(logto_token: str, source_token: str, source: str):
 async def chat(logto_token: str, query: str, chat_id: str):
     vectorstore = app.state.vectorstore
     reranker = app.state.reranker
+
     questdb_pool = app.state.questdb_pool
     sources = get_authenticated_sources(questdb_pool, logto_token)
 

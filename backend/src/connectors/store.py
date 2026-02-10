@@ -1,32 +1,22 @@
 import hashlib
 import logging
 import os
-import uuid
 from typing import List
+import uuid
 
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import (
-    Distance,
-    FieldCondition,
-    Filter,
-    MatchAny,
-    MatchValue,
-    Modifier,
-    PayloadSchemaType,
-    PointStruct,
-    SparseVectorParams,
-    VectorParams,
-)
+from qdrant_client.http.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, Modifier, PayloadSchemaType, PointStruct, SparseVectorParams, VectorParams
 from qdrant_client.http.models import Document as QDocument
 
-from src.connectors.manifest import VDBManifest
 from src.connectors.source import DataSource
+from src.connectors.manifest import VDBManifest
 from src.connectors.vdb_file import VDBFile
 from src.utils.topic import assign_topics, extract_initial_topics
+
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant")
 QDRANT_PATH = "qdrant_index"
 BM25_MODEL = "qdrant/bm25"
@@ -39,19 +29,6 @@ DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overla
 
 TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
 CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", "") == "True"
-
-
-def get_config_hash() -> str:
-    """
-    Genera un hash de la configuración de chunking.
-    Si cambia chunk_size o chunk_overlap, el hash cambia y se fuerza rebuild.
-    """
-    config = (
-        f"chunk_size={DOCUMENT_SPLITTER._chunk_size}"
-        f"_overlap={DOCUMENT_SPLITTER._chunk_overlap}"
-        "_tokenizer=unicode_v1"
-    )
-    return hashlib.md5(config.encode()).hexdigest()[:8]
 
 
 def iterate_qdrant_docs(
