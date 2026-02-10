@@ -1,6 +1,8 @@
 import time
 from enum import Enum
 
+from psycopg2.pool import ThreadedConnectionPool
+
 from src.config.auth import USER_ID, USER_ROLE
 from src.metrics.connection import execute_query
 
@@ -8,38 +10,35 @@ from src.metrics.connection import execute_query
 # Float metric list
 # ---------------------------------
 
-
 class Metrics(Enum):
-    CPU_USAGE = "CPU_USAGE"  # Percentage of CPU used
-    RAM_USAGE = "RAM_USAGE"  # Percentage of RAM used
-    GPU_USAGE = "GPU_USAGE"  # Percentage of GPU used
+    CPU_USAGE='CPU_USAGE'                       # Percentage of CPU used
+    RAM_USAGE='RAM_USAGE'                       # Percentage of RAM used
+    GPU_USAGE='GPU_USAGE'                       # Percentage of GPU used
 
-    LLM_RESPONSE_TIME = "LLM_RESPONSE_TIME"  # LLM response time
-    DOC_RESPONSE_TIME = "DOC_RESPONSE_TIME"  # RAG latency
+    LLM_RESPONSE_TIME='LLM_RESPONSE_TIME'       # LLM response time
+    DOC_RESPONSE_TIME='DOC_RESPONSE_TIME'       # RAG latency
 
-    NUM_DOCS_RAG = "NUM_DOCS_RAG"  # Number of docs returned for each query
+    NUM_DOCS_RAG='NUM_DOCS_RAG'                 # Number of docs returned for each query
 
-    NUM_LLM_TOKENS_IN = "NUM_LLM_TOKENS_IN"  # Number of LLM input tokens
-    NUM_LLM_TOKENS_OUT = "NUM_LLM_TOKENS_OUT"  # Number of LLM output tokens
-    NUM_RAG_TOKENS_IN = "NUM_RAG_TOKENS_IN"  # Number of RAG input tokens
-    NUM_RAG_TOKENS_OUT = "NUM_RAG_TOKENS_OUT"  # Number of RAG output tokens
-
+    NUM_LLM_TOKENS_IN='NUM_LLM_TOKENS_IN'       # Number of LLM input tokens
+    NUM_LLM_TOKENS_OUT='NUM_LLM_TOKENS_OUT'     # Number of LLM output tokens
+    NUM_RAG_TOKENS_IN='NUM_RAG_TOKENS_IN'       # Number of RAG input tokens
+    NUM_RAG_TOKENS_OUT='NUM_RAG_TOKENS_OUT'     # Number of RAG output tokens
 
 # ---------------------------------
 # Metric storage
 # ---------------------------------
 
-
-def insert_metric(pool, tag: str, value: float):
+def insert_metric(pool: ThreadedConnectionPool, tag: str, value: float):
     query = """
     INSERT INTO metrics (ts, user_id, user_role, tag, value)
     VALUES (NOW(), %s, %s, %s, %s)
     """
 
-    execute_query(query, (USER_ID, USER_ROLE, tag, value), pool=pool)
+    execute_query(pool, query, (USER_ID, USER_ROLE, tag, value))
 
 
-def register_words(pool, words: set[str], lang_code: str = 'es'):
+def register_words(pool: ThreadedConnectionPool, words: set[str], lang: str = 'es'):
     if not words:
         return
 
@@ -51,16 +50,16 @@ def register_words(pool, words: set[str], lang_code: str = 'es'):
         VALUES {value_insertions}
     """
 
-    # Flatten parameters (4 for each word)
+    # Flatten parameters (3 for each word)
     params = []
 
     for w in words:
-        params.extend([lang_code, USER_ID, USER_ROLE, w])
+        params.extend([lang, USER_ID, USER_ROLE, w])
 
-    execute_query(query, tuple(params), pool=pool)
+    execute_query(pool, query, tuple(params))
 
 
-def register_topics(pool, topics: set[str]):
+def register_topics(pool: ThreadedConnectionPool, topics: set[str]):
     if not topics:
         return
 
@@ -78,31 +77,29 @@ def register_topics(pool, topics: set[str]):
     for t in topics:
         params.extend([USER_ID, USER_ROLE, t])
 
-    execute_query(query, tuple(params), pool=pool)
+    execute_query(pool, query, tuple(params))
 
 
-def register_user_activity(pool):
+def register_user_activity(pool: ThreadedConnectionPool):
     query = """
     INSERT INTO user_activity (ts, user_id, user_role)
     VALUES (NOW(), %s, %s)
     """
 
-    execute_query(query, (USER_ID, USER_ROLE), pool=pool)
+    execute_query(pool, query, (USER_ID, USER_ROLE))
 
 
-def log_request(endpoint: str, method: str, status: int, latency: float):
+def log_request(pool: ThreadedConnectionPool, endpoint: str, method: str, status: int, latency: float):
     query = """
     INSERT INTO requests (ts, user_id, user_role, endpoint, method, status, latency)
     VALUES (NOW(), %s, %s, %s, %s, %s, %s)
     """
 
-    execute_query(query, (USER_ID, USER_ROLE, endpoint, method, status, latency))
-
+    execute_query(pool, query, (USER_ID, USER_ROLE, endpoint, method, status, latency))
 
 # ---------------------------------
 # Helpers
 # ---------------------------------
-
 
 class TimedMetric:
     """
@@ -111,7 +108,7 @@ class TimedMetric:
     Example usage:
 
         ```python
-        with TimedMetric(pool, Metrics.REQ_RESPONSE_TIME.value):
+        with TimedMetric(Metrics.REQ_RESPONSE_TIME.value):
             response = make_request()
         ```
 
@@ -120,13 +117,11 @@ class TimedMetric:
         - Timing is measured using `time.perf_counter()` in fractional seconds.
 
     Parameters:
-        pool: QuestDB connection pool (or None for one-off connections).
         metric (str): The name of the metric to record. Use the `Metrics` enum.
     """
-
-    def __init__(self, pool, metric):
-        self.pool = pool
+    def __init__(self, pool: ThreadedConnectionPool, metric):
         self.metric = metric
+        self.pool = pool
 
     def __enter__(self):
         self.start = time.perf_counter()
