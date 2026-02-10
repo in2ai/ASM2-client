@@ -12,29 +12,9 @@ def build_graph(checkpointer=None):
     builder = StateGraph(State)
     tool_node = ToolNode(tool_list)
 
-    def tools_with_history(state: State, config):
-        """Wrap ToolNode to inject conversation history into config for tools."""
-        if isinstance(state, dict):
-            messages = state.get("messages", [])
-        else:
-            messages = getattr(state, "messages", [])
-
-        # Pass messages directly — model_dump() would serialize LangChain
-        # message objects to plain dicts, breaking ToolNode's isinstance checks.
-        state_dict = {"messages": messages}
-
-        enhanced_config = {
-            **config,
-            "configurable": {
-                **config.get("configurable", {}),
-                "conversation_history": messages,
-            },
-        }
-        return tool_node.invoke(state_dict, enhanced_config)
-
     builder.add_node("pre_process", pre_process)
     builder.add_node("assistant", assistant)
-    builder.add_node("tools", tools_with_history)
+    builder.add_node("tools", tool_node)
     builder.add_node("summarize_conversation", summarize_conversation)
 
     builder.add_edge(START, "pre_process")

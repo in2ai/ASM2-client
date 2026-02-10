@@ -137,7 +137,13 @@ def get_rag_system_prompt(lang_code: str) -> str:
         "Write in natural, clear, and direct language. "
         "IMPORTANT: In the 'sources' field, include ONLY the sources you actually used to respond. "
         "If the question is a greeting, thanks, or does not require information from the sources, leave 'sources' empty. "
-        "Use the conversation history to follow the thread."
+        "Use the conversation history to follow the thread. "
+        "When calling search tools, always formulate the query argument as a fully "
+        "self-contained search query. Resolve any pronouns, demonstratives, or "
+        "conversational references (e.g. 'it', 'that', 'those', 'the same thing', "
+        "'more about that') by replacing them with the specific terms from the "
+        "conversation context, so the search query is understandable without "
+        "prior conversation."
     )
 
 
