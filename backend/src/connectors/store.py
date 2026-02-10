@@ -31,6 +31,20 @@ TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
 CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", "") == "True"
 
 
+def get_config_hash() -> str:
+    """
+    Generate a stable hash of the chunking configuration.
+
+    If chunk_size or chunk_overlap changes, the hash changes and a full rebuild is triggered.
+    """
+    config = (
+        f"chunk_size={DOCUMENT_SPLITTER._chunk_size}"
+        f"_overlap={DOCUMENT_SPLITTER._chunk_overlap}"
+        "_tokenizer=unicode_v1"
+    )
+    return hashlib.md5(config.encode()).hexdigest()[:8]
+
+
 def iterate_qdrant_docs(
     vectorstore: Qdrant,
     batch_size=100,
