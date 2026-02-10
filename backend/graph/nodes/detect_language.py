@@ -3,7 +3,7 @@ from state import State
 from src.utils.nlp import detect_language
 
 
-def pre_process(state: State):
+def detect_language_node(state: State):
     """Detect the language of the last user message."""
     for msg in reversed(state.messages):
         if isinstance(msg, HumanMessage):
