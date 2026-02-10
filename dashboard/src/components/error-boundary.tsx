@@ -105,7 +105,7 @@ export class ErrorBoundary extends Component<
                 </Button>
                 <Button
                   onClick={() => {
-                    window.location.href = "/";
+                    globalThis.location.href = "/";
                   }}
                   className="flex-1"
                   variant="outline"

@@ -13,7 +13,7 @@ export const env = createEnv({
     QUESTDB_USER: z.string(),
     QUESTDB_PASSWORD: z.string(),
     QUESTDB_DB: z.string(),
-    LOGTO_ENDPOINT: z.string().url({
+    LOGTO_ENDPOINT: z.url({
       error: "LOGTO_ENDPOINT must be a valid URL (e.g., http://logto:3001)",
     }),
     LOGTO_APP_ID: z.string().min(1, {
@@ -34,7 +34,7 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    NEXT_PUBLIC_APP_URL: z.string().url({
+    NEXT_PUBLIC_APP_URL: z.url({
       error:
         "NEXT_PUBLIC_APP_URL must be a valid URL (e.g., https://yourdomain.com). For Dokploy: https://${{DOKPLOY_DEPLOY_URL}}",
     }),

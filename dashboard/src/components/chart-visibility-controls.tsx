@@ -1,5 +1,6 @@
 "use client";
 
+import { type DashboardView } from "@/app/_components/dashboard-views";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,11 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getChartsForView } from "@/contexts/chart-visibility-config";
 import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { Eye, EyeOff, Settings } from "lucide-react";
 
 interface ChartControlsProps {
-  view: "overview" | "usage" | "rag-quality" | "insights";
+  readonly view: DashboardView;
 }
 
 /**
@@ -25,43 +27,27 @@ interface ChartControlsProps {
 export function ChartVisibilityControls({
   view,
 }: Readonly<ChartControlsProps>) {
-  const { visibility, toggleChart, showAllCharts, hideAllCharts } =
-    useChartVisibility();
+  const {
+    state: { visibility },
+    actions: { hideAllCharts, showAllCharts, toggleChart },
+  } = useChartVisibility();
 
-  const getChartsForView = () => {
-    switch (view) {
-      case "usage":
-        return [
-          { id: "activityTrend" as const, label: "Tendencia de actividad" },
-          { id: "departmentPieChart" as const, label: "Distribución por rol" },
-          { id: "hourlyActivityPattern" as const, label: "Patrón horario" },
-        ];
-      case "rag-quality":
-        return [
-          {
-            id: "metricsByTag" as const,
-            label: "Tendencia de tiempos de respuesta",
-          },
-          { id: "tokenUsage" as const, label: "Consumo de tokens" },
-          { id: "resourceConsumption" as const, label: "Salud del sistema" },
-        ];
-      case "insights":
-        return [
-          { id: "topWordsBarChart" as const, label: "Palabras más buscadas" },
-          { id: "topicsBarChart" as const, label: "Temas más frecuentes" },
-        ];
-      default:
-        return [];
-    }
-  };
-
-  const charts = getChartsForView();
+  const charts = getChartsForView(view);
   const visibleCount = charts.filter((chart) => visibility[chart.id]).length;
+
+  if (charts.length === 0) {
+    return null;
+  }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="min-h-[44px] gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-h-[44px] gap-2"
+          aria-label="Configurar visibilidad de gráficos"
+        >
           <Settings className="h-4 w-4" />
           <span className="hidden sm:inline">
             Gráficos ({visibleCount}/{charts.length})
@@ -99,7 +85,10 @@ export function ChartVisibilityControls({
         {charts.map((chart) => (
           <DropdownMenuItem
             key={chart.id}
-            onClick={() => toggleChart(chart.id)}
+            onSelect={(event) => {
+              event.preventDefault();
+              toggleChart(chart.id);
+            }}
             className="flex min-h-[44px] cursor-pointer items-center justify-between"
           >
             <span className="text-sm">{chart.label}</span>

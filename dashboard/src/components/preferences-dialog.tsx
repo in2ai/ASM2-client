@@ -22,19 +22,18 @@ import {
 import { type LogtoUser } from "@/lib/auth";
 import { api } from "@/trpc/react";
 import { Loader2, Settings } from "lucide-react";
-import { useState } from "react";
+import { type ChangeEvent, useMemo, useState } from "react";
 
 interface PreferencesDialogProps {
   readonly user: LogtoUser | null;
 }
 
+type Theme = "light" | "dark" | "system";
+
 interface PreferencesFormProps {
   readonly initialDateRange: number;
-  readonly initialTheme: "light" | "dark" | "system";
-  readonly onSave: (values: {
-    defaultDateRange: number;
-    theme: "light" | "dark" | "system";
-  }) => void;
+  readonly initialTheme: Theme;
+  readonly onSave: (values: { defaultDateRange: number; theme: Theme }) => void;
   readonly onReset: () => void;
   readonly onCancel: () => void;
   readonly isSaving: boolean;
@@ -75,7 +74,6 @@ function PreferencesForm({
   return (
     <>
       <div className="space-y-6 py-4">
-        {/* Default Date Range */}
         <div className="space-y-2">
           <Label htmlFor="dateRange">Rango de fechas predeterminado</Label>
           <div className="flex items-center gap-2">
@@ -85,7 +83,7 @@ function PreferencesForm({
               min="1"
               max="365"
               value={defaultDateRange}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 setDefaultDateRange(Number.parseInt(e.target.value, 10) || 30)
               }
               className="w-24"
@@ -98,14 +96,11 @@ function PreferencesForm({
           </p>
         </div>
 
-        {/* Theme */}
         <div className="space-y-2">
           <Label htmlFor="theme">Tema</Label>
           <Select
             value={theme}
-            onValueChange={(value: string) =>
-              setTheme(value as "light" | "dark" | "system")
-            }
+            onValueChange={(value: string) => setTheme(value as Theme)}
           >
             <SelectTrigger id="theme">
               <SelectValue />
@@ -142,7 +137,7 @@ function PreferencesForm({
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Guardando...
+                Guardando…
               </>
             ) : (
               "Guardar"
@@ -179,6 +174,12 @@ export function PreferencesDialog({ user }: PreferencesDialogProps) {
     },
   });
 
+  const formKey = useMemo(
+    () =>
+      `${preferences?.defaultDateRange ?? 30}-${preferences?.theme ?? "system"}`,
+    [preferences?.defaultDateRange, preferences?.theme],
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -202,7 +203,7 @@ export function PreferencesDialog({ user }: PreferencesDialogProps) {
         ) : (
           // Use key to remount the form when preferences change, resetting state
           <PreferencesForm
-            key={JSON.stringify(preferences)}
+            key={formKey}
             initialDateRange={preferences?.defaultDateRange ?? 30}
             initialTheme={preferences?.theme ?? "system"}
             onSave={(values) => updateMutation.mutate(values)}

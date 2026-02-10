@@ -1,57 +1,73 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { z } from "zod";
 
-// Zod schema for chart visibility state
 const chartVisibilitySchema = z.record(z.string(), z.boolean());
+const themeSchema = z.enum(["light", "dark", "system"]);
 
-// Zod schema for updating user preferences
 const updatePreferencesSchema = z.object({
   chartVisibility: chartVisibilitySchema.optional(),
   defaultDateRange: z.number().min(1).max(365).optional(),
-  theme: z.enum(["light", "dark", "system"]).optional(),
+  theme: themeSchema.optional(),
 });
 
-// Type for user preferences response
-type UserPreferencesResponse = {
+type Theme = z.infer<typeof themeSchema>;
+
+type UserPreferencesRecord = {
   userId: string;
   chartVisibility: Record<string, boolean>;
   defaultDateRange?: number;
-  theme?: "light" | "dark" | "system";
+  theme: Theme;
   createdAt: Date;
   updatedAt: Date;
-} | null;
+};
 
-/**
- * Preferences router - Temporary stub implementation
- * TODO: Implement persistent storage for user preferences
- */
+type UserPreferencesResponse = UserPreferencesRecord | null;
+
+const preferencesStore = new Map<string, UserPreferencesRecord>();
+
+function getStoredPreferences(userId: string): UserPreferencesResponse {
+  return preferencesStore.get(userId) ?? null;
+}
+
+function buildUpdatedPreferences(
+  userId: string,
+  input: z.infer<typeof updatePreferencesSchema>,
+): UserPreferencesRecord {
+  const now = new Date();
+  const existing = preferencesStore.get(userId);
+
+  return {
+    userId,
+    chartVisibility: input.chartVisibility ?? existing?.chartVisibility ?? {},
+    defaultDateRange: input.defaultDateRange ?? existing?.defaultDateRange,
+    theme: input.theme ?? existing?.theme ?? "system",
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+}
+
 export const preferencesRouter = createTRPCRouter({
-  // Get user preferences - returns null (no persistent storage yet)
-  get: protectedProcedure.query(async (): Promise<UserPreferencesResponse> => {
-    // TODO: Implement persistent storage (e.g., using a key-value store or file system)
-    // For now, return null to indicate no saved preferences
-    return null;
-  }),
+  get: protectedProcedure.query(
+    async ({ ctx }): Promise<UserPreferencesResponse> => {
+      return getStoredPreferences(ctx.userContext.userId);
+    },
+  ),
 
-  // Update user preferences - stub implementation
   update: protectedProcedure
     .input(updatePreferencesSchema)
     .mutation(async ({ ctx, input }) => {
-      // TODO: Implement persistent storage
-      // For now, just return the input as if it was saved
-      return {
-        userId: ctx.userContext.userId,
-        chartVisibility: input.chartVisibility ?? {},
-        defaultDateRange: input.defaultDateRange,
-        theme: input.theme ?? "system",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      const updatedPreferences = buildUpdatedPreferences(
+        ctx.userContext.userId,
+        input,
+      );
+
+      preferencesStore.set(ctx.userContext.userId, updatedPreferences);
+
+      return updatedPreferences;
     }),
 
-  // Reset preferences to defaults - stub implementation
-  reset: protectedProcedure.mutation(async () => {
-    // TODO: Implement persistent storage
+  reset: protectedProcedure.mutation(async ({ ctx }) => {
+    preferencesStore.delete(ctx.userContext.userId);
     return { success: true };
   }),
 });

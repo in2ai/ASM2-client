@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  DASHBOARD_VIEWS,
+  type DashboardView,
+} from "@/app/_components/dashboard-views";
 import { signOutAction } from "@/app/actions/auth";
 import { ChartVisibilityControls } from "@/components/chart-visibility-controls";
 import { PreferencesDialog } from "@/components/preferences-dialog";
@@ -17,61 +21,64 @@ import { ChartVisibilityProvider } from "@/contexts/chart-visibility-context";
 import { type LogtoUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
-  Activity,
   BarChart3,
   Building2,
   Loader2,
   LogOut,
   Menu,
   Shield,
-  Sparkles,
-  TrendingUp,
   User,
   X,
+  type LucideIcon,
 } from "lucide-react";
-import { useState, type ElementType, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
-type View = "overview" | "usage" | "rag-quality" | "insights";
-
 interface AppLayoutProps {
-  readonly children: (view: View) => ReactNode;
+  readonly children: ReactNode;
   readonly user: LogtoUser | null;
+  readonly view: DashboardView;
+  readonly onViewChange: (view: DashboardView) => void;
 }
 
-/**
- * Renders the dashboard application layout containing a responsive sidebar, topbar, and main content area.
- *
- * The component manages the active dashboard view and UI state for the sidebar and mobile menu, and provides chart-visibility context to its children.
- *
- * @param children - Render prop that receives the current view (`"overview" | "usage" | "rag-quality" | "insights"`) and returns the content to display in the main area.
- * @param user - The authenticated user object from Logto, or null if not authenticated.
- * @returns The composed layout element that wraps the provided content with navigation, controls, and user menu.
- */
-export function AppLayout({ children, user }: AppLayoutProps) {
-  const [currentView, setCurrentView] = useState<View>("overview");
+export function AppLayout({
+  children,
+  user,
+  view,
+  onViewChange,
+}: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Close mobile menu when view changes
-  const handleViewChange = (view: View) => {
-    setCurrentView(view);
-    setMobileMenuOpen(false);
-  };
+  const handleViewChange = useCallback(
+    (nextView: DashboardView) => {
+      onViewChange(nextView);
+      setMobileMenuOpen(false);
+    },
+    [onViewChange],
+  );
+
+  const handleSidebarToggle = useCallback(() => {
+    if (globalThis.innerWidth < 1024) {
+      setMobileMenuOpen((current) => !current);
+      return;
+    }
+
+    setSidebarOpen((current) => !current);
+  }, []);
 
   return (
     <ChartVisibilityProvider>
       <div className="dark:via-background flex h-screen overflow-hidden bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:to-slate-950">
-        {/* Mobile Overlay */}
         {mobileMenuOpen && (
-          <div
+          <button
+            type="button"
             className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
-            aria-hidden="true"
+            aria-label="Cerrar menú lateral"
           />
         )}
 
-        {/* Sidebar */}
         <aside
           className={cn(
             "bg-card/40 fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-xl backdrop-blur-xl transition-all duration-300 lg:static lg:translate-x-0 lg:shadow-none",
@@ -93,63 +100,49 @@ export function AppLayout({ children, user }: AppLayoutProps) {
               size="icon"
               className="ml-auto lg:hidden"
               onClick={() => setMobileMenuOpen(false)}
+              aria-label="Cerrar menú lateral"
             >
               <X className="h-5 w-5" />
+              <span className="sr-only">Cerrar menú lateral</span>
             </Button>
           </div>
 
           <div className="flex flex-1 flex-col justify-between p-3">
             <nav className="space-y-1">
-              <NavItem
-                icon={BarChart3}
-                label="Vista General"
-                active={currentView === "overview"}
-                onClick={() => handleViewChange("overview")}
-                collapsed={!sidebarOpen}
-              />
-              <NavItem
-                icon={TrendingUp}
-                label="Uso e Interacción"
-                active={currentView === "usage"}
-                onClick={() => handleViewChange("usage")}
-                collapsed={!sidebarOpen}
-              />
-              <NavItem
-                icon={Activity}
-                label="Calidad del RAG"
-                active={currentView === "rag-quality"}
-                onClick={() => handleViewChange("rag-quality")}
-                collapsed={!sidebarOpen}
-              />
-              <NavItem
-                icon={Sparkles}
-                label="Insights"
-                active={currentView === "insights"}
-                onClick={() => handleViewChange("insights")}
-                collapsed={!sidebarOpen}
-              />
+              {DASHBOARD_VIEWS.map((dashboardView) => (
+                <NavItem
+                  key={dashboardView.key}
+                  icon={dashboardView.icon}
+                  label={dashboardView.sidebarLabel}
+                  active={view === dashboardView.key}
+                  onClick={() => handleViewChange(dashboardView.key)}
+                  collapsed={!sidebarOpen}
+                />
+              ))}
             </nav>
           </div>
         </aside>
 
-        {/* Main Content */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Topbar */}
           <header className="bg-background/40 flex h-16 items-center justify-between border-b px-4 backdrop-blur-md sm:px-6">
             <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
                 size="icon"
                 className="bg-muted/50 hover:bg-muted h-10 w-10 rounded-xl transition-colors"
-                onClick={() => {
-                  if (window.innerWidth < 1024) {
-                    setMobileMenuOpen(!mobileMenuOpen);
-                  } else {
-                    setSidebarOpen(!sidebarOpen);
-                  }
-                }}
+                onClick={handleSidebarToggle}
+                aria-label={
+                  mobileMenuOpen
+                    ? "Cerrar menú de navegación"
+                    : "Abrir menú de navegación"
+                }
               >
                 <Menu className="h-5 w-5" />
+                <span className="sr-only">
+                  {mobileMenuOpen
+                    ? "Cerrar menú de navegación"
+                    : "Abrir menú de navegación"}
+                </span>
               </Button>
               <div className="hidden sm:block">
                 <h1 className="text-sm font-bold tracking-tight md:text-base">
@@ -172,33 +165,21 @@ export function AppLayout({ children, user }: AppLayoutProps) {
             <div className="flex items-center gap-2 sm:gap-4">
               <CompanyDisplay user={user} />
               <div className="bg-border/60 mx-1 hidden h-8 w-px md:block" />
-              <ViewSwitcher value={currentView} onChange={handleViewChange} />
-              {currentView !== "overview" && (
-                <ChartVisibilityControls view={currentView} />
-              )}
+              <ViewSwitcher value={view} onChange={handleViewChange} />
+              {view !== "overview" ? (
+                <ChartVisibilityControls view={view} />
+              ) : null}
               <UserMenu user={user} />
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto">
-            {children(currentView)}
-          </main>
+          <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
       </div>
     </ChartVisibilityProvider>
   );
 }
 
-/**
- * Renders a sidebar navigation item as a button with an icon and optional label, supporting active and collapsed states.
- *
- * @param icon - Icon component to display at the start of the item.
- * @param label - Text label shown when not collapsed.
- * @param active - If `true`, highlights the item and shows an active indicator.
- * @param onClick - Click handler invoked when the item is activated.
- * @param collapsed - If `true`, hides the label and active indicator to render a compact item.
- * @returns The JSX element for the navigation item.
- */
 function NavItem({
   icon: Icon,
   label,
@@ -206,7 +187,7 @@ function NavItem({
   onClick,
   collapsed,
 }: Readonly<{
-  icon: ElementType;
+  icon: LucideIcon;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -216,6 +197,7 @@ function NavItem({
     <Button
       variant={active ? "default" : "ghost"}
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "group relative flex h-11 w-full items-center justify-start gap-4 px-3 py-2 text-sm font-semibold transition-all",
         active
@@ -237,44 +219,31 @@ function NavItem({
   );
 }
 
-/**
- * Renders a compact segmented control for selecting one of the dashboard views.
- *
- * Renders a rounded group of buttons for each view; the active view is styled as selected and tapping a button selects that view.
- *
- * @param value - The currently selected view key
- * @param onChange - Callback invoked with the newly selected view when a button is clicked
- * @returns The view switcher React element
- */
 function ViewSwitcher({
   value,
   onChange,
 }: Readonly<{
-  value: View;
-  onChange: (v: View) => void;
+  value: DashboardView;
+  onChange: (view: DashboardView) => void;
 }>) {
-  const views: { key: View; label: string; shortLabel: string }[] = [
-    { key: "overview", label: "General", shortLabel: "Gen" },
-    { key: "usage", label: "Uso", shortLabel: "Uso" },
-    { key: "rag-quality", label: "RAG", shortLabel: "RAG" },
-    { key: "insights", label: "Insights", shortLabel: "Ins" },
-  ];
-
   return (
     <div className="bg-muted inline-flex rounded-full p-1">
-      {views.map((v) => (
+      {DASHBOARD_VIEWS.map((dashboardView) => (
         <Button
-          key={v.key}
+          key={dashboardView.key}
           size="sm"
-          variant={value === v.key ? "default" : "ghost"}
+          variant={value === dashboardView.key ? "default" : "ghost"}
+          aria-pressed={value === dashboardView.key}
           className={cn(
             "min-h-[36px] min-w-[36px] rounded-full px-2 text-xs sm:min-w-0 sm:px-3",
-            value !== v.key && "text-muted-foreground",
+            value !== dashboardView.key && "text-muted-foreground",
           )}
-          onClick={() => onChange(v.key)}
+          onClick={() => onChange(dashboardView.key)}
         >
-          <span className="hidden sm:inline">{v.label}</span>
-          <span className="sm:hidden">{v.shortLabel}</span>
+          <span className="hidden sm:inline">
+            {dashboardView.switcherLabel}
+          </span>
+          <span className="sm:hidden">{dashboardView.switcherShortLabel}</span>
         </Button>
       ))}
     </div>
@@ -308,31 +277,34 @@ function SignOutButton() {
       ) : (
         <LogOut className="h-4 w-4" />
       )}
-      <span>{pending ? "Cerrando sesión..." : "Cerrar sesión"}</span>
+      <span>{pending ? "Cerrando sesión…" : "Cerrar sesión"}</span>
     </button>
   );
 }
 
-function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
-  const getInitials = (): string => {
-    if (user?.firstName && user?.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    }
-    if (user?.email) {
-      return user.email.substring(0, 2).toUpperCase();
-    }
-    return "U";
-  };
+function getInitials(user: LogtoUser | null): string {
+  if (user?.firstName && user?.lastName) {
+    return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+  }
+  if (user?.email) {
+    return user.email.substring(0, 2).toUpperCase();
+  }
+  return "U";
+}
 
-  const getDisplayName = (): string => {
-    if (user?.firstName && user?.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    if (user?.firstName) {
-      return user.firstName;
-    }
-    return "Usuario";
-  };
+function getDisplayName(user: LogtoUser | null): string {
+  if (user?.firstName && user?.lastName) {
+    return `${user.firstName} ${user.lastName}`;
+  }
+  if (user?.firstName) {
+    return user.firstName;
+  }
+  return "Usuario";
+}
+
+function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
+  const displayName = getDisplayName(user);
+  const initials = getInitials(user);
 
   return (
     <DropdownMenu>
@@ -340,10 +312,11 @@ function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
         <Button
           variant="ghost"
           className="relative h-10 min-h-[44px] w-10 min-w-[44px] rounded-full"
+          aria-label="Abrir menú de usuario"
         >
           <Avatar className="h-10 w-10">
             <AvatarFallback className="bg-primary text-primary-foreground">
-              {getInitials()}
+              {initials}
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -352,9 +325,7 @@ function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <div className="flex items-center justify-between">
-              <p className="text-sm leading-none font-medium">
-                {getDisplayName()}
-              </p>
+              <p className="text-sm leading-none font-medium">{displayName}</p>
               {user?.role === "admin" ? (
                 <Badge variant="default" className="ml-2 gap-1">
                   <Shield className="h-3 w-3" />

@@ -36,6 +36,7 @@ import {
 } from "./constants";
 import { ChartHint } from "./chart-hint";
 import { type MetricsResponse } from "./types";
+import { formatShortDate } from "./utils";
 
 interface UsageMetricsProps {
   metrics: MetricsResponse;
@@ -50,7 +51,9 @@ interface UsageMetricsProps {
  * @returns A React element containing the metrics section with cards and charts, conditionally rendered based on chart visibility and available data
  */
 export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
-  const { visibility } = useChartVisibility();
+  const {
+    state: { visibility },
+  } = useChartVisibility();
   const userActivity = metrics.user_activity;
 
   const roleDistributionData = useMemo(
@@ -67,10 +70,7 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
     () =>
       userActivity.by_day.map((item) => ({
         ...item,
-        date: new Date(item.date).toLocaleDateString("es-ES", {
-          day: "2-digit",
-          month: "short",
-        }),
+        date: formatShortDate(item.date),
       })),
     [userActivity.by_day],
   );

@@ -17,6 +17,10 @@ import { BarChart3, TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartHint } from "./chart-hint";
+import {
+  insightsTopWordsChartConfig,
+  insightsTopicsChartConfig,
+} from "./constants";
 import { type MetricsResponse } from "./types";
 
 interface InsightsViewProps {
@@ -28,7 +32,9 @@ interface InsightsViewProps {
  * Displays bar charts for top words and topics from the word_counts and topic_counts tables.
  */
 export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
-  const { visibility } = useChartVisibility();
+  const {
+    state: { visibility },
+  } = useChartVisibility();
   const topWords = metrics.top_words;
   const topTopics = metrics.top_topics;
 
@@ -92,9 +98,7 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
               </CardHeader>
               <CardContent className="overflow-hidden p-0 pt-4">
                 <ChartContainer
-                  config={{
-                    count: { label: "Búsquedas", color: "oklch(0.7 0.2 200)" },
-                  }}
+                  config={insightsTopWordsChartConfig}
                   className="h-[300px] w-full"
                 >
                   <BarChart
@@ -151,9 +155,7 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
               </CardHeader>
               <CardContent className="overflow-hidden p-0 pt-4">
                 <ChartContainer
-                  config={{
-                    count: { label: "Menciones", color: "oklch(0.7 0.2 330)" },
-                  }}
+                  config={insightsTopicsChartConfig}
                   className="h-[400px] w-full"
                 >
                   <BarChart
