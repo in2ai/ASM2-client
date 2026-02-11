@@ -232,12 +232,18 @@ async def chat(logto_token: str, query: str, chat_id: str):
     }
 
     with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
+        try:
+            result = await app.state.graph.ainvoke(
+                {"messages": [HumanMessage(content=query)]}, config
+            )
+        except Exception:
+            logger.exception("Graph invocation failed")
+            raise HTTPException(status_code=500, detail="Internal error processing your request")
 
-        result = await app.state.graph.ainvoke(
-            {"messages": [HumanMessage(content=query)]}, config
-        )
-
-    answer = result["messages"][-1].content
+    messages = result.get("messages") or []
+    if not messages:
+        raise HTTPException(status_code=500, detail="No response generated")
+    answer = messages[-1].content
     detected_lang = result.get("detected_lang", "es")
 
     # Extract token usage from AIMessages
