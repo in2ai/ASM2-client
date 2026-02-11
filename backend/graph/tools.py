@@ -39,13 +39,13 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
 
     except Exception:
-        logger.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
+        logging.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
 
     try:
         search_terms = extract_search_terms(query, lang_code)
         register_words(pool, search_terms, lang_code)
     except Exception:
-        logger.warning("Failed to record search terms", exc_info=True)
+        logging.warning("Failed to record search terms", exc_info=True)
 
     try:
         topic_indices = {t for c in chunks for t in c.metadata.get("topics", {})}
@@ -53,7 +53,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
             topics = resolve_topic_names(topic_indices, lang_code, QDRANT_PATH)
             register_topics(pool, topics)
     except Exception:
-        logger.warning("Failed to record topics", exc_info=True)
+        logging.warning("Failed to record topics", exc_info=True)
 
     # --- Build response ---
     fallback_messages = {
