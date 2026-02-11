@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     app.state.vectorstore = get_vectordb()
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
-    
+
     # Async periodic jobs
     jobs = [
         extract_usage_metrics,  # Store CPU, RAM and GPU metrics
@@ -163,7 +163,7 @@ def extract_usage_metrics():
 async def start_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(403)
-        
+
     with open(VDB_LOCK, 'w+'):
         pass
 
@@ -236,13 +236,16 @@ async def chat(logto_token: str, query: str, chat_id: str):
             result = await app.state.graph.ainvoke(
                 {"messages": [HumanMessage(content=query)]}, config
             )
+
         except Exception:
             logger.exception("Graph invocation failed")
             raise HTTPException(status_code=500, detail="Internal error processing your request")
 
     messages = result.get("messages") or []
+
     if not messages:
         raise HTTPException(status_code=500, detail="No response generated")
+
     answer = messages[-1].content
     detected_lang = result.get("detected_lang", "es")
 
@@ -253,6 +256,7 @@ async def chat(logto_token: str, query: str, chat_id: str):
                 usage = msg.usage_metadata
                 insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_IN.value, usage.get("input_tokens", 0))
                 insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_OUT.value, usage.get("output_tokens", 0))
+
     except Exception:
         logger.warning("Failed to record token usage metrics", exc_info=True)
 
