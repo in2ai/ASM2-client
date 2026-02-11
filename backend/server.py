@@ -26,7 +26,7 @@ from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
 
 from graph.agent import build_graph
-from graph.checkpointer import get_checkpointer
+from graph import get_checkpointer
 from langchain_core.messages import AIMessage, HumanMessage
 
 logger = logging.getLogger(__name__)

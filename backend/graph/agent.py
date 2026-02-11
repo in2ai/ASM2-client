@@ -1,11 +1,34 @@
-from edges.should_continue import should_continue
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
-from model import tool_list
-from nodes.assistant import call_model as assistant
-from nodes.detect_language import detect_language_node
-from nodes.summarize_conversation import summarize_conversation
-from state import State
+from langchain_core.messages import AIMessage
+from .model import tool_list
+from .nodes import call_model as assistant, detect_language_node, summarize_conversation
+from .state import State
+
+
+_checkpointer = None
+
+
+def get_checkpointer():
+    global _checkpointer
+    if _checkpointer is None:
+        _checkpointer = MemorySaver()
+    return _checkpointer
+
+
+def should_continue(state: State):
+    """Return the next node to execute."""
+    messages = state.messages
+    last_message = messages[-1]
+
+    if isinstance(last_message, AIMessage) and last_message.tool_calls:
+        return "tools"
+
+    if len(messages) > 6:
+        return "summarize_conversation"
+
+    return END
 
 
 def build_graph(checkpointer=None):

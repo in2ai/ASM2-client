@@ -2,7 +2,7 @@ from pathlib import Path
 
 from dotenv.main import load_dotenv
 from langchain_openai.chat_models.base import ChatOpenAI
-from tools.vectordb_search import vectordb_search
+from .tools import vectordb_search
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 

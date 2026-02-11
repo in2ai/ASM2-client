@@ -2,15 +2,18 @@ import logging
 
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
-from src.connectors.store import QDRANT_PATH
-from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_topics, register_words
-from src.utils.nlp import extract_search_terms
 from src.utils.rag import retrieve_and_rerank
+
+from src.connectors.store import QDRANT_PATH
+from src.metrics.metrics import (
+    Metrics,
+    TimedMetric,
+    insert_metric,
+    register_topics,
+    register_words,
+)
+from src.utils.nlp import extract_search_terms
 from src.utils.topic import resolve_topic_names
-
-logger = logging.getLogger(__name__)
-
-# TODO: turn into subgraph
 
 
 @tool
@@ -28,12 +31,13 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
             chunks, available_sources, lang_code = retrieve_and_rerank(
                 query, vectorstore, reranker, sources
             )
+
     except Exception as e:
         return f"[Search error: {e}]"
 
-    # --- Metrics (fire-and-forget, never break the tool) ---
     try:
         insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
+
     except Exception:
         logger.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
 
