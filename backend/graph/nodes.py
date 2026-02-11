@@ -38,6 +38,7 @@ def summarize_conversation(state: State):
             f"This is summary of the conversation to date: {summary}\n\n"
             "Extend the summary by taking into account the new messages above:"
         )
+
     else:
         summary_message = "Create a summary of the conversation above:"
 
@@ -46,6 +47,7 @@ def summarize_conversation(state: State):
 
     # Keep from the last HumanMessage onward to avoid orphaning tool messages
     human_indices = [i for i, m in enumerate(state.messages) if isinstance(m, HumanMessage)]
+
     if len(human_indices) < 2:
         # Single-turn conversation: just update summary, don't delete messages
         return {"summary": response.content}

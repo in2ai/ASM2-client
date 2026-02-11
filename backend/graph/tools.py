@@ -45,14 +45,17 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     try:
         search_terms = extract_search_terms(query, lang_code)
         register_words(pool, search_terms, lang_code)
+
     except Exception:
         logging.warning("Failed to record search terms", exc_info=True)
 
     try:
         topic_indices = {t for c in chunks for t in c.metadata.get("topics", {})}
+
         if topic_indices:
             topics = resolve_topic_names(topic_indices, lang_code, QDRANT_PATH)
             register_topics(pool, topics)
+
     except Exception:
         logging.warning("Failed to record topics", exc_info=True)
 
