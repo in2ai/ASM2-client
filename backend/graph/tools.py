@@ -2,7 +2,6 @@ import logging
 
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
-from src.utils.rag import retrieve_and_rerank
 
 from src.connectors.store import QDRANT_PATH
 from src.metrics.metrics import (
@@ -13,6 +12,7 @@ from src.metrics.metrics import (
     register_words,
 )
 from src.utils.nlp import extract_search_terms
+from src.utils.rag import retrieve_and_rerank
 from src.utils.topic import resolve_topic_names
 
 

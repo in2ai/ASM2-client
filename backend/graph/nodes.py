@@ -1,8 +1,9 @@
 from langchain_core.messages import HumanMessage, RemoveMessage, SystemMessage
-from .model import llm, llm_with_tools
-from .state import State
+
 from src.utils.nlp import detect_language
 from src.utils.rag import get_rag_system_prompt
+from .model import llm, llm_with_tools
+from .state import State
 
 
 def detect_language_node(state: State):
