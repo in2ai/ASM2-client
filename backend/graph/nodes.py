@@ -11,7 +11,7 @@ def detect_language_node(state: State):
         if isinstance(msg, HumanMessage) and isinstance(msg.content, str):
             try:
                 detected = detect_language(msg.content)
-            except RuntimeError:
+            except Exception:
                 return {"detected_lang": "es"}
             return {"detected_lang": detected}
 
