@@ -32,8 +32,9 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
                 query, vectorstore, reranker, sources
             )
 
-    except Exception as e:
-        return f"[Search error: {e}]"
+    except Exception:
+        logging.exception("vectordb_search failed")
+        return "[Search error: the document search is temporarily unavailable.]"
 
     try:
         insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
