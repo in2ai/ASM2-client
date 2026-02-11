@@ -1,4 +1,5 @@
 from langchain_core.messages import HumanMessage, RemoveMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 
 from src.utils.nlp import detect_language
 from src.utils.rag import get_rag_system_prompt
@@ -19,18 +20,18 @@ def detect_language_node(state: State):
     return {"detected_lang": "es"}
 
 
-def call_model(state: State):
+def call_model(state: State, config: RunnableConfig):
     system_prompt = get_rag_system_prompt(state.detected_lang)
 
     if state.summary:
         system_prompt += f"\n\nSummary of conversation earlier: {state.summary}"
 
     messages = [SystemMessage(content=system_prompt)] + state.messages
-    response = llm_with_tools.invoke(messages)
+    response = llm_with_tools.invoke(messages, config)
     return {"messages": response}
 
 
-def summarize_conversation(state: State):
+def summarize_conversation(state: State, config: RunnableConfig):
     summary = state.summary
 
     if summary:
@@ -43,7 +44,7 @@ def summarize_conversation(state: State):
         summary_message = "Create a summary of the conversation above:"
 
     messages = state.messages + [HumanMessage(content=summary_message)]
-    response = llm.invoke(messages)
+    response = llm.invoke(messages, config)
 
     # Keep from the last HumanMessage onward to avoid orphaning tool messages
     human_indices = [i for i, m in enumerate(state.messages) if isinstance(m, HumanMessage)]
