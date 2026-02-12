@@ -10,11 +10,10 @@ export default async function Home() {
     redirect("/sign-in");
   }
 
-  // Prefetch metrics, stats, and preferences for better initial load performance
+  // Prefetch metrics and stats for better initial load performance
   await Promise.all([
     api.metrics.get.prefetch({}),
     api.metrics.getStats.prefetch({}),
-    api.preferences.get.prefetch(),
   ]);
 
   return (
