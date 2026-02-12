@@ -1,4 +1,5 @@
 import { config as dotenvConfig } from "dotenv";
+import createNextIntlPlugin from "next-intl/plugin";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -94,4 +95,5 @@ const config = {
   },
 };
 
-export default config;
+const withNextIntl = createNextIntlPlugin();
+export default withNextIntl(config);

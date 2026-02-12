@@ -1,6 +1,7 @@
 "use client";
 
 import { Activity, Clock, Database, Sparkles, User } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { StatCard } from "./stat-card";
 import { type MetricsResponse } from "./types";
 
@@ -15,49 +16,52 @@ interface StatsRowProps {
  * @returns A JSX element: a responsive grid of StatCard components showing unique users, total events, average session (minutes), RAG latency (ms), and total RAG metrics
  */
 export function StatsRow({ metrics }: Readonly<StatsRowProps>) {
+  const locale = useLocale();
+  const t = useTranslations("StatsRow");
+
   const userActivity = metrics.user_activity;
   const metricsData = metrics.metrics;
 
-  const uniqueUsers = userActivity.unique_users.toLocaleString("es-ES");
-  const totalEvents = userActivity.total_events.toLocaleString("es-ES");
+  const uniqueUsers = userActivity.unique_users.toLocaleString(locale);
+  const totalEvents = userActivity.total_events.toLocaleString(locale);
   const avgSession = userActivity.mean_session_length_seconds
     ? (userActivity.mean_session_length_seconds / 60).toFixed(1)
     : "0.0";
   const ragLatency = metricsData.response_time
     ? metricsData.response_time.toFixed(0)
     : "0";
-  const totalMetrics = metricsData.total_count.toLocaleString("es-ES");
+  const totalMetrics = metricsData.total_count.toLocaleString(locale);
 
   return (
     <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <StatCard
-        label="Usuarios únicos"
+        label={t("uniqueUsers.label")}
         value={uniqueUsers}
-        helper="En el período"
+        helper={t("uniqueUsers.helper")}
         icon={User}
       />
       <StatCard
-        label="Eventos totales"
+        label={t("totalEvents.label")}
         value={totalEvents}
-        helper="Interacciones"
+        helper={t("totalEvents.helper")}
         icon={Activity}
       />
       <StatCard
-        label="Sesión media"
+        label={t("avgSession.label")}
         value={`${avgSession}m`}
-        helper="Tiempo de uso"
+        helper={t("avgSession.helper")}
         icon={Clock}
       />
       <StatCard
-        label="Latencia RAG"
+        label={t("ragLatency.label")}
         value={`${ragLatency}ms`}
-        helper="Respuesta LLM"
+        helper={t("ragLatency.helper")}
         icon={Sparkles}
       />
       <StatCard
-        label="Métricas RAG"
+        label={t("ragMetrics.label")}
         value={totalMetrics}
-        helper="Registros totales"
+        helper={t("ragMetrics.helper")}
         icon={Database}
       />
     </div>

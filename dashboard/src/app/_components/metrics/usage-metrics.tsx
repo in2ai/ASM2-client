@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/chart";
 import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { Activity, Clock, User } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { useMemo } from "react";
 import {
   Area,
@@ -29,12 +30,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  activityChartConfig,
-  hourlyChartConfig,
-  roleChartConfig,
-} from "./constants";
 import { ChartHint } from "./chart-hint";
+import {
+  createActivityChartConfig,
+  createHourlyChartConfig,
+  createRoleChartConfig,
+} from "./constants";
 import { type MetricsResponse } from "./types";
 import { formatShortDate } from "./utils";
 
@@ -51,28 +52,64 @@ interface UsageMetricsProps {
  * @returns A React element containing the metrics section with cards and charts, conditionally rendered based on chart visibility and available data
  */
 export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
+  const locale = useLocale();
+  const t = useTranslations("UsageMetrics");
+  const roleLabels = useMemo(
+    () => ({
+      admin: t("roleLabels.admin"),
+      user: t("roleLabels.user"),
+      viewer: t("roleLabels.viewer"),
+      manager: t("roleLabels.manager"),
+      other: t("roleLabels.other"),
+    }),
+    [t],
+  );
+
   const {
     state: { visibility },
   } = useChartVisibility();
   const userActivity = metrics.user_activity;
 
+  const roleChartConfig = useMemo(
+    () => createRoleChartConfig(roleLabels),
+    [roleLabels],
+  );
+  const activityChartConfig = useMemo(
+    () =>
+      createActivityChartConfig({
+        events: t("chartLabels.events"),
+        uniqueUsers: t("chartLabels.uniqueUsers"),
+      }),
+    [t],
+  );
+  const hourlyChartConfig = useMemo(
+    () =>
+      createHourlyChartConfig({
+        activity: t("chartLabels.activity"),
+      }),
+    [t],
+  );
+
   const roleDistributionData = useMemo(
     () =>
       Object.entries(userActivity.role_distribution).map(([role, count]) => ({
         role,
+        roleLabel:
+          roleLabels[role.toLowerCase() as keyof typeof roleLabels] ??
+          roleLabels.other,
         value: count,
         fill: `var(--color-${role.toLowerCase()})`,
       })),
-    [userActivity.role_distribution],
+    [roleLabels, userActivity.role_distribution],
   );
 
   const activityByDayData = useMemo(
     () =>
       userActivity.by_day.map((item) => ({
         ...item,
-        date: formatShortDate(item.date),
+        date: formatShortDate(item.date, locale),
       })),
-    [userActivity.by_day],
+    [locale, userActivity.by_day],
   );
 
   const hourlyPatternData = useMemo(
@@ -87,12 +124,8 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold sm:text-2xl">
-          1. Métricas de uso e interacción
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          Datos de la tabla user_activity
-        </p>
+        <h2 className="text-xl font-semibold sm:text-2xl">{t("title")}</h2>
+        <p className="text-muted-foreground text-sm">{t("subtitle")}</p>
         <div className="bg-border mt-3 h-px" />
       </div>
 
@@ -102,10 +135,12 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-xl font-bold tracking-tight">
-                  Tendencia de actividad
-                  <ChartHint hint="Compara el número total de eventos (consultas) con la cantidad de usuarios únicos activos cada día. Si los eventos crecen más rápido que los usuarios, significa que cada usuario realiza más consultas." />
+                  {t("activityTrend.title")}
+                  <ChartHint hint={t("activityTrend.hint")} />
                 </CardTitle>
-                <CardDescription>Eventos y usuarios por día</CardDescription>
+                <CardDescription>
+                  {t("activityTrend.description")}
+                </CardDescription>
               </div>
               <div className="bg-primary/10 text-primary rounded-xl p-2.5">
                 <Activity size={20} />
@@ -214,10 +249,12 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
-                    Distribución por rol
-                    <ChartHint hint="Muestra cómo se distribuyen los usuarios activos según su rol en la organización. Útil para entender qué grupos usan más el asistente." />
+                    {t("roleDistribution.title")}
+                    <ChartHint hint={t("roleDistribution.hint")} />
                   </CardTitle>
-                  <CardDescription>Usuarios por rol de acceso</CardDescription>
+                  <CardDescription>
+                    {t("roleDistribution.description")}
+                  </CardDescription>
                 </div>
                 <div className="bg-primary/10 text-primary rounded-xl p-2.5">
                   <User size={18} />
@@ -232,7 +269,7 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
                     <Pie
                       data={roleDistributionData}
                       dataKey="value"
-                      nameKey="role"
+                      nameKey="roleLabel"
                       innerRadius={60}
                       outerRadius={90}
                       paddingAngle={5}
@@ -250,14 +287,14 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
                       content={
                         <ChartTooltipContent
                           nameKey="role"
-                          labelKey="role"
+                          labelKey="roleLabel"
                           hideIndicator
                           className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                         />
                       }
                     />
                     <ChartLegend
-                      content={<ChartLegendContent nameKey="role" />}
+                      content={<ChartLegendContent nameKey="roleLabel" />}
                       className="flex-wrap gap-x-4 gap-y-2 pt-4"
                     />
                   </PieChart>
@@ -271,10 +308,12 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
-                    Patrón horario
-                    <ChartHint hint="Identifica las horas del día con mayor actividad. Útil para planificar mantenimientos o detectar picos de uso que podrían afectar el rendimiento." />
+                    {t("hourlyPattern.title")}
+                    <ChartHint hint={t("hourlyPattern.hint")} />
                   </CardTitle>
-                  <CardDescription>Eventos por hora del día</CardDescription>
+                  <CardDescription>
+                    {t("hourlyPattern.description")}
+                  </CardDescription>
                 </div>
                 <div className="bg-primary/10 text-primary rounded-xl p-2.5">
                   <Clock size={18} />

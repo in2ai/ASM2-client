@@ -6,6 +6,8 @@ import {
 } from "@/app/_components/dashboard-views";
 import { signOutAction } from "@/app/actions/auth";
 import { ChartVisibilityControls } from "@/components/chart-visibility-controls";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +18,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { ChartVisibilityProvider } from "@/contexts/chart-visibility-context";
 import { type LogtoUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCallback, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -47,6 +49,15 @@ export function AppLayout({
   view,
   onViewChange,
 }: AppLayoutProps) {
+  const t = useTranslations("AppLayout");
+
+  const viewLabels: Record<DashboardView, string> = {
+    overview: t("views.overview"),
+    usage: t("views.usage"),
+    "rag-quality": t("views.ragQuality"),
+    insights: t("views.insights"),
+  };
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -75,7 +86,7 @@ export function AppLayout({
             type="button"
             className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
-            aria-label="Cerrar menú lateral"
+            aria-label={t("closeSidebarMenu")}
           />
         )}
 
@@ -100,10 +111,10 @@ export function AppLayout({
               size="icon"
               className="ml-auto lg:hidden"
               onClick={() => setMobileMenuOpen(false)}
-              aria-label="Cerrar menú lateral"
+              aria-label={t("closeSidebarMenu")}
             >
               <X className="h-5 w-5" />
-              <span className="sr-only">Cerrar menú lateral</span>
+              <span className="sr-only">{t("closeSidebarMenu")}</span>
             </Button>
           </div>
 
@@ -113,7 +124,7 @@ export function AppLayout({
                 <NavItem
                   key={dashboardView.key}
                   icon={dashboardView.icon}
-                  label={dashboardView.sidebarLabel}
+                  label={viewLabels[dashboardView.key]}
                   active={view === dashboardView.key}
                   onClick={() => handleViewChange(dashboardView.key)}
                   collapsed={!sidebarOpen}
@@ -133,30 +144,30 @@ export function AppLayout({
                 onClick={handleSidebarToggle}
                 aria-label={
                   mobileMenuOpen
-                    ? "Cerrar menú de navegación"
-                    : "Abrir menú de navegación"
+                    ? t("closeNavigationMenu")
+                    : t("openNavigationMenu")
                 }
               >
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">
                   {mobileMenuOpen
-                    ? "Cerrar menú de navegación"
-                    : "Abrir menú de navegación"}
+                    ? t("closeNavigationMenu")
+                    : t("openNavigationMenu")}
                 </span>
               </Button>
               <div className="hidden sm:block">
                 <h1 className="text-sm font-bold tracking-tight md:text-base">
-                  Dashboard de Métricas
+                  {t("title")}
                 </h1>
                 <div className="flex items-center gap-2">
                   <Badge
                     variant="outline"
                     className="h-4 border-emerald-500/20 bg-emerald-500/10 px-1 text-[8px] font-bold text-emerald-500 uppercase"
                   >
-                    Live
+                    {t("live")}
                   </Badge>
                   <p className="text-muted-foreground text-[10px] font-medium tracking-widest uppercase">
-                    Real-time analysis
+                    {t("realTimeAnalysis")}
                   </p>
                 </div>
               </div>
@@ -167,6 +178,7 @@ export function AppLayout({
               {view !== "overview" ? (
                 <ChartVisibilityControls view={view} />
               ) : null}
+              <LanguageSwitcher />
               <ThemeToggle />
               <UserMenu user={user} />
             </div>
@@ -233,6 +245,7 @@ function CompanyDisplay({ user }: Readonly<{ user: LogtoUser | null }>) {
 
 function SignOutButton() {
   const { pending } = useFormStatus();
+  const t = useTranslations("AppLayout");
 
   return (
     <button
@@ -245,7 +258,7 @@ function SignOutButton() {
       ) : (
         <LogOut className="h-4 w-4" />
       )}
-      <span>{pending ? "Cerrando sesión…" : "Cerrar sesión"}</span>
+      <span>{pending ? t("signingOut") : t("signOut")}</span>
     </button>
   );
 }
@@ -260,18 +273,19 @@ function getInitials(user: LogtoUser | null): string {
   return "U";
 }
 
-function getDisplayName(user: LogtoUser | null): string {
+function getDisplayName(user: LogtoUser | null, fallbackName: string): string {
   if (user?.firstName && user?.lastName) {
     return `${user.firstName} ${user.lastName}`;
   }
   if (user?.firstName) {
     return user.firstName;
   }
-  return "Usuario";
+  return fallbackName;
 }
 
 function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
-  const displayName = getDisplayName(user);
+  const t = useTranslations("AppLayout");
+  const displayName = getDisplayName(user, t("userFallbackName"));
   const initials = getInitials(user);
 
   return (
@@ -280,7 +294,7 @@ function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
         <Button
           variant="ghost"
           className="relative h-10 min-h-11 w-10 min-w-11 rounded-full"
-          aria-label="Abrir menú de usuario"
+          aria-label={t("openUserMenu")}
         >
           <Avatar className="h-10 w-10">
             <AvatarFallback className="bg-primary text-primary-foreground">
@@ -297,17 +311,17 @@ function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
               {user?.role === "admin" ? (
                 <Badge variant="default" className="ml-2 gap-1">
                   <Shield className="h-3 w-3" />
-                  Admin
+                  {t("admin")}
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="ml-2 gap-1">
                   <User className="h-3 w-3" />
-                  Usuario
+                  {t("user")}
                 </Badge>
               )}
             </div>
             <p className="text-muted-foreground text-xs leading-none">
-              {user?.email ?? "usuario@empresa.com"}
+              {user?.email ?? t("fallbackEmail")}
             </p>
             {user?.role !== "admin" && user?.organizationId && (
               <p className="text-muted-foreground flex items-center gap-1 text-xs leading-none">

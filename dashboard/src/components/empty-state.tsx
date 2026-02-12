@@ -14,6 +14,7 @@ import {
   RefreshCw,
   type LucideIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface EmptyStateProps {
   /**
@@ -63,7 +64,7 @@ interface EmptyStateProps {
  * Provides actionable next steps for users
  */
 export function EmptyState({
-  title = "No data available",
+  title,
   message,
   icon: Icon = FileQuestion,
   actionLabel,
@@ -72,20 +73,24 @@ export function EmptyState({
   secondaryActionLabel,
   onSecondaryAction,
   showTips = false,
-  tips = [
-    "Ensure the database connection is configured correctly",
-    "Run the seed script to populate initial data",
-    "Check that your filters are not too restrictive",
-    "Verify your date range includes data",
-  ],
+  tips,
 }: Readonly<EmptyStateProps>) {
+  const t = useTranslations("EmptyState");
+  const resolvedTitle = title ?? t("defaultTitle");
+  const resolvedTips = tips ?? [
+    t("defaultTips.connection"),
+    t("defaultTips.seed"),
+    t("defaultTips.filters"),
+    t("defaultTips.dateRange"),
+  ];
+
   return (
     <Card className="border-muted bg-muted/5 mx-auto max-w-3xl">
-      <CardHeader className="text-center pb-4 sm:pb-6">
+      <CardHeader className="pb-4 text-center sm:pb-6">
         <div className="bg-muted mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full sm:h-20 sm:w-20">
           <Icon className="text-muted-foreground h-8 w-8 sm:h-10 sm:w-10" />
         </div>
-        <CardTitle className="text-xl sm:text-2xl">{title}</CardTitle>
+        <CardTitle className="text-xl sm:text-2xl">{resolvedTitle}</CardTitle>
         <CardDescription className="mx-auto mt-2 max-w-md text-sm sm:text-base">
           {message}
         </CardDescription>
@@ -98,19 +103,19 @@ export function EmptyState({
               <Button
                 onClick={onAction}
                 disabled={isActionLoading}
-                className="gap-2 min-h-[44px] w-full sm:w-auto"
+                className="min-h-11 w-full gap-2 sm:w-auto"
               >
                 <RefreshCw
                   className={`h-4 w-4 ${isActionLoading ? "animate-spin" : ""}`}
                 />
-                {isActionLoading ? "Loading..." : actionLabel}
+                {isActionLoading ? t("loading") : actionLabel}
               </Button>
             )}
             {onSecondaryAction && secondaryActionLabel && (
               <Button
                 onClick={onSecondaryAction}
                 variant="outline"
-                className="gap-2 min-h-[44px] w-full sm:w-auto"
+                className="min-h-11 w-full gap-2 sm:w-auto"
               >
                 <Database className="h-4 w-4" />
                 {secondaryActionLabel}
@@ -120,11 +125,13 @@ export function EmptyState({
         )}
 
         {/* Helpful tips */}
-        {showTips && tips.length > 0 && (
+        {showTips && resolvedTips.length > 0 && (
           <div className="bg-card rounded-lg border p-4 sm:p-6">
-            <p className="mb-3 text-sm font-medium sm:text-base">Helpful tips:</p>
+            <p className="mb-3 text-sm font-medium sm:text-base">
+              {t("helpfulTips")}
+            </p>
             <ul className="text-muted-foreground space-y-2 text-sm sm:text-base">
-              {tips.map((tip, index) => (
+              {resolvedTips.map((tip, index) => (
                 <li key={index} className="flex items-start gap-2">
                   <span className="bg-muted-foreground mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
                   <span>{tip}</span>
@@ -148,20 +155,22 @@ export function NoMetricsEmptyState({
   onRefresh?: () => void;
   isRefreshing?: boolean;
 }>) {
+  const t = useTranslations("EmptyState.noMetrics");
+
   return (
     <EmptyState
-      title="No hay datos disponibles"
-      message="No hay datos disponibles para el rango de fechas seleccionado. Intenta ajustar el rango de fechas arriba para encontrar períodos con datos."
+      title={t("title")}
+      message={t("message")}
       icon={Database}
-      actionLabel="Actualizar"
+      actionLabel={t("refresh")}
       onAction={onRefresh}
       isActionLoading={isRefreshing}
       showTips={true}
       tips={[
-        "Ajusta el rango de fechas usando los controles arriba",
-        "Prueba con un rango de fechas más amplio",
-        "Si eres administrador, intenta seleccionar un nodo diferente",
-        "Ejecuta 'npm run db:seed' para poblar datos de ejemplo si es necesario",
+        t("tips.adjustDateRange"),
+        t("tips.widerRange"),
+        t("tips.selectDifferentNode"),
+        t("tips.seedData"),
       ]}
     />
   );
@@ -177,19 +186,21 @@ export function NoNodesEmptyState({
   onRefresh?: () => void;
   isRefreshing?: boolean;
 }>) {
+  const t = useTranslations("EmptyState.noNodes");
+
   return (
     <EmptyState
-      title="No nodes available"
-      message="No organization nodes are configured in the system. Please contact your administrator or run the setup script."
+      title={t("title")}
+      message={t("message")}
       icon={Database}
-      actionLabel="Refresh"
+      actionLabel={t("refresh")}
       onAction={onRefresh}
       isActionLoading={isRefreshing}
       showTips={true}
       tips={[
-        "Run the node setup script to create initial nodes",
-        "Ensure Logto organizations are properly configured",
-        "Contact your system administrator for assistance",
+        t("tips.setupScript"),
+        t("tips.logtoOrganizations"),
+        t("tips.contactAdmin"),
       ]}
     />
   );

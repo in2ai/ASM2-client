@@ -14,12 +14,13 @@ import {
 } from "@/components/ui/chart";
 import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { BarChart3, TrendingUp } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartHint } from "./chart-hint";
 import {
-  insightsTopWordsChartConfig,
-  insightsTopicsChartConfig,
+  createInsightsTopWordsChartConfig,
+  createInsightsTopicsChartConfig,
 } from "./constants";
 import { type MetricsResponse } from "./types";
 
@@ -32,9 +33,25 @@ interface InsightsViewProps {
  * Displays bar charts for top words and topics from the word_counts and topic_counts tables.
  */
 export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
+  const t = useTranslations("InsightsView");
+
   const {
     state: { visibility },
   } = useChartVisibility();
+  const insightsTopWordsChartConfig = useMemo(
+    () =>
+      createInsightsTopWordsChartConfig({
+        searches: t("chartLabels.searches"),
+      }),
+    [t],
+  );
+  const insightsTopicsChartConfig = useMemo(
+    () =>
+      createInsightsTopicsChartConfig({
+        mentions: t("chartLabels.mentions"),
+      }),
+    [t],
+  );
   const topWords = metrics.top_words;
   const topTopics = metrics.top_topics;
 
@@ -62,12 +79,8 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold sm:text-2xl">
-          Análisis de consultas
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          Palabras y temas más frecuentes en las búsquedas de usuarios
-        </p>
+        <h2 className="text-xl font-semibold sm:text-2xl">{t("title")}</h2>
+        <p className="text-muted-foreground text-sm">{t("subtitle")}</p>
         <div className="bg-border mt-3 h-px" />
       </div>
 
@@ -77,7 +90,7 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
             <BarChart3 size={24} />
           </div>
           <p className="text-muted-foreground text-sm font-medium">
-            No hay datos de búsquedas disponibles en este período
+            {t("noData")}
           </p>
         </div>
       ) : (
@@ -87,10 +100,10 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
-                    Palabras más buscadas
-                    <ChartHint hint="Muestra las palabras clave que los usuarios mencionan con más frecuencia en sus consultas. Ayuda a identificar los temas de mayor interés y posibles lagunas de información." />
+                    {t("topWords.title")}
+                    <ChartHint hint={t("topWords.hint")} />
                   </CardTitle>
-                  <CardDescription>Top palabras por frecuencia</CardDescription>
+                  <CardDescription>{t("topWords.description")}</CardDescription>
                 </div>
                 <div className="bg-primary/10 text-primary rounded-xl p-2.5">
                   <BarChart3 size={18} />
@@ -144,10 +157,12 @@ export function InsightsView({ metrics }: Readonly<InsightsViewProps>) {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
-                    Temas más frecuentes
-                    <ChartHint hint="Agrupa las consultas por temática detectada automáticamente. Permite entender qué áreas del conocimiento son más consultadas y priorizar la mejora del contenido." />
+                    {t("topTopics.title")}
+                    <ChartHint hint={t("topTopics.hint")} />
                   </CardTitle>
-                  <CardDescription>Top temas por frecuencia</CardDescription>
+                  <CardDescription>
+                    {t("topTopics.description")}
+                  </CardDescription>
                 </div>
                 <div className="bg-primary/10 text-primary rounded-xl p-2.5">
                   <TrendingUp size={18} />

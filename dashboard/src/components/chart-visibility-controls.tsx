@@ -13,6 +13,7 @@ import {
 import { getChartsForView } from "@/contexts/chart-visibility-config";
 import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { Eye, EyeOff, Settings } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface ChartControlsProps {
   readonly view: DashboardView;
@@ -27,6 +28,18 @@ interface ChartControlsProps {
 export function ChartVisibilityControls({
   view,
 }: Readonly<ChartControlsProps>) {
+  const t = useTranslations("ChartVisibilityControls");
+  const chartLabels = {
+    activityTrend: t("charts.activityTrend"),
+    roleDistribution: t("charts.roleDistribution"),
+    hourlyPattern: t("charts.hourlyPattern"),
+    responseTimeTrend: t("charts.responseTimeTrend"),
+    tokenUsage: t("charts.tokenUsage"),
+    systemHealth: t("charts.systemHealth"),
+    topWords: t("charts.topWords"),
+    topTopics: t("charts.topTopics"),
+  } as const;
+
   const {
     state: { visibility },
     actions: { hideAllCharts, showAllCharts, toggleChart },
@@ -45,12 +58,12 @@ export function ChartVisibilityControls({
         <Button
           variant="outline"
           size="sm"
-          className="min-h-[44px] gap-2"
-          aria-label="Configurar visibilidad de gráficos"
+          className="min-h-11 gap-2"
+          aria-label={t("ariaLabel")}
         >
           <Settings className="h-4 w-4" />
           <span className="hidden sm:inline">
-            Gráficos ({visibleCount}/{charts.length})
+            {t("buttonLabel", { visibleCount, totalCount: charts.length })}
           </span>
           <span className="sm:hidden">
             {visibleCount}/{charts.length}
@@ -58,7 +71,7 @@ export function ChartVisibilityControls({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Mostrar/Ocultar Gráficos</DropdownMenuLabel>
+        <DropdownMenuLabel>{t("menuLabel")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
 
         <div className="flex gap-1 p-1">
@@ -68,7 +81,7 @@ export function ChartVisibilityControls({
             onClick={showAllCharts}
             className="flex-1 text-xs"
           >
-            Mostrar todos
+            {t("showAll")}
           </Button>
           <Button
             variant="ghost"
@@ -76,7 +89,7 @@ export function ChartVisibilityControls({
             onClick={hideAllCharts}
             className="flex-1 text-xs"
           >
-            Ocultar todos
+            {t("hideAll")}
           </Button>
         </div>
 
@@ -89,9 +102,9 @@ export function ChartVisibilityControls({
               event.preventDefault();
               toggleChart(chart.id);
             }}
-            className="flex min-h-[44px] cursor-pointer items-center justify-between"
+            className="flex min-h-11 cursor-pointer items-center justify-between"
           >
-            <span className="text-sm">{chart.label}</span>
+            <span className="text-sm">{chartLabels[chart.labelKey]}</span>
             {visibility[chart.id] ? (
               <Eye className="h-4 w-4 text-green-600" />
             ) : (

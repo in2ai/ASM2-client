@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AlertCircle, Home, RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface ErrorStateProps {
   /**
@@ -43,12 +44,15 @@ interface ErrorStateProps {
  */
 export function ErrorState({
   message,
-  title = "Error loading data",
+  title,
   onRetry,
   isRetrying = false,
   onGoHome,
   showHomeButton = false,
 }: Readonly<ErrorStateProps>) {
+  const t = useTranslations("ErrorState");
+  const resolvedTitle = title ?? t("defaultTitle");
+
   const handleGoHome = () => {
     if (onGoHome) {
       onGoHome();
@@ -65,7 +69,9 @@ export function ErrorState({
             <AlertCircle className="text-destructive h-5 w-5 sm:h-6 sm:w-6" />
           </div>
           <div className="flex-1">
-            <CardTitle className="text-lg sm:text-xl">{title}</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">
+              {resolvedTitle}
+            </CardTitle>
             <CardDescription className="mt-1.5 text-sm sm:text-base">
               {message}
             </CardDescription>
@@ -79,18 +85,22 @@ export function ErrorState({
               variant="outline"
               onClick={onRetry}
               disabled={isRetrying}
-              className="gap-2 min-h-[44px] w-full sm:w-auto"
+              className="min-h-11 w-full gap-2 sm:w-auto"
             >
               <RefreshCw
                 className={`h-4 w-4 ${isRetrying ? "animate-spin" : ""}`}
               />
-              {isRetrying ? "Retrying..." : "Retry"}
+              {isRetrying ? t("retrying") : t("retry")}
             </Button>
           )}
           {showHomeButton && (
-            <Button variant="ghost" onClick={handleGoHome} className="gap-2 min-h-[44px] w-full sm:w-auto">
+            <Button
+              variant="ghost"
+              onClick={handleGoHome}
+              className="min-h-11 w-full gap-2 sm:w-auto"
+            >
               <Home className="h-4 w-4" />
-              Go Home
+              {t("goHome")}
             </Button>
           )}
         </div>
