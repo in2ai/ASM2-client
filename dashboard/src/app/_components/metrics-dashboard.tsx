@@ -5,6 +5,7 @@ import { NoMetricsEmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { type LogtoUser } from "@/lib/auth";
 import { api } from "@/trpc/react";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useMemo, useState } from "react";
 import { type DateRange } from "react-day-picker";
 import { AppLayout } from "./app-layout";
@@ -17,8 +18,7 @@ import { type MetricsResponse } from "./metrics/types";
 import { UsageMetrics } from "./metrics/usage-metrics";
 import {
   getDateFormatter,
-  getErrorMessage,
-  getErrorTitle,
+  getMetricsErrorCode,
   isEmptyData,
   isRecoverableError,
 } from "./metrics/utils";
@@ -55,6 +55,9 @@ function renderMetricsView(
 }
 
 export function MetricsDashboard({ user }: MetricsDashboardProps) {
+  const locale = useLocale();
+  const t = useTranslations("MetricsErrors");
+
   const [currentView, setCurrentView] = useState<DashboardView>("overview");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
@@ -86,8 +89,28 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
       return undefined;
     }
 
-    return getDateFormatter().format(new Date(data.metadata.updatedAt));
-  }, [data]);
+    return getDateFormatter(locale).format(new Date(data.metadata.updatedAt));
+  }, [data, locale]);
+
+  const errorCode = getMetricsErrorCode(error);
+  const errorTitles = {
+    unauthorized: t("titles.unauthorized"),
+    forbidden: t("titles.forbidden"),
+    notFound: t("titles.notFound"),
+    timeout: t("titles.timeout"),
+    network: t("titles.network"),
+    server: t("titles.server"),
+    unknown: t("titles.unknown"),
+  } as const;
+  const errorMessages = {
+    unauthorized: t("messages.unauthorized"),
+    forbidden: t("messages.forbidden"),
+    notFound: t("messages.notFound"),
+    timeout: t("messages.timeout"),
+    network: t("messages.network"),
+    server: t("messages.server"),
+    unknown: t("messages.unknown"),
+  } as const;
 
   return (
     <AppLayout user={user} view={currentView} onViewChange={setCurrentView}>
@@ -107,8 +130,8 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
           <LoadingState />
         ) : isError ? (
           <ErrorState
-            title={getErrorTitle(error)}
-            message={getErrorMessage(error)}
+            title={errorTitles[errorCode]}
+            message={errorMessages[errorCode]}
             onRetry={isRecoverableError(error) ? handleRetry : undefined}
             isRetrying={isRefetching}
             showHomeButton={true}

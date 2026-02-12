@@ -1,13 +1,14 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { getLogtoContext } from "@logto/next/server-actions";
 import { logtoConfig } from "@/lib/logto";
+import { getLogtoContext } from "@logto/next/server-actions";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 const publicPaths = [
   "/sign-in",
   "/callback",
   "/api/logto/sign-in",
   "/api/logto/sign-out",
+  "/api/locale",
   "/api/health",
 ];
 

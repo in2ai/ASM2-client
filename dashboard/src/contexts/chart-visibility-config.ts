@@ -4,21 +4,21 @@ type ControllableView = Exclude<DashboardView, "overview">;
 
 export const chartsByView = {
   usage: [
-    { id: "activityTrend", label: "Tendencia de actividad" },
-    { id: "departmentPieChart", label: "Distribución por rol" },
-    { id: "hourlyActivityPattern", label: "Patrón horario" },
+    { id: "activityTrend", labelKey: "activityTrend" },
+    { id: "departmentPieChart", labelKey: "roleDistribution" },
+    { id: "hourlyActivityPattern", labelKey: "hourlyPattern" },
   ],
   "rag-quality": [
     {
       id: "metricsByTag",
-      label: "Tendencia de tiempos de respuesta",
+      labelKey: "responseTimeTrend",
     },
-    { id: "tokenUsage", label: "Consumo de tokens" },
-    { id: "resourceConsumption", label: "Salud del sistema" },
+    { id: "tokenUsage", labelKey: "tokenUsage" },
+    { id: "resourceConsumption", labelKey: "systemHealth" },
   ],
   insights: [
-    { id: "topWordsBarChart", label: "Palabras más buscadas" },
-    { id: "topicsBarChart", label: "Temas más frecuentes" },
+    { id: "topWordsBarChart", labelKey: "topWords" },
+    { id: "topicsBarChart", labelKey: "topTopics" },
   ],
 } as const;
 

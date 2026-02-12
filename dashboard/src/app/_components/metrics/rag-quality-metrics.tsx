@@ -17,6 +17,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { useChartVisibility } from "@/contexts/chart-visibility-context";
 import { Activity, Cpu, FileText, Zap } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { useMemo } from "react";
 import {
   Area,
@@ -28,7 +29,10 @@ import {
   YAxis,
 } from "recharts";
 import { ChartHint } from "./chart-hint";
-import { ragResponseTimeChartConfig, tokenUsageChartConfig } from "./constants";
+import {
+  createRagResponseTimeChartConfig,
+  createTokenUsageChartConfig,
+} from "./constants";
 import { type MetricsResponse } from "./types";
 import { formatShortDate } from "./utils";
 
@@ -42,21 +46,41 @@ interface RAGQualityMetricsProps {
 export function RAGQualityMetrics({
   metrics,
 }: Readonly<RAGQualityMetricsProps>) {
+  const locale = useLocale();
+  const t = useTranslations("RAGQualityMetrics");
+
   const {
     state: { visibility },
   } = useChartVisibility();
   const ragQuality = metrics.rag_quality;
 
+  const ragResponseTimeChartConfig = useMemo(
+    () =>
+      createRagResponseTimeChartConfig({
+        llm: t("chartLabels.llmMs"),
+        rag: t("chartLabels.ragMs"),
+      }),
+    [t],
+  );
+  const tokenUsageChartConfig = useMemo(
+    () =>
+      createTokenUsageChartConfig({
+        input: t("chartLabels.input"),
+        output: t("chartLabels.output"),
+      }),
+    [t],
+  );
+
   const responseTimeData = useMemo(
     () =>
       ragQuality.response_time_trend.map((item) => ({
         ...item,
-        date: formatShortDate(item.date),
+        date: formatShortDate(item.date, locale),
         // Convert from seconds to milliseconds for display
         llm_ms: item.llm_response_time * 1000,
         doc_ms: item.doc_response_time * 1000,
       })),
-    [ragQuality.response_time_trend],
+    [locale, ragQuality.response_time_trend],
   );
 
   const tokenData = useMemo(
@@ -90,12 +114,8 @@ export function RAGQualityMetrics({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold sm:text-2xl">
-          Calidad y rendimiento del RAG
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          Tiempos de respuesta, consumo de tokens y salud del sistema
-        </p>
+        <h2 className="text-xl font-semibold sm:text-2xl">{t("title")}</h2>
+        <p className="text-muted-foreground text-sm">{t("subtitle")}</p>
         <div className="bg-border mt-3 h-px" />
       </div>
 
@@ -106,11 +126,11 @@ export function RAGQualityMetrics({
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-xl font-bold tracking-tight">
-                  Tendencia de tiempos de respuesta
-                  <ChartHint hint="Muestra cómo evolucionan los tiempos de respuesta del LLM (modelo de lenguaje) y del RAG (recuperación de documentos) a lo largo del tiempo. Valores altos pueden indicar problemas de rendimiento." />
+                  {t("responseTimeTrend.title")}
+                  <ChartHint hint={t("responseTimeTrend.hint")} />
                 </CardTitle>
                 <CardDescription>
-                  Latencia LLM y RAG por día (ms)
+                  {t("responseTimeTrend.description")}
                 </CardDescription>
               </div>
               <div className="bg-primary/10 text-primary rounded-xl p-2.5">
@@ -206,11 +226,13 @@ export function RAGQualityMetrics({
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-lg font-bold">
-                  Consumo de tokens
-                  <ChartHint hint="Compara los tokens de entrada (lo que envía el usuario + contexto) vs salida (respuesta generada) para LLM y RAG. Más tokens = mayor coste y tiempo de procesamiento." />
+                  {t("tokenUsage.title")}
+                  <ChartHint hint={t("tokenUsage.hint")} />
                 </CardTitle>
                 <CardDescription>
-                  Total: {totalTokens.toLocaleString("es-ES")} tokens
+                  {t("tokenUsage.total", {
+                    count: totalTokens.toLocaleString(locale),
+                  })}
                 </CardDescription>
               </div>
               <div className="bg-primary/10 text-primary rounded-xl p-2.5">
@@ -279,10 +301,12 @@ export function RAGQualityMetrics({
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-lg font-bold">
-                  Salud del sistema
-                  <ChartHint hint="Monitoriza el uso de recursos del servidor. Un uso alto sostenido de CPU, RAM o GPU puede indicar la necesidad de escalar la infraestructura." />
+                  {t("systemHealth.title")}
+                  <ChartHint hint={t("systemHealth.hint")} />
                 </CardTitle>
-                <CardDescription>Uso promedio de recursos</CardDescription>
+                <CardDescription>
+                  {t("systemHealth.description")}
+                </CardDescription>
               </div>
               <div className="bg-primary/10 text-primary rounded-xl p-2.5">
                 <Cpu size={18} />
@@ -293,30 +317,36 @@ export function RAGQualityMetrics({
                 <>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">CPU</span>
+                      <span className="font-medium">{t("resources.cpu")}</span>
                       <span className="text-muted-foreground">
-                        {systemHealth.avg_cpu.toFixed(1)}% (máx:{" "}
-                        {systemHealth.max_cpu.toFixed(1)}%)
+                        {t("resources.usageWithMax", {
+                          average: systemHealth.avg_cpu.toFixed(1),
+                          max: systemHealth.max_cpu.toFixed(1),
+                        })}
                       </span>
                     </div>
                     <Progress value={systemHealth.avg_cpu} className="h-2" />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">RAM</span>
+                      <span className="font-medium">{t("resources.ram")}</span>
                       <span className="text-muted-foreground">
-                        {systemHealth.avg_ram.toFixed(1)}% (máx:{" "}
-                        {systemHealth.max_ram.toFixed(1)}%)
+                        {t("resources.usageWithMax", {
+                          average: systemHealth.avg_ram.toFixed(1),
+                          max: systemHealth.max_ram.toFixed(1),
+                        })}
                       </span>
                     </div>
                     <Progress value={systemHealth.avg_ram} className="h-2" />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">GPU</span>
+                      <span className="font-medium">{t("resources.gpu")}</span>
                       <span className="text-muted-foreground">
-                        {systemHealth.avg_gpu.toFixed(1)}% (máx:{" "}
-                        {systemHealth.max_gpu.toFixed(1)}%)
+                        {t("resources.usageWithMax", {
+                          average: systemHealth.avg_gpu.toFixed(1),
+                          max: systemHealth.max_gpu.toFixed(1),
+                        })}
                       </span>
                     </div>
                     <Progress value={systemHealth.avg_gpu} className="h-2" />
@@ -324,7 +354,7 @@ export function RAGQualityMetrics({
                 </>
               ) : (
                 <p className="text-muted-foreground py-4 text-center text-sm">
-                  No hay datos de uso de recursos
+                  {t("systemHealth.noData")}
                 </p>
               )}
 
@@ -335,9 +365,11 @@ export function RAGQualityMetrics({
                     <FileText size={16} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Docs por consulta</p>
+                    <p className="text-sm font-medium">
+                      {t("docsPerQuery.title")}
+                    </p>
                     <p className="text-muted-foreground text-xs">
-                      Promedio de documentos recuperados
+                      {t("docsPerQuery.description")}
                     </p>
                   </div>
                   <div className="ml-auto text-2xl font-bold">

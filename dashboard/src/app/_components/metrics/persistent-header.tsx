@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Loader2, RefreshCw } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { type DateRange } from "react-day-picker";
 import { type StatsResponse } from "./types";
 
@@ -41,16 +42,19 @@ export function PersistentHeader({
   isFetching,
   onRefresh,
 }: Readonly<PersistentHeaderProps>) {
+  const t = useTranslations("PersistentHeader");
+  const locale = useLocale();
+
   return (
     <div className="mb-6 flex flex-col gap-4 sm:mb-8">
       <div className="bg-card/60 border-border/50 flex flex-col gap-4 rounded-2xl border p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight">Vista General</h2>
+            <h2 className="text-xl font-bold tracking-tight">{t("title")}</h2>
             {isFetching && (
               <Badge variant="secondary" className="animate-pulse gap-1">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Actualizando
+                {t("updating")}
               </Badge>
             )}
           </div>
@@ -60,12 +64,16 @@ export function PersistentHeader({
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
               </span>
-              {lastUpdated ? `Actualizado ${lastUpdated}` : "Actualizado ahora"}
+              {lastUpdated
+                ? t("updatedAt", { value: lastUpdated })
+                : t("updatedNow")}
             </div>
             {stats && (
               <div className="flex items-center gap-1.5">
                 <RefreshCw className="h-3.5 w-3.5" />
-                {stats.totalMetricsRecords.toLocaleString()} registros
+                {t("records", {
+                  count: stats.totalMetricsRecords.toLocaleString(locale),
+                })}
               </div>
             )}
           </div>
@@ -87,7 +95,7 @@ export function PersistentHeader({
               <RefreshCw
                 className={cn("h-4 w-4", isFetching && "animate-spin")}
               />
-              <span className="sr-only">Actualizar</span>
+              <span className="sr-only">{t("refresh")}</span>
             </Button>
           </div>
         </div>

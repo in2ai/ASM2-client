@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { enUS, es } from "date-fns/locale";
 import { CalendarIcon, Check, X } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { type DateRange } from "react-day-picker";
 
@@ -18,12 +19,6 @@ interface DateRangeSelectorProps {
   readonly value: DateRange | undefined;
   readonly onChange: (range: DateRange | undefined) => void;
 }
-
-const presets = [
-  { label: "Últimos 7 días", days: 7 },
-  { label: "Últimos 30 días", days: 30 },
-  { label: "Últimos 90 días", days: 90 },
-];
 
 /**
  * Render a date range selector with quick presets, a clear option, and a popover calendar for selecting a custom range.
@@ -36,6 +31,11 @@ const presets = [
  * @returns The rendered DateRangeSelector element
  */
 export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
+  const t = useTranslations("DateRangeSelector");
+  const locale = useLocale();
+  const dateLocale = locale === "en" ? enUS : es;
+  const presets = [7, 30, 90];
+
   // Internal draft state for pending date selection
   const [draftRange, setDraftRange] = useState<DateRange | undefined>(value);
   const [isOpen, setIsOpen] = useState(false);
@@ -78,20 +78,22 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
         variant={!value ? "default" : "outline"}
         size="sm"
         onClick={handleClearFilter}
-        className="min-h-[44px] text-xs sm:text-sm"
+        className="min-h-11 text-xs sm:text-sm"
       >
-        Todos
+        {t("all")}
       </Button>
       {presets.map((preset) => (
         <Button
-          key={preset.days}
+          key={preset}
           variant="outline"
           size="sm"
-          onClick={() => handlePresetClick(preset.days)}
-          className="min-h-[44px] text-xs sm:text-sm"
+          onClick={() => handlePresetClick(preset)}
+          className="min-h-11 text-xs sm:text-sm"
         >
-          <span className="hidden sm:inline">{preset.label}</span>
-          <span className="sm:hidden">{preset.days}d</span>
+          <span className="hidden sm:inline">
+            {t("lastDays", { count: preset })}
+          </span>
+          <span className="sm:hidden">{preset}d</span>
         </Button>
       ))}
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
@@ -100,7 +102,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
             variant="outline"
             size="sm"
             className={cn(
-              "min-h-[44px] justify-start text-left text-xs font-normal sm:text-sm",
+              "min-h-11 justify-start text-left text-xs font-normal sm:text-sm",
               !value && "text-muted-foreground",
             )}
           >
@@ -110,21 +112,24 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
                 value.to ? (
                   <>
                     <span className="hidden sm:inline">
-                      {format(value.from, "dd MMM yyyy", { locale: es })} -{" "}
-                      {format(value.to, "dd MMM yyyy", { locale: es })}
+                      {format(value.from, "dd MMM yyyy", {
+                        locale: dateLocale,
+                      })}{" "}
+                      -{" "}
+                      {format(value.to, "dd MMM yyyy", { locale: dateLocale })}
                     </span>
                     <span className="sm:hidden">
-                      {format(value.from, "dd/MM", { locale: es })} -{" "}
-                      {format(value.to, "dd/MM", { locale: es })}
+                      {format(value.from, "dd/MM", { locale: dateLocale })} -{" "}
+                      {format(value.to, "dd/MM", { locale: dateLocale })}
                     </span>
                   </>
                 ) : (
-                  format(value.from, "dd MMM yyyy", { locale: es })
+                  format(value.from, "dd MMM yyyy", { locale: dateLocale })
                 )
               ) : (
                 <>
-                  <span className="hidden sm:inline">Rango personalizado</span>
-                  <span className="sm:hidden">Personalizado</span>
+                  <span className="hidden sm:inline">{t("customRange")}</span>
+                  <span className="sm:hidden">{t("customShort")}</span>
                 </>
               )}
             </span>
@@ -139,7 +144,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
               onSelect={setDraftRange}
               numberOfMonths={2}
               className="rounded-t-lg border-b-0 shadow-sm"
-              locale={es}
+              locale={dateLocale}
             />
             <div className="bg-muted/50 flex items-center justify-end gap-2 border-t p-3">
               <Button
@@ -149,7 +154,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
                 className="h-8"
               >
                 <X className="mr-1 h-4 w-4" />
-                Cancelar
+                {t("cancel")}
               </Button>
               <Button
                 size="sm"
@@ -158,7 +163,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
                 className="h-8"
               >
                 <Check className="mr-1 h-4 w-4" />
-                Aplicar
+                {t("apply")}
               </Button>
             </div>
           </div>

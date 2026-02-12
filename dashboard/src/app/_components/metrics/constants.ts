@@ -1,46 +1,85 @@
 import { type ChartConfig } from "@/components/ui/chart";
 
-export const roleChartConfig: ChartConfig = {
-  admin: { label: "Admin", color: "hsl(11 84% 60%)" },
-  user: { label: "User", color: "hsl(199 89% 62%)" },
-  viewer: { label: "Viewer", color: "hsl(330 72% 65%)" },
-  manager: { label: "Manager", color: "hsl(43 92% 58%)" },
-  other: { label: "Other", color: "hsl(215 20% 65%)" },
-};
+export function createRoleChartConfig(labels: {
+  admin: string;
+  user: string;
+  viewer: string;
+  manager: string;
+  other: string;
+}): ChartConfig {
+  return {
+    admin: { label: labels.admin, color: "hsl(11 84% 60%)" },
+    user: { label: labels.user, color: "hsl(199 89% 62%)" },
+    viewer: { label: labels.viewer, color: "hsl(330 72% 65%)" },
+    manager: { label: labels.manager, color: "hsl(43 92% 58%)" },
+    other: { label: labels.other, color: "hsl(215 20% 65%)" },
+  };
+}
 
-export const activityChartConfig: ChartConfig = {
-  event_count: { label: "Eventos", color: "oklch(0.6 0.25 250)" },
-  unique_users: { label: "Usuarios únicos", color: "oklch(0.7 0.2 150)" },
-};
+export function createActivityChartConfig(labels: {
+  events: string;
+  uniqueUsers: string;
+}): ChartConfig {
+  return {
+    event_count: { label: labels.events, color: "oklch(0.6 0.25 250)" },
+    unique_users: { label: labels.uniqueUsers, color: "oklch(0.7 0.2 150)" },
+  };
+}
 
-export const hourlyChartConfig: ChartConfig = {
-  event_count: { label: "Actividad", color: "oklch(0.7 0.2 200)" },
-};
+export function createHourlyChartConfig(labels: {
+  activity: string;
+}): ChartConfig {
+  return {
+    event_count: { label: labels.activity, color: "oklch(0.7 0.2 200)" },
+  };
+}
 
-export const overviewActivityChartConfig: ChartConfig = {
-  event_count: { label: "Eventos", color: "oklch(0.6 0.25 250)" },
-};
+export function createOverviewActivityChartConfig(labels: {
+  events: string;
+}): ChartConfig {
+  return {
+    event_count: { label: labels.events, color: "oklch(0.6 0.25 250)" },
+  };
+}
 
-export const ragResponseTimeChartConfig: ChartConfig = {
-  llm_ms: {
-    label: "LLM (ms)",
-    color: "oklch(0.6 0.25 250)",
-  },
-  doc_ms: {
-    label: "RAG (ms)",
-    color: "oklch(0.7 0.2 150)",
-  },
-};
+export function createRagResponseTimeChartConfig(labels: {
+  llm: string;
+  rag: string;
+}): ChartConfig {
+  return {
+    llm_ms: {
+      label: labels.llm,
+      color: "oklch(0.6 0.25 250)",
+    },
+    doc_ms: {
+      label: labels.rag,
+      color: "oklch(0.7 0.2 150)",
+    },
+  };
+}
 
-export const tokenUsageChartConfig: ChartConfig = {
-  input: { label: "Entrada", color: "oklch(0.6 0.2 220)" },
-  output: { label: "Salida", color: "oklch(0.7 0.25 280)" },
-};
+export function createTokenUsageChartConfig(labels: {
+  input: string;
+  output: string;
+}): ChartConfig {
+  return {
+    input: { label: labels.input, color: "oklch(0.6 0.2 220)" },
+    output: { label: labels.output, color: "oklch(0.7 0.25 280)" },
+  };
+}
 
-export const insightsTopWordsChartConfig: ChartConfig = {
-  count: { label: "Búsquedas", color: "oklch(0.7 0.2 200)" },
-};
+export function createInsightsTopWordsChartConfig(labels: {
+  searches: string;
+}): ChartConfig {
+  return {
+    count: { label: labels.searches, color: "oklch(0.7 0.2 200)" },
+  };
+}
 
-export const insightsTopicsChartConfig: ChartConfig = {
-  count: { label: "Menciones", color: "oklch(0.7 0.2 330)" },
-};
+export function createInsightsTopicsChartConfig(labels: {
+  mentions: string;
+}): ChartConfig {
+  return {
+    count: { label: labels.mentions, color: "oklch(0.7 0.2 330)" },
+  };
+}

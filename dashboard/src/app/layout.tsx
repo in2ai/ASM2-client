@@ -4,6 +4,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import "@/styles/globals.css";
 import { TRPCReactProvider } from "@/trpc/react";
 import { type Metadata } from "next";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 import { Geist } from "next/font/google";
 
 export const metadata: Metadata = {
@@ -17,11 +19,17 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const locale = await getLocale();
+
   return (
-    <html lang="es" className={`${geist.variable}`} suppressHydrationWarning>
+    <html
+      lang={locale}
+      className={`${geist.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         <ThemeProvider
           attribute="class"
@@ -31,7 +39,9 @@ export default function RootLayout({
         >
           <ErrorBoundary>
             <AuthErrorBoundary>
-              <TRPCReactProvider>{children}</TRPCReactProvider>
+              <TRPCReactProvider>
+                <NextIntlClientProvider>{children}</NextIntlClientProvider>
+              </TRPCReactProvider>
             </AuthErrorBoundary>
           </ErrorBoundary>
         </ThemeProvider>
