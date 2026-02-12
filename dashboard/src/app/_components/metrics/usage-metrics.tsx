@@ -98,7 +98,7 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         {visibility.activityTrend && activityByDayData.length > 0 && (
-          <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg lg:col-span-2">
+          <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-xl font-bold tracking-tight">
@@ -210,7 +210,7 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
 
         <div className="grid grid-cols-1 gap-4 lg:col-span-2 lg:grid-cols-2">
           {visibility.departmentPieChart && roleDistributionData.length > 0 && (
-            <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg">
+            <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
@@ -267,7 +267,7 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
           )}
 
           {visibility.hourlyActivityPattern && hourlyPatternData.length > 0 && (
-            <Card className="overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-lg">
+            <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">

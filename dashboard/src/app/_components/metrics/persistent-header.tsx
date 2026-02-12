@@ -43,7 +43,7 @@ export function PersistentHeader({
 }: Readonly<PersistentHeaderProps>) {
   return (
     <div className="mb-6 flex flex-col gap-4 sm:mb-8">
-      <div className="bg-card/50 flex flex-col gap-4 rounded-2xl border p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div className="bg-card/60 border-border/50 flex flex-col gap-4 rounded-2xl border p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold tracking-tight">Vista General</h2>

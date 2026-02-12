@@ -102,7 +102,7 @@ export function RAGQualityMetrics({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Response Time Trend Chart */}
         {visibility.metricsByTag && responseTimeData.length > 0 && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
+          <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-xl font-bold tracking-tight">
@@ -202,7 +202,7 @@ export function RAGQualityMetrics({
 
         {/* Token Usage Chart */}
         {visibility.tokenUsage && (
-          <Card className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+          <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-lg font-bold">
@@ -275,7 +275,7 @@ export function RAGQualityMetrics({
 
         {/* System Health + RAG Stats */}
         {visibility.resourceConsumption && (
-          <Card className="bg-card/40 rounded-2xl border-none backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+          <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-lg font-bold">
