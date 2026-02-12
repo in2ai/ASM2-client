@@ -1,5 +1,5 @@
 import { metricsRouter } from "@/server/api/routers/metrics";
-import { preferencesRouter } from "@/server/api/routers/preferences";
+
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -9,7 +9,6 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
  */
 export const appRouter = createTRPCRouter({
   metrics: metricsRouter,
-  preferences: preferencesRouter,
 });
 
 // export type definition of API
