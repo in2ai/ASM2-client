@@ -6,7 +6,6 @@ import {
 } from "@/app/_components/dashboard-views";
 import { signOutAction } from "@/app/actions/auth";
 import { ChartVisibilityControls } from "@/components/chart-visibility-controls";
-import { PreferencesDialog } from "@/components/preferences-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -349,10 +348,7 @@ function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
             )}
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <div className="px-2 py-1.5">
-          <PreferencesDialog user={user} />
-        </div>
+
         <DropdownMenuSeparator />
         <form action={signOutAction} className="w-full">
           <SignOutButton />
