@@ -37,32 +37,42 @@ def load_topic_mapping(vdb_path: str) -> dict:
         return {}
 
 
-def save_topic_mapping(vdb_path: str, mapping: dict) -> None:
+def save_topic_mapping(vdb_path: str, mapping: dict, pool=None) -> None:
     os.makedirs(vdb_path, exist_ok=True)
     path = get_topic_mapping_path(vdb_path)
+
     with open(path, "w", encoding="utf-8") as f:
         json.dump(mapping, f, ensure_ascii=False, indent=2)
+
+    if pool is not None:
+        from src.metrics.metrics import register_topic_intl
+
+        register_topic_intl(pool, mapping)
 
 
 def resolve_topic_names(
     topic_indices: Iterable[int], lang_code: str, vdb_path: str
-) -> set[str]:
+) -> dict[str, str]:
     mapping = load_topic_mapping(vdb_path)
+
     if not mapping:
-        return {str(idx) for idx in topic_indices}
+        return {str(idx): str(idx) for idx in topic_indices}
 
     lang_map = mapping.get(lang_code) or mapping.get("es") or {}
     fallback_map = mapping.get("es", {})
-    resolved = set()
+    resolved = {}
 
     for idx in topic_indices:
         key = str(idx)
         name = None
+
         if isinstance(lang_map, dict):
             name = lang_map.get(key)
+
         if not name and isinstance(fallback_map, dict):
             name = fallback_map.get(key)
-        resolved.add(name if name else str(idx))
+
+        resolved[key] = name if name else str(idx)
 
     return resolved
 
@@ -82,7 +92,7 @@ def get_doc_by_id(vdb: Qdrant, id):
     )
 
 
-def extract_initial_topics(vdb: Qdrant, vdb_path: str):
+def extract_initial_topics(vdb: Qdrant, vdb_path: str, pool=None):
     if not CALCULATE_TOPICS:
         return
     
@@ -254,7 +264,7 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
             points=[id]
         )
 
-    save_topic_mapping(vdb_path, topic_mapping)
+    save_topic_mapping(vdb_path, topic_mapping, pool)
 
     logging.info('Finished topic extraction')
 
