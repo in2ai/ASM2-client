@@ -164,8 +164,6 @@ export function AppLayout({
 
             <div className="flex items-center gap-2 sm:gap-4">
               <CompanyDisplay user={user} />
-              <div className="bg-border/60 mx-1 hidden h-8 w-px md:block" />
-              <ViewSwitcher value={view} onChange={handleViewChange} />
               {view !== "overview" ? (
                 <ChartVisibilityControls view={view} />
               ) : null}
@@ -217,37 +215,6 @@ function NavItem({
         <div className="bg-primary-foreground absolute right-2 h-1 w-1 rounded-full" />
       )}
     </Button>
-  );
-}
-
-function ViewSwitcher({
-  value,
-  onChange,
-}: Readonly<{
-  value: DashboardView;
-  onChange: (view: DashboardView) => void;
-}>) {
-  return (
-    <div className="bg-muted inline-flex rounded-full p-1">
-      {DASHBOARD_VIEWS.map((dashboardView) => (
-        <Button
-          key={dashboardView.key}
-          size="sm"
-          variant={value === dashboardView.key ? "default" : "ghost"}
-          aria-pressed={value === dashboardView.key}
-          className={cn(
-            "min-h-9 min-w-9 rounded-full px-2 text-xs sm:min-w-0 sm:px-3",
-            value !== dashboardView.key && "text-muted-foreground",
-          )}
-          onClick={() => onChange(dashboardView.key)}
-        >
-          <span className="hidden sm:inline">
-            {dashboardView.switcherLabel}
-          </span>
-          <span className="sm:hidden">{dashboardView.switcherShortLabel}</span>
-        </Button>
-      ))}
-    </div>
   );
 }
 
