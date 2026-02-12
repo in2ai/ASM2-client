@@ -16,6 +16,7 @@ import { useTransition } from "react";
 const languageOptions: ReadonlyArray<{ value: AppLocale }> = [
   { value: "es" },
   { value: "en" },
+  { value: "gl" },
 ];
 
 export function LanguageSwitcher() {
@@ -23,6 +24,7 @@ export function LanguageSwitcher() {
   const optionLabels: Record<AppLocale, string> = {
     es: t("spanish"),
     en: t("english"),
+    gl: t("galician"),
   };
   const locale = useLocale();
   const router = useRouter();
