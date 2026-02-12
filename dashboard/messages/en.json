@@ -2,7 +2,8 @@
   "LanguageSwitcher": {
     "ariaLabel": "Change language",
     "spanish": "Spanish",
-    "english": "English"
+    "english": "English",
+    "galician": "Galician"
   },
   "ThemeToggle": {
     "ariaLabel": "Change theme",
