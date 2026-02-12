@@ -1,5 +1,6 @@
 import { AuthErrorBoundary } from "@/components/auth-error-boundary";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { ThemeProvider } from "@/components/theme-provider";
 import "@/styles/globals.css";
 import { TRPCReactProvider } from "@/trpc/react";
 import { type Metadata } from "next";
@@ -22,11 +23,18 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${geist.variable}`} suppressHydrationWarning>
       <body>
-        <ErrorBoundary>
-          <AuthErrorBoundary>
-            <TRPCReactProvider>{children}</TRPCReactProvider>
-          </AuthErrorBoundary>
-        </ErrorBoundary>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ErrorBoundary>
+            <AuthErrorBoundary>
+              <TRPCReactProvider>{children}</TRPCReactProvider>
+            </AuthErrorBoundary>
+          </ErrorBoundary>
+        </ThemeProvider>
       </body>
     </html>
   );

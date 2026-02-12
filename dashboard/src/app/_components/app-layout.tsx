@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ChartVisibilityProvider } from "@/contexts/chart-visibility-context";
 import { type LogtoUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -68,7 +69,7 @@ export function AppLayout({
 
   return (
     <ChartVisibilityProvider>
-      <div className="dark:via-background flex h-screen overflow-hidden bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:to-slate-950">
+      <div className="bg-background flex h-screen overflow-hidden">
         {mobileMenuOpen && (
           <button
             type="button"
@@ -86,12 +87,12 @@ export function AppLayout({
           )}
         >
           <div className="flex h-16 items-center px-6">
-            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-xl">
-              <BarChart3 className="text-primary h-6 w-6" />
+            <div className="bg-primary shadow-primary/25 flex h-10 w-10 items-center justify-center rounded-xl shadow-lg">
+              <BarChart3 className="text-primary-foreground h-5 w-5" />
             </div>
             {sidebarOpen ? (
               <span className="ml-3 truncate text-lg font-black tracking-tighter">
-                ASM2<span className="text-primary">METRICS</span>
+                ASM<span className="text-primary">2</span>
               </span>
             ) : null}
             <Button
@@ -168,6 +169,7 @@ export function AppLayout({
               {view !== "overview" ? (
                 <ChartVisibilityControls view={view} />
               ) : null}
+              <ThemeToggle />
               <UserMenu user={user} />
             </div>
           </header>
@@ -234,7 +236,7 @@ function ViewSwitcher({
           variant={value === dashboardView.key ? "default" : "ghost"}
           aria-pressed={value === dashboardView.key}
           className={cn(
-            "min-h-[36px] min-w-[36px] rounded-full px-2 text-xs sm:min-w-0 sm:px-3",
+            "min-h-9 min-w-9 rounded-full px-2 text-xs sm:min-w-0 sm:px-3",
             value !== dashboardView.key && "text-muted-foreground",
           )}
           onClick={() => onChange(dashboardView.key)}
@@ -310,7 +312,7 @@ function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="relative h-10 min-h-[44px] w-10 min-w-[44px] rounded-full"
+          className="relative h-10 min-h-11 w-10 min-w-11 rounded-full"
           aria-label="Abrir menú de usuario"
         >
           <Avatar className="h-10 w-10">

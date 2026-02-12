@@ -37,13 +37,13 @@ export function StatCard({
   trend,
 }: Readonly<StatCardProps>) {
   return (
-    <Card className="relative overflow-hidden rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-      <div className="absolute top-0 right-0 p-4 opacity-[0.03] grayscale transition-opacity hover:opacity-[0.08]">
+    <Card className="group border-border/50 bg-card/80 hover:shadow-primary/5 relative overflow-hidden rounded-2xl backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+      <div className="absolute top-0 right-0 p-4 opacity-[0.04] transition-opacity group-hover:opacity-[0.08]">
         <Icon size={80} />
       </div>
       <CardHeader className="p-4 pb-2">
         <div className="flex items-center justify-between">
-          <div className="bg-primary/10 text-primary rounded-lg p-2">
+          <div className="bg-primary/10 text-primary group-hover:bg-primary/15 rounded-lg p-2 transition-colors">
             <Icon size={18} />
           </div>
           {trend && (

@@ -39,19 +39,25 @@ export default async function SignInPage({
   }
 
   return (
-    <div className="bg-muted/10 flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="bg-background flex min-h-screen items-center justify-center p-4">
+      <Card className="border-border/50 bg-card/80 w-full max-w-md backdrop-blur-sm">
         <CardHeader className="space-y-1 text-center">
-          <div className="bg-primary mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
-            <BarChart3 className="text-primary-foreground h-6 w-6" />
+          <div className="bg-primary shadow-primary/25 mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg">
+            <BarChart3 className="text-primary-foreground h-7 w-7" />
           </div>
-          <CardTitle className="text-2xl font-bold">ASM2 Central</CardTitle>
+          <CardTitle className="text-2xl font-black tracking-tight">
+            ASM<span className="text-primary">2</span> Central
+          </CardTitle>
           <CardDescription>
             Inicia sesión para acceder al dashboard de métricas
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button asChild className="w-full" size="lg">
+          <Button
+            asChild
+            className="shadow-primary/20 w-full shadow-lg"
+            size="lg"
+          >
             <Link href="/api/logto/sign-in">Iniciar sesión</Link>
           </Button>
         </CardContent>

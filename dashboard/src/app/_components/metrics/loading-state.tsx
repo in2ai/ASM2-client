@@ -16,9 +16,9 @@ export function LoadingState() {
         {[1, 2, 3, 4, 5, 6, 7, 8].map((id) => (
           <Card
             key={`kpi-${id}`}
-            className="bg-card/40 overflow-hidden rounded-2xl border-none shadow-sm backdrop-blur-sm"
+            className="bg-card/60 border-border/50 overflow-hidden rounded-2xl border shadow-sm backdrop-blur-sm"
           >
-            <div className="from-muted/20 absolute inset-0 bg-linear-to-br to-transparent" />
+            <div className="from-primary/5 absolute inset-0 bg-linear-to-br to-transparent" />
             <CardHeader className="relative p-4 pb-2">
               <div className="bg-muted h-8 w-8 animate-pulse rounded-lg" />
               <div className="bg-muted mt-4 h-2 w-16 animate-pulse rounded" />
@@ -35,7 +35,7 @@ export function LoadingState() {
         {[1, 2, 3].map((id) => (
           <Card
             key={id}
-            className="bg-card/40 overflow-hidden rounded-2xl border-none backdrop-blur-sm lg:even:col-span-2"
+            className="bg-card/60 border-border/50 overflow-hidden rounded-2xl border backdrop-blur-sm lg:even:col-span-2"
           >
             <CardHeader className="p-6">
               <div className="flex items-center justify-between">
