@@ -22,7 +22,15 @@ CREATE TABLE IF NOT EXISTS topic_counts (
     ts TIMESTAMP,      -- timestamp of the count update
     user_id SYMBOL,
     user_role SYMBOL,
-    word SYMBOL        -- the topic being counted
+    word SYMBOL,       -- the topic being counted
+    topic_id SYMBOL    -- numeric topic index as string
+) TIMESTAMP(ts) PARTITION BY DAY;
+
+CREATE TABLE IF NOT EXISTS topic_intl (
+    ts TIMESTAMP,
+    topic_id SYMBOL,
+    word SYMBOL,
+    lang SYMBOL
 ) TIMESTAMP(ts) PARTITION BY DAY;
 
 CREATE TABLE IF NOT EXISTS user_activity (

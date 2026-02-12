@@ -321,13 +321,13 @@ def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
     )
 
 
-def extract_topics(vectorstore: Qdrant):
+def extract_topics(vectorstore: Qdrant, pool=None):
     manifest = VDBManifest(QDRANT_PATH)
 
     # Add topics if needed
     if not manifest.has_topics():
         if manifest.num_chunks() > TOPIC_MIN_SIZE:
-            extract_initial_topics(vectorstore, QDRANT_PATH)
+            extract_initial_topics(vectorstore, QDRANT_PATH, pool)
 
             if CALCULATE_TOPICS:
                 manifest.set_topics()

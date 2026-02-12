@@ -59,19 +59,46 @@ def register_words(pool: ThreadedConnectionPool, words: set[str], lang: str = 'e
     execute_query(pool, query, tuple(params))
 
 
-def register_topics(pool: ThreadedConnectionPool, topics: set[str]):
+def register_topics(pool: ThreadedConnectionPool, topics: dict[str, str]):
     if not topics:
         return
 
-    # Generate query with all value insertions
-    value_insertions = ", ".join(["(NOW(), %s, %s, %s)"] * len(topics))
+    value_insertions = ", ".join(["(NOW(), %s, %s, %s, %s)"] * len(topics))
 
     query = f"""
-        INSERT INTO topic_counts (ts, user_id, user_role, word)
+        INSERT INTO topic_counts (ts, user_id, user_role, word, topic_id)
         VALUES {value_insertions}
     """
 
-    # Flatten parameters (3 for each topic)
+    params = []
+
+    for topic_id, name in topics.items():
+        params.extend([USER_ID, USER_ROLE, name, topic_id])
+
+    execute_query(pool, query, tuple(params))
+
+
+def register_topic_intl(pool: ThreadedConnectionPool, mapping: dict):
+    rows = []
+
+    for lang, topics in mapping.items():
+
+        if not isinstance(topics, dict):
+            continue
+
+        for topic_id, name in topics.items():
+            rows.append((topic_id, name, lang))
+
+    if not rows:
+        return
+
+    value_insertions = ", ".join(["(NOW(), %s, %s, %s)"] * len(rows))
+
+    query = f"""
+        INSERT INTO topic_intl (ts, topic_id, word, lang)
+        VALUES {value_insertions}
+    """
+
     params = []
 
     for t in topics:
