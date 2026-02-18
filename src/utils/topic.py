@@ -18,7 +18,7 @@ from src.utils.nlp import SUPPORTED_LANGUAGES
 TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
 TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
 TOPIC_MAPPING_FILENAME = "topics.json"
-CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
+CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", "") == "True"
 
 
 def get_topic_mapping_path(vdb_path: str) -> str:
@@ -42,26 +42,38 @@ def save_topic_mapping(vdb_path: str, mapping: dict) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(mapping, f, ensure_ascii=False, indent=2)
 
+    # Register intl topics
+    from src.metrics.metrics import register_topic_intl
+
+    try:
+        register_topic_intl(mapping)
+    except Exception as e:
+        print(f"Error registering topic intl: {e}")
+
 
 def resolve_topic_names(
     topic_indices: Iterable[int], lang_code: str, vdb_path: str
-) -> set[str]:
+) -> dict[str, str]:
     mapping = load_topic_mapping(vdb_path)
+
     if not mapping:
-        return {str(idx) for idx in topic_indices}
+        return {str(idx): str(idx) for idx in topic_indices}
 
     lang_map = mapping.get(lang_code) or mapping.get("es") or {}
     fallback_map = mapping.get("es", {})
-    resolved = set()
+    resolved = {}
 
     for idx in topic_indices:
         key = str(idx)
         name = None
+
         if isinstance(lang_map, dict):
             name = lang_map.get(key)
+
         if not name and isinstance(fallback_map, dict):
             name = fallback_map.get(key)
-        resolved.add(name if name else str(idx))
+
+        resolved[key] = name if name else str(idx)
 
     return resolved
 
@@ -100,25 +112,22 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
             offset=offset,
             limit=batch_size,
             with_payload=False,
-            with_vectors=True
+            with_vectors=True,
         )
 
         requests = [
             models.QueryRequest(
-                query=i.vector['embedding'],
-                using='embedding',
+                query=i.vector["embedding"],
+                using="embedding",
                 limit=200,
                 with_payload=False,
                 with_vector=False,
-                params=APPROX_SEARCH_PARAMS
+                params=APPROX_SEARCH_PARAMS,
             )
             for i in batch
         ]
 
-        hits = vdb.client.query_batch_points(
-            vdb.collection_name,
-            requests
-        )
+        hits = vdb.client.query_batch_points(vdb.collection_name, requests)
 
         for point, nearest in zip(batch, hits):
             ids.append(point.id)
@@ -195,7 +204,7 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
                 name = f"Topic {topic_index}"
             topic_mapping[lang][str(topic_index)] = name
 
-        print(f'Topic: {topic_mapping.get("es", {}).get(str(topic_index))}')
+        print(f"Topic: {topic_mapping.get('es', {}).get(str(topic_index))}")
 
         for m in members:
             m_id = ids[m]
@@ -232,7 +241,9 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
             aggregated_topics.setdefault(v_name, {})
 
             if weight >= TOPIC_MIN_CONTRIB:
-                aggregated_topics[v_name][t] = max(weight, aggregated_topics[v_name].get(t, 0.0))
+                aggregated_topics[v_name][t] = max(
+                    weight, aggregated_topics[v_name].get(t, 0.0)
+                )
 
     # Actualizar metadatos
     for id, ts in aggregated_topics.items():
@@ -240,9 +251,9 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
         topics_str_keys = {str(k): v for k, v in ts.items()}
         vdb.client.set_payload(
             collection_name=vdb.collection_name,
-            key='metadata',
-            payload={'topics': topics_str_keys},
-            points=[id]
+            key="metadata",
+            payload={"topics": topics_str_keys},
+            points=[id],
         )
 
     save_topic_mapping(vdb_path, topic_mapping)
@@ -260,19 +271,16 @@ def assign_topics(vdb: Qdrant, ids):
     requests = [
         models.QueryRequest(
             query=i,
-            using='embedding',
+            using="embedding",
             limit=200,
             with_payload=True,
             with_vector=False,
-            params=APPROX_SEARCH_PARAMS
+            params=APPROX_SEARCH_PARAMS,
         )
         for i in ids
     ]
 
-    hits = vdb.client.query_batch_points(
-        vdb.collection_name,
-        requests
-    )
+    hits = vdb.client.query_batch_points(vdb.collection_name, requests)
 
     # Get topic connections
     for point, nearest in zip(ids, hits):
@@ -285,8 +293,8 @@ def assign_topics(vdb: Qdrant, ids):
             if n.score < min_cosine:
                 continue  # skip neighbors beyond threshold
 
-            if 'topics' in n.payload['metadata']:
-                n_topics.append(n.payload['metadata']['topics'])
+            if "topics" in n.payload["metadata"]:
+                n_topics.append(n.payload["metadata"]["topics"])
 
         # Ensure enough neighbors with topics
         if len(n_topics) < 20:
@@ -311,9 +319,9 @@ def assign_topics(vdb: Qdrant, ids):
         # Save chunk to VDB
         vdb.client.set_payload(
             collection_name=vdb.collection_name,
-            key='metadata',
-            payload={'topics': topics_dict},
-            points=[point]
+            key="metadata",
+            payload={"topics": topics_dict},
+            points=[point],
         )
 
 
@@ -336,7 +344,7 @@ def get_topic(texts):
     Evita temas compuestos separados por nexos ("Comunicaciones Unificadas y Telefonía IP" son dos temas, no uno).
     """
 
-    user = '\n\n-----------------------\n\n'.join(texts)
+    user = "\n\n-----------------------\n\n".join(texts)
 
     res = None
     tries = 0
@@ -345,7 +353,9 @@ def get_topic(texts):
         try:
             tries += 1
             llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-            ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
+            ans = llm.invoke(
+                [SystemMessage(content=system), HumanMessage(content=user)]
+            ).content
             res = json.loads(ans)
 
         except json.JSONDecodeError:

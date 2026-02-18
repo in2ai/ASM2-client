@@ -8,24 +8,27 @@ from src.metrics.connection import execute_query
 # Float metric list
 # ---------------------------------
 
-class Metrics(Enum):
-    CPU_USAGE='CPU_USAGE'                       # Percentage of CPU used
-    RAM_USAGE='RAM_USAGE'                       # Percentage of RAM used
-    GPU_USAGE='GPU_USAGE'                       # Percentage of GPU used
-    
-    LLM_RESPONSE_TIME='LLM_RESPONSE_TIME'       # LLM response time
-    DOC_RESPONSE_TIME='DOC_RESPONSE_TIME'       # RAG latency
-    
-    NUM_DOCS_RAG='NUM_DOCS_RAG'                 # Number of docs returned for each query
 
-    NUM_LLM_TOKENS_IN='NUM_LLM_TOKENS_IN'       # Number of LLM input tokens
-    NUM_LLM_TOKENS_OUT='NUM_LLM_TOKENS_OUT'     # Number of LLM output tokens
-    NUM_RAG_TOKENS_IN='NUM_RAG_TOKENS_IN'       # Number of RAG input tokens
-    NUM_RAG_TOKENS_OUT='NUM_RAG_TOKENS_OUT'     # Number of RAG output tokens
+class Metrics(Enum):
+    CPU_USAGE = "CPU_USAGE"  # Percentage of CPU used
+    RAM_USAGE = "RAM_USAGE"  # Percentage of RAM used
+    GPU_USAGE = "GPU_USAGE"  # Percentage of GPU used
+
+    LLM_RESPONSE_TIME = "LLM_RESPONSE_TIME"  # LLM response time
+    DOC_RESPONSE_TIME = "DOC_RESPONSE_TIME"  # RAG latency
+
+    NUM_DOCS_RAG = "NUM_DOCS_RAG"  # Number of docs returned for each query
+
+    NUM_LLM_TOKENS_IN = "NUM_LLM_TOKENS_IN"  # Number of LLM input tokens
+    NUM_LLM_TOKENS_OUT = "NUM_LLM_TOKENS_OUT"  # Number of LLM output tokens
+    NUM_RAG_TOKENS_IN = "NUM_RAG_TOKENS_IN"  # Number of RAG input tokens
+    NUM_RAG_TOKENS_OUT = "NUM_RAG_TOKENS_OUT"  # Number of RAG output tokens
+
 
 # ---------------------------------
 # Metric storage
 # ---------------------------------
+
 
 def insert_metric(tag: str, value: float):
     query = """
@@ -36,7 +39,7 @@ def insert_metric(tag: str, value: float):
     execute_query(query, (USER_ID, USER_ROLE, tag, value))
 
 
-def register_words(words: set[str], lang: str = 'es'):
+def register_words(words: set[str], lang: str = "es"):
     if not words:
         return
 
@@ -50,30 +53,58 @@ def register_words(words: set[str], lang: str = 'es'):
 
     # Flatten parameters (3 for each word)
     params = []
-    
+
     for w in words:
         params.extend([lang, USER_ID, USER_ROLE, w])
 
     execute_query(query, tuple(params))
 
 
-def register_topics(topics: set[str]):
+def register_topics(topics: dict[str, str]):
     if not topics:
         return
 
     # Generate query with all value insertions
-    value_insertions = ", ".join(["(NOW(), %s, %s, %s)"] * len(topics))
+    value_insertions = ", ".join(["(NOW(), %s, %s, %s, %s)"] * len(topics))
 
     query = f"""
-        INSERT INTO topic_counts (ts, user_id, user_role, word)
+        INSERT INTO topic_counts (ts, user_id, user_role, word, topic_id)
         VALUES {value_insertions}
     """
 
-    # Flatten parameters (3 for each topic)
+    # Flatten parameters (4 for each topic)
     params = []
-    
-    for t in topics:
-        params.extend([USER_ID, USER_ROLE, t])
+
+    for topic_id, name in topics.items():
+        params.extend([USER_ID, USER_ROLE, name, topic_id])
+
+    execute_query(query, tuple(params))
+
+
+def register_topic_intl(mapping: dict):
+    rows = []
+
+    for lang, topics in mapping.items():
+        if not isinstance(topics, dict):
+            continue
+
+        for topic_id, name in topics.items():
+            rows.append((topic_id, name, lang))
+
+    if not rows:
+        return
+
+    value_insertions = ", ".join(["(NOW(), %s, %s, %s)"] * len(rows))
+
+    query = f"""
+        INSERT INTO topic_intl (ts, topic_id, word, lang)
+        VALUES {value_insertions}
+    """
+
+    params = []
+
+    for topic_id, name, lang in rows:
+        params.extend([topic_id, name, lang])
 
     execute_query(query, tuple(params))
 
@@ -90,6 +121,7 @@ def register_user_activity():
 # ---------------------------------
 # Helpers
 # ---------------------------------
+
 
 class TimedMetric:
     """
@@ -109,6 +141,7 @@ class TimedMetric:
     Parameters:
         metric (str): The name of the metric to record. Use the `Metrics` enum.
     """
+
     def __init__(self, metric):
         self.metric = metric
 
