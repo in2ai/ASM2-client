@@ -65,8 +65,9 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
     () => ({
       startDate: dateRange?.from,
       endDate: dateRange?.to,
+      lang: locale,
     }),
-    [dateRange?.from, dateRange?.to],
+    [dateRange?.from, dateRange?.to, locale],
   );
 
   const metricsQuery = api.metrics.get.useQuery(metricsInput, QUERY_OPTIONS);
