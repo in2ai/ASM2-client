@@ -100,13 +100,6 @@
   "UsageMetrics": {
     "title": "1. Usage and interaction metrics",
     "subtitle": "Data from the user_activity table",
-    "roleLabels": {
-      "admin": "Admin",
-      "user": "User",
-      "viewer": "Viewer",
-      "manager": "Manager",
-      "other": "Other"
-    },
     "chartLabels": {
       "events": "Events",
       "uniqueUsers": "Unique users",

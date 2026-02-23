@@ -1,19 +1,65 @@
 import { type ChartConfig } from "@/components/ui/chart";
 
-export function createRoleChartConfig(labels: {
-  admin: string;
-  user: string;
-  viewer: string;
-  manager: string;
-  other: string;
-}): ChartConfig {
-  return {
-    admin: { label: labels.admin, color: "hsl(11 84% 60%)" },
-    user: { label: labels.user, color: "hsl(199 89% 62%)" },
-    viewer: { label: labels.viewer, color: "hsl(330 72% 65%)" },
-    manager: { label: labels.manager, color: "hsl(43 92% 58%)" },
-    other: { label: labels.other, color: "hsl(215 20% 65%)" },
-  };
+const ROLE_CHART_COLORS = [
+  "hsl(11 84% 60%)",
+  "hsl(199 89% 62%)",
+  "hsl(330 72% 65%)",
+  "hsl(43 92% 58%)",
+  "hsl(215 20% 65%)",
+  "hsl(160 70% 45%)",
+  "hsl(280 65% 62%)",
+  "hsl(0 70% 62%)",
+] as const;
+
+interface RoleDistributionChartItem {
+  roleKey: string;
+  value: number;
+  fill: string;
+}
+
+function getRoleChartKey(role: string): string {
+  const normalizedKey = role
+    .toLowerCase()
+    .trim()
+    .replaceAll(/[^a-z0-9]+/g, "_")
+    .replaceAll(/^_+|_+$/g, "");
+
+  return normalizedKey || "role";
+}
+
+export function createRoleDistributionChartModel(
+  roleDistribution: Record<string, number>,
+): {
+  config: ChartConfig;
+  data: RoleDistributionChartItem[];
+} {
+  const config: ChartConfig = {};
+  const data: RoleDistributionChartItem[] = [];
+  const usedKeys = new Set<string>();
+
+  Object.entries(roleDistribution).forEach(([role, value], index) => {
+    const baseKey = getRoleChartKey(role);
+    let roleKey = baseKey;
+    let duplicateIndex = 2;
+
+    while (usedKeys.has(roleKey)) {
+      roleKey = `${baseKey}_${duplicateIndex}`;
+      duplicateIndex += 1;
+    }
+
+    usedKeys.add(roleKey);
+    config[roleKey] = {
+      label: role,
+      color: ROLE_CHART_COLORS[index % ROLE_CHART_COLORS.length],
+    };
+    data.push({
+      roleKey,
+      value,
+      fill: `var(--color-${roleKey})`,
+    });
+  });
+
+  return { config, data };
 }
 
 export function createActivityChartConfig(labels: {

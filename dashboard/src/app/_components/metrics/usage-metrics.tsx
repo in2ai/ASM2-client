@@ -34,7 +34,7 @@ import { ChartHint } from "./chart-hint";
 import {
   createActivityChartConfig,
   createHourlyChartConfig,
-  createRoleChartConfig,
+  createRoleDistributionChartModel,
 } from "./constants";
 import { type MetricsResponse } from "./types";
 import { formatShortDate } from "./utils";
@@ -54,25 +54,15 @@ interface UsageMetricsProps {
 export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
   const locale = useLocale();
   const t = useTranslations("UsageMetrics");
-  const roleLabels = useMemo(
-    () => ({
-      admin: t("roleLabels.admin"),
-      user: t("roleLabels.user"),
-      viewer: t("roleLabels.viewer"),
-      manager: t("roleLabels.manager"),
-      other: t("roleLabels.other"),
-    }),
-    [t],
-  );
 
   const {
     state: { visibility },
   } = useChartVisibility();
   const userActivity = metrics.user_activity;
 
-  const roleChartConfig = useMemo(
-    () => createRoleChartConfig(roleLabels),
-    [roleLabels],
+  const { config: roleChartConfig, data: roleDistributionData } = useMemo(
+    () => createRoleDistributionChartModel(userActivity.role_distribution),
+    [userActivity.role_distribution],
   );
   const activityChartConfig = useMemo(
     () =>
@@ -88,19 +78,6 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
         activity: t("chartLabels.activity"),
       }),
     [t],
-  );
-
-  const roleDistributionData = useMemo(
-    () =>
-      Object.entries(userActivity.role_distribution).map(([role, count]) => ({
-        role,
-        roleLabel:
-          roleLabels[role.toLowerCase() as keyof typeof roleLabels] ??
-          roleLabels.other,
-        value: count,
-        fill: `var(--color-${role.toLowerCase()})`,
-      })),
-    [roleLabels, userActivity.role_distribution],
   );
 
   const activityByDayData = useMemo(
@@ -269,7 +246,7 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
                     <Pie
                       data={roleDistributionData}
                       dataKey="value"
-                      nameKey="roleLabel"
+                      nameKey="roleKey"
                       innerRadius={60}
                       outerRadius={90}
                       paddingAngle={5}
@@ -277,7 +254,7 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
                     >
                       {roleDistributionData.map((entry) => (
                         <Cell
-                          key={`cell-${entry.role}`}
+                          key={`cell-${entry.roleKey}`}
                           fill={entry.fill}
                           stroke="none"
                         />
@@ -286,15 +263,15 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
                     <ChartTooltip
                       content={
                         <ChartTooltipContent
-                          nameKey="role"
-                          labelKey="roleLabel"
+                          nameKey="roleKey"
+                          labelKey="roleKey"
                           hideIndicator
                           className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                         />
                       }
                     />
                     <ChartLegend
-                      content={<ChartLegendContent nameKey="roleLabel" />}
+                      content={<ChartLegendContent nameKey="roleKey" />}
                       className="flex-wrap gap-x-4 gap-y-2 pt-4"
                     />
                   </PieChart>
