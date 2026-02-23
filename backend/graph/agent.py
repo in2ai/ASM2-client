@@ -4,19 +4,13 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from .model import tool_list
-from .nodes import call_model as assistant, detect_language_node, summarize_conversation
+from .nodes import call_model as assistant
+from .nodes import detect_language_node, summarize_conversation
 from .state import State
 
 
-_checkpointer = None
-
-
 def get_checkpointer():
-    global _checkpointer
-
-    if _checkpointer is None:
-        _checkpointer = MemorySaver()
-    return _checkpointer
+    return MemorySaver()
 
 
 def should_continue(state: State):
