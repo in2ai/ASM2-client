@@ -32,6 +32,6 @@ def execute_query(pool: ThreadedConnectionPool, query, params=None):
 
                 if cur.description:
                     return cur.fetchall()
-                
+
     finally:
         pool.putconn(conn)

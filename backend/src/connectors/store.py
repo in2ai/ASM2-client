@@ -1,7 +1,8 @@
+import hashlib
+import logging
 import os
 from typing import List
 import uuid
-import logging
 
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
@@ -13,8 +14,8 @@ from qdrant_client.http.models import Document as QDocument
 
 from src.connectors.source import DataSource
 from src.connectors.manifest import VDBManifest
+from src.connectors.vdb_file import VDBFile
 from src.utils.topic import assign_topics, extract_initial_topics
-
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant")
 QDRANT_PATH = "qdrant_index"
@@ -28,6 +29,20 @@ DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overla
 
 TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
 CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", "") == "True"
+
+
+def get_config_hash() -> str:
+    """
+    Generate a stable hash of the chunking configuration.
+
+    If chunk_size or chunk_overlap changes, the hash changes and a full rebuild is triggered.
+    """
+    config = (
+        f"chunk_size={DOCUMENT_SPLITTER._chunk_size}"
+        f"_overlap={DOCUMENT_SPLITTER._chunk_overlap}"
+        "_tokenizer=unicode_v1"
+    )
+    return hashlib.md5(config.encode()).hexdigest()[:8]
 
 
 def iterate_qdrant_docs(
@@ -61,7 +76,7 @@ def iterate_qdrant_docs(
             break
 
 
-def get_vectordb():
+def get_vectordb() -> Qdrant:
     client = QdrantClient(
         url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
@@ -69,27 +84,40 @@ def get_vectordb():
     )
 
     vectorstore = Qdrant(client, QDRANT_COL, EMBEDDINGS)
-
     return vectorstore
 
 
 def build_vectordb_from_sources(sources: List[DataSource]):
     vectordb = None
-
-    for source in sources:
-        vectordb = build_vectorstore(source)
+    for src in sources:
+        vectordb = build_vectorstore(src.list_files(), src.name)
 
     extract_topics(vectordb)
-
     return vectordb
 
 
-def build_vectorstore(source: DataSource, batch_size=200):
-    # Get files
-    files = source.list_files()
-
+def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
     # Read status manifest file
     manifest = VDBManifest(QDRANT_PATH)
+    current_config_hash = get_config_hash()
+
+    config_changed = False
+    if hasattr(manifest, "needs_config_rebuild"):
+        try:
+            config_changed = bool(manifest.needs_config_rebuild(current_config_hash))
+        except Exception:
+            config_changed = False
+
+    # Limpiar manifest si config cambió
+    if config_changed:
+        logging.warning(
+            "Chunking config changed; forcing full rebuild for all sources [config=%s]",
+            current_config_hash,
+        )
+        manifest.manifest["processed_ids"] = {}
+        manifest.manifest["total_chunks"] = 0
+        manifest.manifest["completed"] = {}
+        manifest.save()
 
     # Check if the part for this source is already constructed
     vectorstore = get_vectordb()
@@ -130,15 +158,15 @@ def build_vectorstore(source: DataSource, batch_size=200):
         )
 
     # Update file permissions
-    logging.info('Updating file permissions for source %s...', source.name)
+    logging.info("Updating file permissions for source %s...", source)
 
     for file in files:
         update_file_permissions(
             vectorstore, file.metadata["id"], file.metadata["permissions"]
         )
 
+    current = manifest.get_processed_ids(source)
     # Check files to update
-    current = manifest.get_processed_ids(source.name)
     new = {f.metadata["id"]: f.metadata["modifiedTime"] for f in files}
 
     files_to_delete = set()
@@ -154,7 +182,7 @@ def build_vectorstore(source: DataSource, batch_size=200):
 
     # Early return if no changes are needed
     if len(files_to_delete) == 0 and len(files_to_add) == 0:
-        logging.info('VDB does not need any changes for source %s', source.name)
+        logging.info("VDB does not need any changes for source %s", source)
 
         return vectorstore
 
@@ -168,9 +196,8 @@ def build_vectorstore(source: DataSource, batch_size=200):
     ).count
 
     if num_ids_to_delete > 0:
-        logging.info('Deleting VDB stale entries for source %s', source.name)
-
-        manifest.remove_processed_ids(source.name, files_to_delete)
+        logging.info("Deleting VDB stale entries for source %s", source)
+        manifest.remove_processed_ids(source, files_to_delete)
         manifest.remove_chunks(num_ids_to_delete)
 
         vectorstore.client.delete(
@@ -213,11 +240,16 @@ def build_vectorstore(source: DataSource, batch_size=200):
             if manifest.has_topics():
                 assign_topics(vectorstore, new_ids)
 
-        manifest.add_processed_ids(source.name, pending_ids)
+        manifest.add_processed_ids(source, pending_ids)
         manifest.add_chunks(len(docs_batch))
         manifest.save()
 
-        logging.info('Persisted %s chunks from source %s', len(docs_batch), source.name)
+        logging.info(
+            "Persisted %s chunks from source %s [%s]",
+            len(docs_batch),
+            source,
+            reason,
+        )
 
         docs_batch, pending_ids = [], []
 
@@ -225,14 +257,14 @@ def build_vectorstore(source: DataSource, batch_size=200):
         if f.metadata["id"] not in files_to_add:
             continue
 
-        f.metadata["source"] = source.name
+        f.metadata["source"] = source
 
         txt = f.get_text()
 
         if not txt:
             # We add it to the manifest, since it has been already processed
             manifest.add_processed_ids(
-                source.name, [(f.metadata["id"], f.metadata["modifiedTime"])]
+                source, [(f.metadata["id"], f.metadata["modifiedTime"])]
             )
             manifest.save()
             continue
@@ -249,9 +281,19 @@ def build_vectorstore(source: DataSource, batch_size=200):
         flush("final")
 
     # Update status manifest
-    manifest.add_completed_source(source.name)
+    manifest.add_completed_source(source)
+    if hasattr(manifest, "set_config_hash"):
+        try:
+            manifest.set_config_hash(current_config_hash)
+        except Exception:
+            pass
     manifest.save()
-
+    logging.info(
+        "Index saved in %s for source %s [config: %s]",
+        QDRANT_PATH,
+        source,
+        current_config_hash,
+    )
     return vectorstore
 
 

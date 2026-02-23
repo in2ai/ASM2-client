@@ -21,9 +21,7 @@ def guess_mime_from_name(name: str) -> str:
     if n.endswith(".docx"):
         return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     if n.endswith(".pptx"):
-        return (
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        )
+        return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     if n.endswith(".xlsx"):
         return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return "application/octet-stream"
@@ -38,10 +36,16 @@ class DropboxSource(DataSource):
 
     
     def login(self) -> bool:
-        # TODO: store service somehow (waiting for global auth)
-        self.service = None
-
-        self.update_authenticated_principals()
+        # Minimal backend login: raw_creds is expected to be a valid access token.
+        # If you store JSON creds instead, parse and build the client here.
+        try:
+            self.service = dropbox.Dropbox(oauth2_access_token=self.raw_creds)
+            _ = self.service.users_get_current_account()
+            self.update_authenticated_principals()
+            return True
+        except Exception:
+            self.service = None
+            return False
 
     
     def get_authenticated_principals(self):

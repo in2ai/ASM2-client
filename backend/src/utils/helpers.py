@@ -26,14 +26,14 @@ def process_lock(lock_path: str):
     if not got:
         yield False
         return
-    
+
     try:
         yield True
-    
+
     finally:
         try:
             lock.release()
-    
+
         except Exception:
             pass
 
@@ -52,5 +52,5 @@ def periodic_task(job_func, interval: int):
         with process_lock(lock_path) as locked:
             if locked:
                 job_func()
-                
+
             time.sleep(interval)

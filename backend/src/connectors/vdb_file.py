@@ -11,7 +11,7 @@ from openpyxl import load_workbook
 from pptx import Presentation
 from PyPDF2 import PdfReader
 
-from src.config.config import GRAPH
+from src.config.search_config import GRAPH
 from src.utils.helpers import safe_execute
 
 
@@ -118,7 +118,6 @@ class VDBFile:
     def __init__(self, metadata):
         self.metadata = metadata
 
-
     def get_text(self) -> str: ...
 
 
@@ -126,7 +125,6 @@ class GoogleDriveFile(VDBFile):
     def __init__(self, metadata, service):
         super().__init__(metadata)
         self.service = service
-
 
     def get_text(self) -> str:
         file_id = self.metadata["id"]
@@ -205,7 +203,6 @@ class DropboxFile(VDBFile):
         super().__init__(metadata)
         self.service = service
 
-
     def get_text(self) -> str:
         file_id = self.metadata["id"]
         path_lower = self.metadata["path_lower"]
@@ -266,7 +263,6 @@ class OnedriveFile(VDBFile):
     def __init__(self, metadata, token):
         super().__init__(metadata)
         self.token = token
-
 
     def get_text(self) -> str:
         item_id = self.metadata["id"]

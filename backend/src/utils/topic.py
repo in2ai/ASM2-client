@@ -8,7 +8,7 @@ from typing import Iterable
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_community.vectorstores import Qdrant
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from qdrant_client.http import models
 
@@ -242,6 +242,7 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str):
 
     # Update metadata
     logging.info('Updating VDB metadata...')
+
 
     for id, ts in aggregated_topics.items():
         # Transform ints to strings for Qdrant compatibility reasons

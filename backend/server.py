@@ -2,19 +2,35 @@ import asyncio
 import os
 import logging
 
-from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
-from langchain_openai import ChatOpenAI
+
+from fastapi import FastAPI, HTTPException
 
 from src.config.log import setup_logging
-from src.config.auth import add_credentials, get_user_id, get_authenticated_sources, get_authenticated_admin_sources, user_is_admin, get_credentials_to_refresh
+from src.config.auth import (
+    add_credentials,
+    get_authenticated_admin_sources,
+    get_authenticated_sources,
+    get_credentials_to_refresh,
+    get_user_id,
+    user_is_admin,
+)
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
+from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
+
 from src.utils.helpers import periodic_task
 from src.metrics.connection import get_questdb_pool
-from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
-from src.metrics.metrics import Metrics, TimedMetric, insert_metric
-from src.utils.rag import RAGResponse, prepare_rag_context, get_reranker
+from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_user_activity
+from src.utils.nlp import init_nlp
+from src.utils.rag import get_reranker
+
+from graph.agent import build_graph
+from graph import get_checkpointer
+from langchain_core.messages import AIMessage, HumanMessage
+
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------
 # App configuration
@@ -24,17 +40,22 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
+    init_nlp()
     # Global shared data
     app.state.vectorstore = get_vectordb()
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
-    
+
     # Async periodic jobs
     jobs = [
         extract_usage_metrics,  # Store CPU, RAM and GPU metrics
         update_vdb,             # Update VDB contents by scanning sources
         refresh_tokens          # Refresh all valid access tokens near expiration
     ]
+
+    app.state.graph = build_graph(get_checkpointer())
+
 
     loop = asyncio.get_running_loop()
     app.state.periodic_tasks = [loop.create_task(asyncio.to_thread(j)) for j in jobs]
@@ -49,13 +70,13 @@ async def lifespan(app: FastAPI):
 
             try:
                 await j
-            
+
             except asyncio.CancelledError:
                 pass
 
         app.state.questdb_pool.closeall()
 
-        
+
 app = FastAPI(title="ASM2", lifespan=lifespan)
 
 # ---------------------------------
@@ -113,11 +134,11 @@ def extract_usage_metrics():
     import GPUtil
     import psutil
 
-    def calc():    
+    def calc():
         logging.info('Collecting hardware usage metrics...')
 
         questdb_pool = app.state.questdb_pool
-    
+
         # CPU
         cpu_usage = psutil.cpu_percent(interval=1)
         insert_metric(questdb_pool, Metrics.CPU_USAGE.value, cpu_usage)
@@ -133,7 +154,7 @@ def extract_usage_metrics():
             insert_metric(questdb_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100)
 
     periodic_task(calc, 30)
-    
+
 # ---------------------------------
 # App endpoints
 # ---------------------------------
@@ -142,7 +163,7 @@ def extract_usage_metrics():
 async def start_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(403)
-    
+
     with open(VDB_LOCK, 'w+'):
         pass
 
@@ -151,7 +172,7 @@ async def start_vdb_update(logto_token: str):
 async def stop_vdb_update(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(403)
-    
+
     try:
         os.remove(VDB_LOCK)
 
@@ -163,7 +184,6 @@ async def stop_vdb_update(logto_token: str):
 async def is_vdb_update_active(logto_token: str):
     if not user_is_admin(logto_token):
         raise HTTPException(403)
-    
     return {
         'active': os.path.isfile(VDB_LOCK)
     }
@@ -175,12 +195,11 @@ async def login_source(logto_token: str, source_token: str, source: str):
     if source not in SOURCES:
         raise HTTPException(500, detail=f'Source {source} does not exist')
 
-    # Check source token validity 
     source_instance: DataSource = SOURCES[source](source_token)
 
     if not source_instance.login():
         raise HTTPException(500, detail=f'Authentication failed for source {source}')
-    
+
     # Store credentials in database
     questdb_pool = app.state.questdb_pool
     user_id = get_user_id(logto_token)
@@ -193,31 +212,52 @@ async def login_source(logto_token: str, source_token: str, source: str):
 async def chat(logto_token: str, query: str, chat_id: str):
     vectorstore = app.state.vectorstore
     reranker = app.state.reranker
-    questdb_pool = app.state.questdb_pool
 
+    questdb_pool = app.state.questdb_pool
     sources = get_authenticated_sources(questdb_pool, logto_token)
 
-    messages, _, _, lang_code = prepare_rag_context(query, questdb_pool, vectorstore, reranker, sources)
+    try:
+        register_user_activity(questdb_pool)
+    except Exception:
+        logger.warning("Failed to record user activity", exc_info=True)
 
-    # Prepare LLM with structured output
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-    structured_llm = llm.with_structured_output(RAGResponse)
+    config = {
+        "configurable": {
+            "thread_id": chat_id,
+            "vectorstore": vectorstore,
+            "reranker": reranker,
+            "questdb_pool": questdb_pool,
+            "sources": sources,
+        }
+    }
 
     with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
-        response: RAGResponse = structured_llm.invoke(messages)
+        try:
+            result = await app.state.graph.ainvoke(
+                {"messages": [HumanMessage(content=query)]}, config
+            )
 
-    # Fallback response
-    if not response.answer.strip():
-        fallback_messages = {
-            "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
-            "en": "I couldn't find relevant information about that topic in the available sources.",
-            "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
-        }
+        except Exception:
+            logger.exception("Graph invocation failed")
+            raise HTTPException(status_code=500, detail="Internal error processing your request")
 
-        response.answer = fallback_messages.get(lang_code, fallback_messages["es"])
+    messages = result.get("messages") or []
 
-    # TODO: collect usage metadata from the structured output instead
-    num_out_tokens = llm.get_num_tokens(response.answer)
-    insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_OUT.value, num_out_tokens)
+    if not messages:
+        raise HTTPException(status_code=500, detail="No response generated")
 
-    return response
+    answer = messages[-1].content
+    detected_lang = result.get("detected_lang", "es")
+
+    # Extract token usage from AIMessages
+    try:
+        for msg in result["messages"]:
+            if isinstance(msg, AIMessage) and msg.usage_metadata:
+                usage = msg.usage_metadata
+                insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_IN.value, usage.get("input_tokens", 0))
+                insert_metric(questdb_pool, Metrics.NUM_LLM_TOKENS_OUT.value, usage.get("output_tokens", 0))
+
+    except Exception:
+        logger.warning("Failed to record token usage metrics", exc_info=True)
+
+    return {"answer": answer, "detected_lang": detected_lang}

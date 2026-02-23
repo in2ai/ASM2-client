@@ -14,10 +14,10 @@ class Metrics(Enum):
     CPU_USAGE='CPU_USAGE'                       # Percentage of CPU used
     RAM_USAGE='RAM_USAGE'                       # Percentage of RAM used
     GPU_USAGE='GPU_USAGE'                       # Percentage of GPU used
-    
+
     LLM_RESPONSE_TIME='LLM_RESPONSE_TIME'       # LLM response time
     DOC_RESPONSE_TIME='DOC_RESPONSE_TIME'       # RAG latency
-    
+
     NUM_DOCS_RAG='NUM_DOCS_RAG'                 # Number of docs returned for each query
 
     NUM_LLM_TOKENS_IN='NUM_LLM_TOKENS_IN'       # Number of LLM input tokens
@@ -52,7 +52,7 @@ def register_words(pool: ThreadedConnectionPool, words: set[str], lang: str = 'e
 
     # Flatten parameters (3 for each word)
     params = []
-    
+
     for w in words:
         params.extend([lang, USER_ID, USER_ROLE, w])
 
@@ -73,7 +73,7 @@ def register_topics(pool: ThreadedConnectionPool, topics: set[str]):
 
     # Flatten parameters (3 for each topic)
     params = []
-    
+
     for t in topics:
         params.extend([USER_ID, USER_ROLE, t])
 
