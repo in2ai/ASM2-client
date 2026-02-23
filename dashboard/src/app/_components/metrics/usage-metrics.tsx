@@ -264,7 +264,6 @@ export function UsageMetrics({ metrics }: Readonly<UsageMetricsProps>) {
                       content={
                         <ChartTooltipContent
                           nameKey="roleKey"
-                          labelKey="roleKey"
                           hideIndicator
                           className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
                         />
