@@ -100,13 +100,6 @@
   "UsageMetrics": {
     "title": "1. Métricas de uso e interacción",
     "subtitle": "Datos da táboa user_activity",
-    "roleLabels": {
-      "admin": "Admin",
-      "user": "Usuario",
-      "viewer": "Lector",
-      "manager": "Manager",
-      "other": "Outro"
-    },
     "chartLabels": {
       "events": "Eventos",
       "uniqueUsers": "Usuarios únicos",
