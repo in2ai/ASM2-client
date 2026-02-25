@@ -214,8 +214,6 @@ bm25_index/
 questdb/
 
 node_modules/
-package-lock.json
-package.json
 
 backend/graph/README.md
 backend/graph/test.py
