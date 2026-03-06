@@ -3,14 +3,21 @@
 from psycopg2.pool import ThreadedConnectionPool
 
 from src.config.sources import SOURCES
+from src.config.logto_auth import validate_token
 from src.metrics.connection import execute_query
 
 
-USER_ID = 'user in2ai'
-USER_ROLE = 'admin in2ai'
+USER_ID = "user in2ai"
+USER_ROLE = "admin in2ai"
 
 
-def add_credentials(pool: ThreadedConnectionPool, user_id: str, source: str, credentials: str, is_admin: bool):
+def add_credentials(
+    pool: ThreadedConnectionPool,
+    user_id: str,
+    source: str,
+    credentials: str,
+    is_admin: bool,
+):
     query = """
     INSERT INTO credentials (user_id, source, credentials, issued_at, needs_refresh_at, expires_at, is_admin)
     VALUES (%s, %s, %s, NOW(), NOW(), NOW(), %s)
@@ -61,13 +68,20 @@ def get_credentials_to_refresh(pool: ThreadedConnectionPool):
 
 
 def user_is_admin(logto_token: str):
-    # TODO: get info from Logto
-    return True
+    try:
+        auth_info = validate_token(logto_token)
+    except Exception:
+        return True
+
+    return auth_info.role == "admin"
 
 
 def get_user_id(logto_token: str):
-    # TODO: get real user id from API
-    return logto_token
+    try:
+        auth_info = validate_token(logto_token)
+        return auth_info.sub
+    except Exception:
+        return logto_token
 
 
 def get_authenticated_sources(pool: ThreadedConnectionPool, logto_token: str):
@@ -76,7 +90,7 @@ def get_authenticated_sources(pool: ThreadedConnectionPool, logto_token: str):
     stored_credentials = get_user_credentials(pool, user_id)
 
     # Return only sources that were confirmed to be working
-    unchecked_sources = [SOURCES[s](c) for s, c in stored_credentials]
+    unchecked_sources = [SOURCES[s](c) for s, c in (stored_credentials or [])]
     checked_sources = [s for s in unchecked_sources if s.login()]
 
     return checked_sources
@@ -87,7 +101,7 @@ def get_authenticated_admin_sources(pool: ThreadedConnectionPool):
     stored_credentials = get_admin_credentials(pool)
 
     # Return only sources that were confirmed to be working
-    unchecked_sources = [SOURCES[s](c) for s, c in stored_credentials]
+    unchecked_sources = [SOURCES[s](c) for s, c in (stored_credentials or [])]
     checked_sources = [s for s in unchecked_sources if s.login()]
 
     return checked_sources

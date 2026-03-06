@@ -1,0 +1,28 @@
+FROM node:24-alpine AS build
+
+WORKDIR /app
+
+RUN corepack enable
+
+ARG VITE_BACKEND_URL=/api
+ARG VITE_LOGTO_ENDPOINT
+ARG VITE_LOGTO_APP_ID
+ARG VITE_LOGTO_API_RESOURCE
+
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+ENV VITE_LOGTO_ENDPOINT=$VITE_LOGTO_ENDPOINT
+ENV VITE_LOGTO_APP_ID=$VITE_LOGTO_APP_ID
+ENV VITE_LOGTO_API_RESOURCE=$VITE_LOGTO_API_RESOURCE
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+RUN pnpm build
+
+FROM caddy:2.10-alpine
+
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv
+
+EXPOSE 80

@@ -1,0 +1,253 @@
+{
+  "LanguageSwitcher": {
+    "ariaLabel": "Change language",
+    "spanish": "Spanish",
+    "english": "English",
+    "galician": "Galician"
+  },
+  "ThemeToggle": {
+    "ariaLabel": "Change theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "AppLayout": {
+    "closeSidebarMenu": "Close sidebar",
+    "closeNavigationMenu": "Close navigation menu",
+    "openNavigationMenu": "Open navigation menu",
+    "title": "Metrics Dashboard",
+    "live": "Live",
+    "realTimeAnalysis": "Real-time analysis",
+    "signingOut": "Signing out...",
+    "signOut": "Sign out",
+    "userFallbackName": "User",
+    "openUserMenu": "Open user menu",
+    "admin": "Admin",
+    "user": "User",
+    "fallbackEmail": "user@company.com",
+    "views": {
+      "overview": "Overview",
+      "usage": "Usage & Interaction",
+      "ragQuality": "RAG Quality",
+      "insights": "Insights"
+    }
+  },
+  "ChartVisibilityControls": {
+    "ariaLabel": "Configure chart visibility",
+    "buttonLabel": "Charts ({visibleCount}/{totalCount})",
+    "menuLabel": "Show/Hide Charts",
+    "showAll": "Show all",
+    "hideAll": "Hide all",
+    "charts": {
+      "activityTrend": "Activity trend",
+      "roleDistribution": "Role distribution",
+      "hourlyPattern": "Hourly pattern",
+      "responseTimeTrend": "Response time trend",
+      "tokenUsage": "Token usage",
+      "systemHealth": "System health",
+      "topWords": "Top searched words",
+      "topTopics": "Top topics"
+    }
+  },
+  "DateRangeSelector": {
+    "all": "All",
+    "lastDays": "Last {count} days",
+    "customRange": "Custom range",
+    "customShort": "Custom",
+    "cancel": "Cancel",
+    "apply": "Apply"
+  },
+  "PersistentHeader": {
+    "title": "Overview",
+    "updating": "Updating",
+    "updatedAt": "Updated {value}",
+    "updatedNow": "Updated now",
+    "records": "{count} records",
+    "refresh": "Refresh"
+  },
+  "OverviewHighlights": {
+    "title": "Overview",
+    "subtitle": "Summary of key performance indicators",
+    "chartLabels": {
+      "events": "Events"
+    },
+    "recentActivity": "Recent activity",
+    "recentActivityHint": "Shows how many assistant queries were made each day. Every user message is recorded as an event. Useful for spotting usage trends.",
+    "recentActivityDescription": "Events in recent days"
+  },
+  "StatsRow": {
+    "uniqueUsers": {
+      "label": "Unique users",
+      "helper": "In this period"
+    },
+    "totalEvents": {
+      "label": "Total events",
+      "helper": "Interactions"
+    },
+    "avgSession": {
+      "label": "Avg session",
+      "helper": "Usage time"
+    },
+    "ragLatency": {
+      "label": "RAG latency",
+      "helper": "LLM response"
+    },
+    "ragMetrics": {
+      "label": "RAG metrics",
+      "helper": "Total records"
+    }
+  },
+  "UsageMetrics": {
+    "title": "1. Usage and interaction metrics",
+    "subtitle": "Data from the user_activity table",
+    "chartLabels": {
+      "events": "Events",
+      "uniqueUsers": "Unique users",
+      "activity": "Activity"
+    },
+    "activityTrend": {
+      "title": "Activity trend",
+      "hint": "Compares total events (queries) with unique active users per day. If events grow faster than users, each user is making more queries.",
+      "description": "Events and users by day"
+    },
+    "roleDistribution": {
+      "title": "Role distribution",
+      "hint": "Shows how active users are distributed by role in the organization. Useful to understand which groups use the assistant the most.",
+      "description": "Users by access role"
+    },
+    "hourlyPattern": {
+      "title": "Hourly pattern",
+      "hint": "Highlights the busiest hours of the day. Useful for maintenance planning and detecting usage peaks that can impact performance.",
+      "description": "Events by hour"
+    }
+  },
+  "RAGQualityMetrics": {
+    "title": "RAG quality and performance",
+    "subtitle": "Response times, token usage, and system health",
+    "chartLabels": {
+      "llmMs": "LLM (ms)",
+      "ragMs": "RAG (ms)",
+      "input": "Input",
+      "output": "Output"
+    },
+    "responseTimeTrend": {
+      "title": "Response time trend",
+      "hint": "Shows how LLM response time and RAG retrieval time evolve over time. High values can indicate performance issues.",
+      "description": "LLM and RAG latency by day (ms)"
+    },
+    "tokenUsage": {
+      "title": "Token usage",
+      "hint": "Compares input tokens (user content + context) versus output tokens (generated response) for LLM and RAG. More tokens mean higher cost and processing time.",
+      "total": "Total: {count} tokens"
+    },
+    "systemHealth": {
+      "title": "System health",
+      "hint": "Monitors server resource consumption. Sustained high CPU, RAM, or GPU usage may indicate that infrastructure scaling is needed.",
+      "description": "Average resource usage",
+      "noData": "No resource usage data available"
+    },
+    "resources": {
+      "cpu": "CPU",
+      "ram": "RAM",
+      "gpu": "GPU",
+      "usageWithMax": "{average}% (max: {max}%)"
+    },
+    "docsPerQuery": {
+      "title": "Docs per query",
+      "description": "Average retrieved documents"
+    }
+  },
+  "InsightsView": {
+    "title": "Query analysis",
+    "subtitle": "Most frequent words and topics in user searches",
+    "noData": "No search data available for this period",
+    "chartLabels": {
+      "searches": "Searches",
+      "mentions": "Mentions"
+    },
+    "topWords": {
+      "title": "Top searched words",
+      "hint": "Shows the keywords users mention most often in their queries. Helps identify high-interest topics and potential knowledge gaps.",
+      "description": "Top words by frequency"
+    },
+    "topTopics": {
+      "title": "Most frequent topics",
+      "hint": "Groups queries by detected topic. Helps understand which knowledge areas are consulted most and where to prioritize content improvements.",
+      "description": "Top topics by frequency"
+    }
+  },
+  "ChartHint": {
+    "ariaLabel": "Chart information"
+  },
+  "MetricsErrors": {
+    "titles": {
+      "unauthorized": "Unauthorized access",
+      "forbidden": "Access denied",
+      "notFound": "Data not found",
+      "timeout": "Request timeout",
+      "network": "Connection error",
+      "server": "Server error",
+      "unknown": "Error loading metrics"
+    },
+    "messages": {
+      "unauthorized": "You are not authorized to access this data. Please sign in again.",
+      "forbidden": "You do not have permissions to access this resource. Contact your administrator if you think this is a mistake.",
+      "notFound": "No data was found for the current selection.",
+      "timeout": "The request took too long to complete. Please try again.",
+      "network": "Connection error. Check your internet connection and try again.",
+      "server": "Server error. Please try again later or contact support if the issue persists.",
+      "unknown": "We could not retrieve the data. Please try again."
+    }
+  },
+  "ErrorState": {
+    "defaultTitle": "Error loading data",
+    "retry": "Retry",
+    "retrying": "Retrying...",
+    "goHome": "Go home"
+  },
+  "EmptyState": {
+    "defaultTitle": "No data available",
+    "loading": "Loading...",
+    "helpfulTips": "Helpful tips:",
+    "defaultTips": {
+      "connection": "Ensure the database connection is configured correctly",
+      "seed": "Run the seed script to populate initial data",
+      "filters": "Check that your filters are not too restrictive",
+      "dateRange": "Verify your date range includes data"
+    },
+    "noMetrics": {
+      "title": "No data available",
+      "message": "No data is available for the selected date range. Try adjusting the date range above to find periods with data.",
+      "refresh": "Refresh",
+      "tips": {
+        "adjustDateRange": "Adjust the date range using the controls above",
+        "widerRange": "Try a wider date range",
+        "selectDifferentNode": "If you are an admin, try selecting a different node",
+        "seedData": "Run 'npm run db:seed' to populate sample data if needed"
+      }
+    },
+    "noNodes": {
+      "title": "No nodes available",
+      "message": "No organization nodes are configured in the system. Contact your administrator or run the setup script.",
+      "refresh": "Refresh",
+      "tips": {
+        "setupScript": "Run the node setup script to create initial nodes",
+        "logtoOrganizations": "Ensure Logto organizations are properly configured",
+        "contactAdmin": "Contact your system administrator for assistance"
+      }
+    }
+  },
+  "ExportButton": {
+    "exportCsv": "Export CSV",
+    "exporting": "Exporting...",
+    "errors": {
+      "noData": "Could not retrieve data to export",
+      "failed": "Export error: {message}",
+      "generic": "Could not export data. Please try again."
+    }
+  },
+  "SignInPage": {
+    "description": "Sign in to access the metrics dashboard",
+    "signInButton": "Sign in"
+  }
+}

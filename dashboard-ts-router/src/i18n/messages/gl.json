@@ -1,0 +1,253 @@
+{
+  "LanguageSwitcher": {
+    "ariaLabel": "Cambiar idioma",
+    "spanish": "Español",
+    "english": "Inglés",
+    "galician": "Galego"
+  },
+  "ThemeToggle": {
+    "ariaLabel": "Cambiar tema",
+    "light": "Claro",
+    "dark": "Escuro",
+    "system": "Sistema"
+  },
+  "AppLayout": {
+    "closeSidebarMenu": "Pechar menú lateral",
+    "closeNavigationMenu": "Pechar menú de navegación",
+    "openNavigationMenu": "Abrir menú de navegación",
+    "title": "Dashboard de métricas",
+    "live": "Live",
+    "realTimeAnalysis": "Análise en tempo real",
+    "signingOut": "Fechando sesión...",
+    "signOut": "Pechar sesión",
+    "userFallbackName": "Usuario",
+    "openUserMenu": "Abrir menú de usuario",
+    "admin": "Admin",
+    "user": "Usuario",
+    "fallbackEmail": "usuario@empresa.com",
+    "views": {
+      "overview": "Vista xeral",
+      "usage": "Uso e interacción",
+      "ragQuality": "Calidade do RAG",
+      "insights": "Insights"
+    }
+  },
+  "ChartVisibilityControls": {
+    "ariaLabel": "Configurar visibilidade de gráficos",
+    "buttonLabel": "Gráficos ({visibleCount}/{totalCount})",
+    "menuLabel": "Amosar/Ocultar gráficos",
+    "showAll": "Amosar todos",
+    "hideAll": "Ocultar todos",
+    "charts": {
+      "activityTrend": "Tendencia de actividade",
+      "roleDistribution": "Distribución por rol",
+      "hourlyPattern": "Patrón horario",
+      "responseTimeTrend": "Tendencia de tempos de resposta",
+      "tokenUsage": "Consumo de tokens",
+      "systemHealth": "Saúde do sistema",
+      "topWords": "Palabras máis buscadas",
+      "topTopics": "Temas máis frecuentes"
+    }
+  },
+  "DateRangeSelector": {
+    "all": "Todos",
+    "lastDays": "Últimos {count} días",
+    "customRange": "Rango personalizado",
+    "customShort": "Personalizado",
+    "cancel": "Cancelar",
+    "apply": "Aplicar"
+  },
+  "PersistentHeader": {
+    "title": "Vista xeral",
+    "updating": "Actualizando",
+    "updatedAt": "Actualizado {value}",
+    "updatedNow": "Actualizado agora",
+    "records": "{count} rexistros",
+    "refresh": "Actualizar"
+  },
+  "OverviewHighlights": {
+    "title": "Vista xeral",
+    "subtitle": "Resumo dos indicadores clave de rendemento",
+    "chartLabels": {
+      "events": "Eventos"
+    },
+    "recentActivity": "Actividade recente",
+    "recentActivityHint": "Amosa o número de consultas realizadas ao asistente cada día. Cada vez que un usuario envía unha mensaxe, rexístrase un evento. Útil para identificar tendencias de uso.",
+    "recentActivityDescription": "Eventos nos últimos días"
+  },
+  "StatsRow": {
+    "uniqueUsers": {
+      "label": "Usuarios únicos",
+      "helper": "No período"
+    },
+    "totalEvents": {
+      "label": "Eventos totais",
+      "helper": "Interaccións"
+    },
+    "avgSession": {
+      "label": "Sesión media",
+      "helper": "Tempo de uso"
+    },
+    "ragLatency": {
+      "label": "Latencia RAG",
+      "helper": "Resposta LLM"
+    },
+    "ragMetrics": {
+      "label": "Métricas RAG",
+      "helper": "Rexistros totais"
+    }
+  },
+  "UsageMetrics": {
+    "title": "1. Métricas de uso e interacción",
+    "subtitle": "Datos da táboa user_activity",
+    "chartLabels": {
+      "events": "Eventos",
+      "uniqueUsers": "Usuarios únicos",
+      "activity": "Actividade"
+    },
+    "activityTrend": {
+      "title": "Tendencia de actividade",
+      "hint": "Compara o número total de eventos (consultas) coa cantidade de usuarios únicos activos cada día. Se os eventos medran máis rápido que os usuarios, significa que cada usuario realiza máis consultas.",
+      "description": "Eventos e usuarios por día"
+    },
+    "roleDistribution": {
+      "title": "Distribución por rol",
+      "hint": "Amosa como se distribúen os usuarios activos segundo o seu rol na organización. Útil para entender que grupos usan máis o asistente.",
+      "description": "Usuarios por rol de acceso"
+    },
+    "hourlyPattern": {
+      "title": "Patrón horario",
+      "hint": "Identifica as horas do día con maior actividade. Útil para planificar mantementos ou detectar picos de uso que poidan afectar o rendemento.",
+      "description": "Eventos por hora del día"
+    }
+  },
+  "RAGQualityMetrics": {
+    "title": "Calidade e rendemento do RAG",
+    "subtitle": "Tempos de resposta, consumo de tokens e saúde do sistema",
+    "chartLabels": {
+      "llmMs": "LLM (ms)",
+      "ragMs": "RAG (ms)",
+      "input": "Entrada",
+      "output": "Saída"
+    },
+    "responseTimeTrend": {
+      "title": "Tendencia de tempos de resposta",
+      "hint": "Amosa como evolucionan os tempos de resposta do LLM (modelo de linguaxe) e do RAG (recuperación de documentos) ao longo do tempo. Valores altos poden indicar problemas de rendemento.",
+      "description": "Latencia LLM e RAG por día (ms)"
+    },
+    "tokenUsage": {
+      "title": "Consumo de tokens",
+      "hint": "Compara los tokens de entrada (lo que envía o usuario + contexto) vs saída (resposta xerada) para LLM e RAG. Máis tokens = maior custo e tempo de procesamento.",
+      "total": "Total: {count} tokens"
+    },
+    "systemHealth": {
+      "title": "Saúde do sistema",
+      "hint": "Monitoriza o uso de recursos do servidor. Un uso alto sostido de CPU, RAM ou GPU pode indicar a necesidade de escalar a infraestrutura.",
+      "description": "Uso promedio de recursos",
+      "noData": "Non hai datos de uso de recursos"
+    },
+    "resources": {
+      "cpu": "CPU",
+      "ram": "RAM",
+      "gpu": "GPU",
+      "usageWithMax": "{average}% (max: {max}%)"
+    },
+    "docsPerQuery": {
+      "title": "Docs por consulta",
+      "description": "Promedio de documentos recuperados"
+    }
+  },
+  "InsightsView": {
+    "title": "Análise de consultas",
+    "subtitle": "Palabras e temas máis frecuentes nas buscas de usuarios",
+    "noData": "Non hai datos de buscas dispoñibles neste período",
+    "chartLabels": {
+      "searches": "Buscas",
+      "mentions": "Mencións"
+    },
+    "topWords": {
+      "title": "Palabras máis buscadas",
+      "hint": "Amosa as palabras clave que os usuarios mencionan con máis frecuencia nas súas consultas. Axuda a identificar os temas de maior interese e posibles lagoas de información.",
+      "description": "Top palabras por frecuencia"
+    },
+    "topTopics": {
+      "title": "Temas máis frecuentes",
+      "hint": "Agrupa as consultas por temática detectada automaticamente. Permite entender que áreas do coñecemento son máis consultadas e priorizar a mellora do contido.",
+      "description": "Top temas por frecuencia"
+    }
+  },
+  "ChartHint": {
+    "ariaLabel": "Información do gráfico"
+  },
+  "MetricsErrors": {
+    "titles": {
+      "unauthorized": "Acceso non autorizado",
+      "forbidden": "Acceso denegado",
+      "notFound": "Datos non atopados",
+      "timeout": "Tempo de espera esgotado",
+      "network": "Erro de conexión",
+      "server": "Erro do servidor",
+      "unknown": "Erro ao cargar métricas"
+    },
+    "messages": {
+      "unauthorized": "Non tes autorización para acceder a estes datos. Por favor, inicia sesión novamente.",
+      "forbidden": "Non tes permisos para acceder a este recurso. Contacta co teu administrador se cres que isto é un erro.",
+      "notFound": "Non se atoparon datos para a selección actual.",
+      "timeout": "A solicitude tardou demasiado en completarse. Por favor, tenta de novo.",
+      "network": "Erro de conexión. Verifica a túa conexión a internet e tenta de novo.",
+      "server": "Erro do servidor. Por favor, tenta de novo máis tarde ou contacta co soporte se o problema persiste.",
+      "unknown": "Non se puideron recuperar os datos. Por favor, tenta de novo."
+    }
+  },
+  "ErrorState": {
+    "defaultTitle": "Erro ao cargar datos",
+    "retry": "Reintentar",
+    "retrying": "Reintentando...",
+    "goHome": "Ir ao inicio"
+  },
+  "EmptyState": {
+    "defaultTitle": "Non hai datos dispoñibles",
+    "loading": "Cargando...",
+    "helpfulTips": "Consellos útiles:",
+    "defaultTips": {
+      "connection": "Asegura que a conexión á base de datos estea configurada correctamente",
+      "seed": "Executa o script de seed para poboar datos iniciais",
+      "filters": "Verifica que os filtros non sexan demasiado restritivos",
+      "dateRange": "Verifica que o rango de datas inclúa datos"
+    },
+    "noMetrics": {
+      "title": "Non hai datos dispoñibles",
+      "message": "Non hai datos dispoñibles para o rango de datas seleccionado. Tenta axustar o rango de datas arriba para atopar períodos con datos.",
+      "refresh": "Actualizar",
+      "tips": {
+        "adjustDateRange": "Axusta o rango de datas usando os controis de arriba",
+        "widerRange": "Proba cun rango de datas máis amplo",
+        "selectDifferentNode": "Se es administrador, tenta seleccionar un nodo diferente",
+        "seedData": "Executa 'npm run db:seed' para poboar datos de exemplo se é necesario"
+      }
+    },
+    "noNodes": {
+      "title": "Non hai nodos dispoñibles",
+      "message": "Non hai nodos de organización configurados no sistema. Contacta co teu administrador ou executa o script de configuración.",
+      "refresh": "Actualizar",
+      "tips": {
+        "setupScript": "Executa el script de configuración de nodos para crear nodos iniciais",
+        "logtoOrganizations": "Asegura que as organizacións de Logto estean configuradas correctamente",
+        "contactAdmin": "Contacta co teu administrador do sistema para obter axuda"
+      }
+    }
+  },
+  "ExportButton": {
+    "exportCsv": "Exportar CSV",
+    "exporting": "Exportando...",
+    "errors": {
+      "noData": "Non se puideron obter os datos para exportar",
+      "failed": "Erro ao exportar: {message}",
+      "generic": "Non se puido exportar os datos. Por favor, tenta de novo."
+    }
+  },
+  "SignInPage": {
+    "description": "Inicia sesión para acceder ao dashboard de métricas",
+    "signInButton": "Iniciar sesión"
+  }
+}

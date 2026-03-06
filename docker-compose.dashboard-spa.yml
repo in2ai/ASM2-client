@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: asm2-backend:latest
+    container_name: backend
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./dashboard-ts-router
+      dockerfile: Dockerfile.caddy
+      args:
+        VITE_BACKEND_URL: /api
+        VITE_LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+        VITE_LOGTO_APP_ID: ${LOGTO_APP_ID}
+        VITE_LOGTO_API_RESOURCE: ${LOGTO_API_RESOURCE}
+    image: dashboard-spa:caddy
+    container_name: dashboard
+    depends_on:
+      - backend
+    ports:
+      - "3001:80"
+    restart: unless-stopped
