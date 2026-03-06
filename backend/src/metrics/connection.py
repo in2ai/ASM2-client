@@ -1,5 +1,6 @@
 import os
 from psycopg2.pool import ThreadedConnectionPool
+from psycopg2.extras import RealDictCursor
 
 # Environment variables from docker-compose
 DB_HOST = os.getenv("QUESTDB_HOST", "questdb")
@@ -7,6 +8,7 @@ DB_PORT = int(os.getenv("QUESTDB_PORT", 8812))
 DB_USER = os.getenv("QUESTDB_USER", "admin")
 DB_PASSWORD = os.getenv("QUESTDB_PASSWORD", "quest")
 DB_NAME = os.getenv("QUESTDB_DB", "qdb")
+
 
 # Connection and query management
 def get_questdb_pool():
@@ -18,7 +20,7 @@ def get_questdb_pool():
         user=DB_USER,
         password=DB_PASSWORD,
         dbname=DB_NAME,
-        connect_timeout=5
+        connect_timeout=5,
     )
 
 
@@ -32,6 +34,23 @@ def execute_query(pool: ThreadedConnectionPool, query, params=None):
 
                 if cur.description:
                     return cur.fetchall()
+
+    finally:
+        pool.putconn(conn)
+
+
+def execute_query_dict(pool: ThreadedConnectionPool, query, params=None):
+    conn = pool.getconn()
+
+    try:
+        with conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params)
+
+                if cur.description:
+                    return list(cur.fetchall())
+
+                return []
 
     finally:
         pool.putconn(conn)
