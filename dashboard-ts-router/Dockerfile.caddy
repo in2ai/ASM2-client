@@ -22,6 +22,8 @@ RUN pnpm build
 
 FROM caddy:2.10-alpine
 
+RUN apk add --no-cache curl
+
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv
 

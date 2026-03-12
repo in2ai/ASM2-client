@@ -3,7 +3,6 @@
 from psycopg2.pool import ThreadedConnectionPool
 
 from src.config.sources import SOURCES
-from src.config.logto_auth import validate_token
 from src.metrics.connection import execute_query
 
 
@@ -67,26 +66,8 @@ def get_credentials_to_refresh(pool: ThreadedConnectionPool):
     return execute_query(pool, query)
 
 
-def user_is_admin(logto_token: str):
-    try:
-        auth_info = validate_token(logto_token)
-    except Exception:
-        return True
-
-    return auth_info.role == "admin"
-
-
-def get_user_id(logto_token: str):
-    try:
-        auth_info = validate_token(logto_token)
-        return auth_info.sub
-    except Exception:
-        return logto_token
-
-
-def get_authenticated_sources(pool: ThreadedConnectionPool, logto_token: str):
+def get_authenticated_sources(pool: ThreadedConnectionPool, user_id: str):
     # Extract raw credentials from the database
-    user_id = get_user_id(logto_token)
     stored_credentials = get_user_credentials(pool, user_id)
 
     # Return only sources that were confirmed to be working

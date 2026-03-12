@@ -1,6 +1,7 @@
 import asyncio
 import os
 import logging
+import requests
 
 from contextlib import asynccontextmanager
 from datetime import date, datetime
@@ -16,10 +17,9 @@ from src.config.auth import (
     get_authenticated_admin_sources,
     get_authenticated_sources,
     get_credentials_to_refresh,
-    get_user_id,
-    user_is_admin,
 )
-from src.config.logto_auth import AuthInfo, require_scopes
+from src.config.logto_management import ensure_default_role_assigned
+from src.config.logto_auth import AuthInfo, require_admin, require_auth, require_scopes
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
@@ -123,6 +123,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get(
+    "/healthz",
+    status_code=200,
+    responses={503: {"description": "Service not ready"}},
+)
+async def healthcheck():
+    questdb_pool = getattr(app.state, "questdb_pool", None)
+    graph = getattr(app.state, "graph", None)
+
+    if questdb_pool is None or graph is None:
+        raise HTTPException(status_code=503, detail="Service not ready")
+
+    return {"status": "ok"}
 
 
 class MetricsByTagModel(BaseModel):
@@ -265,8 +280,16 @@ class ExportMetricsResponseModel(BaseModel):
     metadata: ExportMetadataModel
 
 
+class AuthBootstrapResponseModel(BaseModel):
+    enabled: bool
+    assigned: bool
+    refresh_required: bool
+
+
 MetricsReadAuth = Annotated[AuthInfo, Depends(require_scopes(["metrics:read"]))]
 MetricsExportAuth = Annotated[AuthInfo, Depends(require_scopes(["metrics:export"]))]
+AuthenticatedAuth = Annotated[AuthInfo, Depends(require_auth())]
+AdminAuth = Annotated[AuthInfo, Depends(require_admin())]
 
 
 def _ensure_valid_date_range(start_date: date | None, end_date: date | None) -> None:
@@ -530,20 +553,37 @@ def extract_usage_metrics():
 # ---------------------------------
 
 
-@app.post("/start-vdb-update", status_code=200)
-async def start_vdb_update(logto_token: str):
-    if not user_is_admin(logto_token):
-        raise HTTPException(403)
+@app.post(
+    "/auth/bootstrap",
+    response_model=AuthBootstrapResponseModel,
+    responses={503: {"description": "Unable to assign default Logto role"}},
+)
+async def auth_bootstrap(auth: AuthenticatedAuth):
+    try:
+        return ensure_default_role_assigned(auth.sub)
+    except requests.RequestException:
+        logger.exception("Failed to bootstrap default Logto role")
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to assign default Logto role",
+        )
+    except RuntimeError as exc:
+        logger.warning("Default Logto role bootstrap is unavailable: %s", exc)
+        return {
+            "enabled": False,
+            "assigned": False,
+            "refresh_required": False,
+        }
 
+
+@app.post("/start-vdb-update", status_code=200)
+async def start_vdb_update(auth: AdminAuth):
     with open(VDB_LOCK, "w+"):
         pass
 
 
 @app.post("/stop-vdb-update", status_code=200)
-async def stop_vdb_update(logto_token: str):
-    if not user_is_admin(logto_token):
-        raise HTTPException(403)
-
+async def stop_vdb_update(auth: AdminAuth):
     try:
         os.remove(VDB_LOCK)
 
@@ -552,14 +592,12 @@ async def stop_vdb_update(logto_token: str):
 
 
 @app.get("/vdb-update-status", status_code=200)
-async def is_vdb_update_active(logto_token: str):
-    if not user_is_admin(logto_token):
-        raise HTTPException(403)
+async def is_vdb_update_active(auth: AdminAuth):
     return {"active": os.path.isfile(VDB_LOCK)}
 
 
 @app.get("/login-source", status_code=200)
-async def login_source(logto_token: str, source_token: str, source: str):
+async def login_source(auth: AuthenticatedAuth, source_token: str, source: str):
     # Check source name
     if source not in SOURCES:
         raise HTTPException(500, detail=f"Source {source} does not exist")
@@ -571,19 +609,19 @@ async def login_source(logto_token: str, source_token: str, source: str):
 
     # Store credentials in database
     questdb_pool = app.state.questdb_pool
-    user_id = get_user_id(logto_token)
-    is_admin = user_is_admin(logto_token)
+    user_id = auth.sub
+    is_admin = auth.role == "admin"
 
     add_credentials(questdb_pool, user_id, source, source_token, is_admin)
 
 
 @app.get("/chat")
-async def chat(logto_token: str, query: str, chat_id: str):
+async def chat(auth: AuthenticatedAuth, query: str, chat_id: str):
     vectorstore = app.state.vectorstore
     reranker = app.state.reranker
 
     questdb_pool = app.state.questdb_pool
-    sources = get_authenticated_sources(questdb_pool, logto_token)
+    sources = get_authenticated_sources(questdb_pool, auth.sub)
 
     try:
         register_user_activity(questdb_pool)
