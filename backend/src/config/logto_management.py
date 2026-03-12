@@ -1,9 +1,10 @@
 import base64
 import logging
-import os
 import time
 
 import requests
+
+from src.config.env import get_env
 
 
 logger = logging.getLogger(__name__)
@@ -16,12 +17,12 @@ _MANAGEMENT_ACCESS_TOKEN_ENDPOINT = ""
 
 
 def _get_management_config() -> tuple[str, str, str, str, str] | None:
-    logto_endpoint = (os.getenv("LOGTO_ENDPOINT") or "").rstrip("/")
-    management_app_id = (os.getenv("LOGTO_MANAGEMENT_APP_ID") or "").strip()
-    management_app_secret = (os.getenv("LOGTO_MANAGEMENT_APP_SECRET") or "").strip()
-    default_user_role_id = (os.getenv("LOGTO_DEFAULT_USER_ROLE_ID") or "").strip()
-    management_api_resource = (
-        os.getenv("LOGTO_MANAGEMENT_API_RESOURCE") or _DEFAULT_MANAGEMENT_API_RESOURCE
+    logto_endpoint = str(get_env("LOGTO_ENDPOINT", "")).rstrip("/")
+    management_app_id = str(get_env("LOGTO_MANAGEMENT_APP_ID", "")).strip()
+    management_app_secret = str(get_env("LOGTO_MANAGEMENT_APP_SECRET", "")).strip()
+    default_user_role_id = str(get_env("LOGTO_DEFAULT_USER_ROLE_ID", "")).strip()
+    management_api_resource = str(
+        get_env("LOGTO_MANAGEMENT_API_RESOURCE", _DEFAULT_MANAGEMENT_API_RESOURCE)
     ).strip()
 
     if not logto_endpoint:

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from dotenv.main import load_dotenv
-from langchain_openai.chat_models.base import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
 from .tools import vectordb_search
 

@@ -1,13 +1,14 @@
-import os
 from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import RealDictCursor
 
+from src.config.env import get_env, get_int_env
+
 # Environment variables from docker-compose
-DB_HOST = os.getenv("QUESTDB_HOST", "questdb")
-DB_PORT = int(os.getenv("QUESTDB_PORT", 8812))
-DB_USER = os.getenv("QUESTDB_USER", "admin")
-DB_PASSWORD = os.getenv("QUESTDB_PASSWORD", "quest")
-DB_NAME = os.getenv("QUESTDB_DB", "qdb")
+DB_HOST = get_env("QUESTDB_HOST", "questdb")
+DB_PORT = get_int_env("QUESTDB_PORT", 8812)
+DB_USER = get_env("QUESTDB_USER", "admin")
+DB_PASSWORD = get_env("QUESTDB_PASSWORD", "quest")
+DB_NAME = get_env("QUESTDB_DB", "qdb")
 
 
 # Connection and query management

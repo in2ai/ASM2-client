@@ -1,7 +1,6 @@
 import igraph as ig
 import random
 import json
-import os
 import logging
 from typing import Iterable
 
@@ -12,14 +11,15 @@ from langchain_core.documents import Document
 
 from qdrant_client.http import models
 
+from src.config.env import get_bool_env, get_float_env
 from src.config.config import APPROX_SEARCH_PARAMS
 from src.utils.nlp import SUPPORTED_LANGUAGES
 
 
-TOPIC_RESOLUTION = float(os.getenv("TOPIC_RESOLUTION", 0.025))
-TOPIC_MIN_CONTRIB = float(os.getenv("TOPIC_MIN_CONTRIB", 0.3))
+TOPIC_RESOLUTION = get_float_env("TOPIC_RESOLUTION", 0.025)
+TOPIC_MIN_CONTRIB = get_float_env("TOPIC_MIN_CONTRIB", 0.3)
 TOPIC_MAPPING_FILENAME = "topics.json"
-CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", '') == 'True'
+CALCULATE_TOPICS = get_bool_env("CALCULATE_TOPICS")
 
 
 def get_topic_mapping_path(vdb_path: str) -> str:
