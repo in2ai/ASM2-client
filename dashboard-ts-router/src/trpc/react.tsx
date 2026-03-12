@@ -1,14 +1,7 @@
 import { useLogto } from '@logto/react'
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
 
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL ||
-  (import.meta.env.PROD ? '/api' : 'http://localhost:8000')
-const API_RESOURCE = import.meta.env.VITE_LOGTO_API_RESOURCE
-
-if (!API_RESOURCE) {
-  throw new Error('VITE_LOGTO_API_RESOURCE is required for strict API auth')
-}
+import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 
 export interface MetricsByTag {
   tag: string
@@ -182,7 +175,8 @@ function useAuthorizedFetch() {
 
     const params = buildSearchParams(input)
     const query = params.toString()
-    const url = `${BACKEND_URL}${path}${query ? `?${query}` : ''}`
+    const suffix = query ? `?${query}` : ''
+    const url = `${BACKEND_URL}${path}${suffix}`
 
     const response = await fetch(url, {
       headers: {

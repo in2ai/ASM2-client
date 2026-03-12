@@ -18,6 +18,8 @@ _JWKS_ENDPOINT = ""
 
 security = HTTPBearer(auto_error=False)
 
+_SUPPORTED_JWT_ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"]
+
 
 @dataclass(frozen=True)
 class AuthInfo:
@@ -91,6 +93,15 @@ def _extract_role(payload: dict[str, Any]) -> str:
     return "user"
 
 
+def _get_allowed_jwt_algorithms(signing_key: jwt.PyJWK) -> list[str]:
+    algorithm_name = getattr(signing_key, "algorithm_name", None)
+
+    if isinstance(algorithm_name, str) and algorithm_name in _SUPPORTED_JWT_ALGORITHMS:
+        return [algorithm_name]
+
+    return _SUPPORTED_JWT_ALGORITHMS
+
+
 def validate_token(token: str) -> AuthInfo:
     try:
         logto_endpoint, logto_api_resource = _ensure_auth_config()
@@ -104,8 +115,8 @@ def validate_token(token: str) -> AuthInfo:
         signing_key = _get_jwks_client(logto_endpoint).get_signing_key_from_jwt(token)
         payload = jwt.decode(
             token,
-            signing_key.key,
-            algorithms=["RS256"],
+            signing_key,
+            algorithms=_get_allowed_jwt_algorithms(signing_key),
             issuer=issuer,
             audience=logto_api_resource,
             options={"require": ["exp", "iss", "sub"]},
@@ -149,14 +160,30 @@ def validate_token(token: str) -> AuthInfo:
     )
 
 
-def require_scopes(required_scopes: list[str]):
-    async def _dependency(
+def require_auth():
+    def _dependency(
         credentials: HTTPAuthorizationCredentials | None = Depends(security),
     ) -> AuthInfo:
         if not credentials or credentials.scheme.lower() != "bearer":
             raise HTTPException(status_code=401, detail="Missing bearer token")
 
-        auth_info = validate_token(credentials.credentials)
+        return validate_token(credentials.credentials)
+
+    return _dependency
+
+
+def require_admin():
+    def _dependency(auth_info: AuthInfo = Depends(require_auth())) -> AuthInfo:
+        if auth_info.role != "admin":
+            raise HTTPException(status_code=403, detail="Admin role required")
+
+        return auth_info
+
+    return _dependency
+
+
+def require_scopes(required_scopes: list[str]):
+    def _dependency(auth_info: AuthInfo = Depends(require_auth())) -> AuthInfo:
         missing_scopes = [
             scope for scope in required_scopes if scope not in auth_info.scopes
         ]
