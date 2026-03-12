@@ -2,6 +2,7 @@ import os, logging
 from dotenv import load_dotenv
 
 from qdrant_client.http.models import SearchParams
+from src.config.env import get_env
 
 # Load .env file
 load_dotenv(override=True)
@@ -9,25 +10,25 @@ load_dotenv(override=True)
 # Drive
 CLIENT_SECRET_FILE  = "client_secret.json"
 SCOPES              = ["https://www.googleapis.com/auth/drive.readonly"]
-GDRIVE_ROOT         = (os.getenv("GDRIVE_ROOT") or "").strip().strip('"').strip("'")
-REDIRECT_URI        = (os.getenv("REDIRECT_URI") or "").strip().strip('"').strip("'")
+GDRIVE_ROOT         = get_env("GDRIVE_ROOT", "")
+REDIRECT_URI        = get_env("REDIRECT_URI", "")
 
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
 # OpenAI
-OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip().strip('"').strip("'")
+OPENAI_API_KEY = get_env("OPENAI_API_KEY", "")
 
 # Dropbox
-DROPBOX_APP_KEY    = (os.getenv("DROPBOX_APP_KEY") or "").strip().strip('"').strip("'")
-DROPBOX_APP_SECRET = (os.getenv("DROPBOX_APP_SECRET") or "").strip().strip('"').strip("'")
-DROPBOX_ROOT       = (os.getenv("DROPBOX_ROOT") or "/").strip()  # carpeta a indexar
+DROPBOX_APP_KEY    = get_env("DROPBOX_APP_KEY", "")
+DROPBOX_APP_SECRET = get_env("DROPBOX_APP_SECRET", "")
+DROPBOX_ROOT       = get_env("DROPBOX_ROOT", "/")  # carpeta a indexar
 
 # OneDrive
-ONEDRIVE_CLIENT_ID = (os.getenv("ONEDRIVE_CLIENT_ID") or "").strip()
-ONEDRIVE_TENANT_ID = (os.getenv("ONEDRIVE_TENANT_ID") or "").strip()
+ONEDRIVE_CLIENT_ID = get_env("ONEDRIVE_CLIENT_ID", "")
+ONEDRIVE_TENANT_ID = get_env("ONEDRIVE_TENANT_ID", "")
 ONEDRIVE_AUTHORITY = f"https://login.microsoftonline.com/{ONEDRIVE_TENANT_ID}"
 ONEDRIVE_SCOPES = ["Files.Read.All", "User.Read"]
-ONEDRIVE_ROOT = (os.getenv("ONEDRIVE_ROOT") or "").strip()   # p.ej. "", "/RAG"
+ONEDRIVE_ROOT = get_env("ONEDRIVE_ROOT", "")   # p.ej. "", "/RAG"
 GRAPH = "https://graph.microsoft.com/v1.0"
 
 # Search config

@@ -1,7 +1,7 @@
 import logging
 
-from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool
 
 from src.connectors.store import QDRANT_PATH
 from src.metrics.metrics import (

@@ -7,6 +7,7 @@ import { LogtoProvider } from '@logto/react'
 import { I18nProvider } from '@/i18n/provider'
 import { logtoConfig } from '@/lib/logto'
 import { ThemeProvider } from '@/components/theme-provider'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { routeTree } from './routeTree.gen'
 
 const router = createRouter({
@@ -32,9 +33,11 @@ if (!rootElement.innerHTML) {
       <LogtoProvider config={logtoConfig}>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <I18nProvider>
-              <RouterProvider router={router} />
-            </I18nProvider>
+            <TooltipProvider>
+              <I18nProvider>
+                <RouterProvider router={router} />
+              </I18nProvider>
+            </TooltipProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </LogtoProvider>

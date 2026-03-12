@@ -1,4 +1,3 @@
-import os
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -7,6 +6,8 @@ import jwt
 import requests
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from src.config.env import get_env
 
 
 _OPENID_CONFIG_TTL_SECONDS = 3600
@@ -30,8 +31,8 @@ class AuthInfo:
 
 
 def _ensure_auth_config() -> tuple[str, str]:
-    logto_endpoint = (os.getenv("LOGTO_ENDPOINT") or "").rstrip("/")
-    logto_api_resource = (os.getenv("LOGTO_API_RESOURCE") or "").strip()
+    logto_endpoint = str(get_env("LOGTO_ENDPOINT", "")).rstrip("/")
+    logto_api_resource = str(get_env("LOGTO_API_RESOURCE", "")).strip()
 
     if not logto_endpoint:
         raise RuntimeError("LOGTO_ENDPOINT is required for strict auth")

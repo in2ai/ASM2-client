@@ -1,6 +1,5 @@
 import hashlib
 import logging
-import os
 from typing import List
 import uuid
 
@@ -12,12 +11,13 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, Modifier, PayloadSchemaType, PointStruct, SparseVectorParams, VectorParams
 from qdrant_client.http.models import Document as QDocument
 
+from src.config.env import get_bool_env, get_env, get_int_env
 from src.connectors.source import DataSource
 from src.connectors.manifest import VDBManifest
 from src.connectors.vdb_file import VDBFile
 from src.utils.topic import assign_topics, extract_initial_topics
 
-QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant")
+QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
 QDRANT_PATH = "qdrant_index"
 BM25_MODEL = "qdrant/bm25"
 VDB_LOCK = 'vdb.lock'
@@ -27,8 +27,8 @@ QDRANT_COL = "documents"
 
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 
-TOPIC_MIN_SIZE = int(os.getenv("TOPIC_MIN_SIZE", 20000))
-CALCULATE_TOPICS = os.getenv("CALCULATE_TOPICS", "") == "True"
+TOPIC_MIN_SIZE = get_int_env("TOPIC_MIN_SIZE", 20000)
+CALCULATE_TOPICS = get_bool_env("CALCULATE_TOPICS")
 
 
 def get_config_hash() -> str:
