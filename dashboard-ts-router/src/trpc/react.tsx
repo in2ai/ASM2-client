@@ -1,5 +1,6 @@
 import { useLogto } from '@logto/react'
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
+import { useQuery  } from '@tanstack/react-query'
+import type {UseQueryOptions} from '@tanstack/react-query';
 
 import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 
@@ -164,6 +165,10 @@ function buildSearchParams(input: MetricsQueryInput): URLSearchParams {
   return params
 }
 
+function buildMetricsQueryKey(input: MetricsQueryInput): string {
+  return buildSearchParams(input).toString()
+}
+
 function useAuthorizedFetch() {
   const { getAccessToken } = useLogto()
 
@@ -206,7 +211,7 @@ function useMetricsGetQuery(
   const authorizedFetch = useAuthorizedFetch()
 
   return useQuery<DashboardMetrics, Error>({
-    queryKey: ['metrics', 'dashboard', input],
+    queryKey: ['metrics', 'dashboard', buildMetricsQueryKey(input)],
     queryFn: () => authorizedFetch<DashboardMetrics>('/metrics/dashboard', input),
     ...options,
   })
@@ -219,7 +224,7 @@ function useMetricsStatsQuery(
   const authorizedFetch = useAuthorizedFetch()
 
   return useQuery<StatsMetrics, Error>({
-    queryKey: ['metrics', 'stats', input],
+    queryKey: ['metrics', 'stats', buildMetricsQueryKey(input)],
     queryFn: () => authorizedFetch<StatsMetrics>('/metrics/stats', input),
     ...options,
   })
@@ -232,7 +237,7 @@ function useExportMetricsQuery(
   const authorizedFetch = useAuthorizedFetch()
 
   return useQuery<ExportMetrics, Error>({
-    queryKey: ['metrics', 'export', input],
+    queryKey: ['metrics', 'export', buildMetricsQueryKey(input)],
     queryFn: () => authorizedFetch<ExportMetrics>('/metrics/export', input),
     ...options,
   })

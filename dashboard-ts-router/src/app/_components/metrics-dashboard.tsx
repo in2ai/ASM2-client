@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
+import { endOfDay, startOfDay } from 'date-fns'
 import { type DateRange } from 'react-day-picker'
 import { useLocale, useTranslations } from 'next-intl'
 
@@ -76,6 +77,18 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
   const [currentView, setCurrentView] = useState<DashboardView>('overview')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
+  const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
+    if (!range?.from || !range.to) {
+      setDateRange(undefined)
+      return
+    }
+
+    setDateRange({
+      from: startOfDay(new Date(range.from)),
+      to: endOfDay(new Date(range.to)),
+    })
+  }, [])
+
   const metricsInput = useMemo(
     () => ({
       startDate: dateRange?.from,
@@ -92,12 +105,12 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
     metricsQuery
   const { data: stats } = statsQuery
 
-  const handleRefresh = useCallback(() => {
-    void metricsQuery.refetch()
+  const handleRefresh = useCallback(async () => {
+    await metricsQuery.refetch()
   }, [metricsQuery])
 
-  const handleRetry = useCallback(() => {
-    void metricsQuery.refetch()
+  const handleRetry = useCallback(async () => {
+    await metricsQuery.refetch()
   }, [metricsQuery])
 
   const lastUpdated = useMemo(() => {
@@ -134,7 +147,7 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
         {!isPending && (
           <PersistentHeader
             dateRange={dateRange}
-            onDateRangeChange={setDateRange}
+            onDateRangeChange={handleDateRangeChange}
             lastUpdated={lastUpdated}
             stats={stats}
             isFetching={isFetching}
