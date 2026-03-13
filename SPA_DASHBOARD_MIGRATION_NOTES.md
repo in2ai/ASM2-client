@@ -11,6 +11,8 @@ The main goals implemented were:
 - request API tokens from the SPA for the backend API resource
 - support automatic assignment of a default Logto user role through a backend-managed M2M flow
 - deploy the SPA behind Caddy with `/api` reverse-proxied to FastAPI
+- stabilize the SPA runtime after migration by fixing provider wiring and date-filter query propagation
+- align the backend AI dependency stack with current LangChain and LangGraph-compatible package versions
 
 ## Important Changes Implemented
 
@@ -27,14 +29,20 @@ The main goals implemented were:
 - Sign-in redirects to `/callback`.
 - Sign-out redirects to `/sign-in`.
 - The callback route now performs a backend bootstrap request after sign-in.
+- The SPA root is wrapped with `TooltipProvider` so tooltip consumers do not crash at runtime.
+- The metrics date-range controls now propagate deterministically into React Query requests.
+- Date presets were normalized to inclusive ranges and custom date selections are normalized before querying.
 
 Key frontend files:
 
+- `dashboard-ts-router/src/main.tsx`
 - `dashboard-ts-router/src/lib/logto.ts`
 - `dashboard-ts-router/src/lib/api.ts`
 - `dashboard-ts-router/src/routes/sign-in.tsx`
 - `dashboard-ts-router/src/routes/callback.tsx`
 - `dashboard-ts-router/src/trpc/react.tsx`
+- `dashboard-ts-router/src/components/date-range-selector.tsx`
+- `dashboard-ts-router/src/app/_components/metrics-dashboard.tsx`
 - `dashboard-ts-router/vite.config.ts`
 
 ### Backend Auth and API Protection
@@ -84,6 +92,19 @@ Key deployment files:
 - `dashboard-ts-router/Dockerfile.caddy`
 - `dashboard-ts-router/Caddyfile`
 - `dashboard-ts-router/README.md`
+
+### AI Dependency Alignment
+
+- The backend AI package pins were upgraded to a coherent modern stack so Docker builds resolve cleanly again.
+- Backend code was updated to follow the current split package layout used by LangChain 1.x.
+- The backend Docker image builds successfully with the aligned dependency set.
+
+Key dependency files:
+
+- `backend/requirements.txt`
+- `requirements.txt`
+- `backend/graph/tools.py`
+- `backend/graph/model.py`
 
 ## Logto Configuration Model
 
@@ -184,6 +205,7 @@ BACKEND_URL=/api
 - `dashboard-ts-router/vite.config.ts` maps shared root env values into `VITE_*` variables for the browser bundle.
 - runtime frontend code reads the normalized `VITE_*` values.
 - in production SPA deployment, `BACKEND_URL` or `VITE_BACKEND_URL` should typically be `/api`.
+- locally, the SPA has also been run against `BACKEND_URL=http://localhost:8000` when the FastAPI app runs outside Docker.
 
 ## Required Logto Permissions and Roles
 
@@ -219,6 +241,15 @@ This means:
 
 If the M2M role assignment is not configured, the bootstrap endpoint returns a disabled state and the app continues without role auto-assignment.
 
+### Environment file formatting
+
+- backend env parsing assumes plain values, not shell-style quoted strings for URLs or integers.
+- values such as `QUESTDB_PORT="8812"` or `LOGTO_ENDPOINT="https://..."` caused runtime failures during local testing.
+- the problematic failures observed were:
+  - `int(...)` parsing errors for QuestDB port values
+  - invalid requests URL construction for OpenID discovery when `LOGTO_ENDPOINT` included literal quotes
+- when using Doppler-generated or copied env files, confirm the effective values consumed by the backend do not include extra quote characters.
+
 ### Internal network and VPN use
 
 - `LOGTO_ENDPOINT` must be a URL reachable by the browser and development machine.
@@ -230,6 +261,16 @@ If the M2M role assignment is not configured, the bootstrap endpoint returns a d
 - public users connect to the dashboard via Caddy
 - Caddy serves the SPA and proxies `/api/*` to the backend
 - backend host exposure was removed from the SPA compose override
+
+### Dashboard filter behavior
+
+- the metrics dashboard date filter is held in SPA state and passed into both dashboard and stats queries.
+- the request cache key now uses serialized query params instead of raw `Date` objects so filter changes always trigger the correct refetch.
+- preset filters now behave as inclusive windows:
+  - `Last 7 days`
+  - `Last 30 days`
+  - `Last 90 days`
+- custom date picks are normalized to day start and day end before reaching the query layer.
 
 ## Things To Check Before Running
 
@@ -258,6 +299,13 @@ If the M2M role assignment is not configured, the bootstrap endpoint returns a d
 
 - `LOGTO_ENDPOINT` matches the same tenant for SPA and backend
 - `LOGTO_API_RESOURCE` is exactly identical in frontend, backend, and Logto
+- if local browser auth works but backend auth fails immediately on discovery, inspect the effective backend value of `LOGTO_ENDPOINT` first
+
+## Validation Status
+
+- `dashboard-ts-router` production build succeeds after the date-filter and runtime fixes.
+- Backend Docker dependency resolution succeeds with the aligned LangChain package set.
+- The dashboard runtime no longer depends on missing tooltip provider context.
 - `BACKEND_URL` is correct for the selected runtime mode
 
 ### Local development
