@@ -1,8 +1,8 @@
-import { format } from 'date-fns'
+import { differenceInCalendarDays, endOfDay, format, isSameDay, startOfDay, subDays } from 'date-fns'
 import { enUS, es } from 'date-fns/locale'
 import { CalendarIcon, Check, X } from 'lucide-react'
-import { useState } from 'react'
-import { type DateRange } from 'react-day-picker'
+import { useEffect, useState } from 'react'
+import type {DateRange} from 'react-day-picker';
 
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -28,6 +28,16 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
   const [draftRange, setDraftRange] = useState<DateRange | undefined>(value)
   const [isOpen, setIsOpen] = useState(false)
 
+  useEffect(() => {
+    if (!isOpen) {
+      setDraftRange(value)
+    }
+  }, [isOpen, value])
+
+  const isAllSelected = value === undefined
+  const selectedPreset = presets.find((preset) => isPresetRange(value, preset))
+  const hasCustomRange = Boolean(value?.from && value.to && !selectedPreset)
+
   const handleOpenChange = (open: boolean) => {
     if (open) {
       setDraftRange(value)
@@ -36,9 +46,8 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
   }
 
   const handlePresetClick = (days: number) => {
-    const to = new Date()
-    const from = new Date()
-    from.setDate(from.getDate() - days)
+    const to = endOfDay(new Date())
+    const from = startOfDay(subDays(to, days - 1))
     onChange({ from, to })
   }
 
@@ -56,12 +65,12 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
     setIsOpen(false)
   }
 
-  const isDraftValid = draftRange?.from && draftRange?.to
+  const isDraftValid = draftRange?.from && draftRange.to
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button
-        variant={!value ? 'default' : 'outline'}
+        variant={isAllSelected ? 'default' : 'outline'}
         size="sm"
         onClick={handleClearFilter}
         className="min-h-11 text-xs sm:text-sm"
@@ -71,7 +80,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
       {presets.map((preset) => (
         <Button
           key={preset}
-          variant="outline"
+          variant={selectedPreset === preset ? 'default' : 'outline'}
           size="sm"
           onClick={() => handlePresetClick(preset)}
           className="min-h-11 text-xs sm:text-sm"
@@ -83,7 +92,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
-            variant="outline"
+            variant={hasCustomRange ? 'default' : 'outline'}
             size="sm"
             className={cn(
               'min-h-11 justify-start text-left text-xs font-normal sm:text-sm',
@@ -143,5 +152,18 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
         </PopoverContent>
       </Popover>
     </div>
+  )
+}
+
+function isPresetRange(range: DateRange | undefined, days: number): boolean {
+  if (!range?.from || !range.to) {
+    return false
+  }
+
+  const today = new Date()
+
+  return (
+    isSameDay(range.to, today) &&
+    differenceInCalendarDays(range.to, range.from) === days - 1
   )
 }
