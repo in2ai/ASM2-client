@@ -42,7 +42,7 @@ function DashboardRoute() {
     }
   }, [getIdTokenClaims, isAuthenticated])
 
-  if (isLoading || (isAuthenticated && !user)) {
+  if ((isLoading && !user) || (isAuthenticated && !user)) {
     return (
       <div className="mx-auto max-w-screen-2xl p-4 sm:p-6 lg:p-8">
         <LoadingState />

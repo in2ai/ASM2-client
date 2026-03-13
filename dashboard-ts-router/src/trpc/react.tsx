@@ -1,6 +1,5 @@
 import { useLogto } from '@logto/react'
-import { useQuery  } from '@tanstack/react-query'
-import type {UseQueryOptions} from '@tanstack/react-query';
+import { keepPreviousData, useQuery, type UseQueryOptions } from '@tanstack/react-query'
 
 import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 
@@ -213,6 +212,7 @@ function useMetricsGetQuery(
   return useQuery<DashboardMetrics, Error>({
     queryKey: ['metrics', 'dashboard', buildMetricsQueryKey(input)],
     queryFn: () => authorizedFetch<DashboardMetrics>('/metrics/dashboard', input),
+    placeholderData: keepPreviousData,
     ...options,
   })
 }
@@ -226,6 +226,7 @@ function useMetricsStatsQuery(
   return useQuery<StatsMetrics, Error>({
     queryKey: ['metrics', 'stats', buildMetricsQueryKey(input)],
     queryFn: () => authorizedFetch<StatsMetrics>('/metrics/stats', input),
+    placeholderData: keepPreviousData,
     ...options,
   })
 }

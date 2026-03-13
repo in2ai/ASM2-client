@@ -60,6 +60,8 @@
   "PersistentHeader": {
     "title": "Overview",
     "updating": "Updating",
+    "updatingOverlayTitle": "Updating metrics",
+    "updatingOverlayDescription": "Fetching fresh data for the current selection.",
     "updatedAt": "Updated {value}",
     "updatedNow": "Updated now",
     "records": "{count} records",

@@ -60,6 +60,8 @@
   "PersistentHeader": {
     "title": "Vista xeral",
     "updating": "Actualizando",
+    "updatingOverlayTitle": "Actualizando métricas",
+    "updatingOverlayDescription": "Estamos recuperando os datos novos para este filtro.",
     "updatedAt": "Actualizado {value}",
     "updatedNow": "Actualizado agora",
     "records": "{count} rexistros",

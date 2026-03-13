@@ -31,12 +31,17 @@ export function PersistentHeader({
 
   return (
     <div className="mb-6 flex flex-col gap-4 sm:mb-8">
-      <div className="bg-card/60 border-border/50 flex flex-col gap-4 rounded-2xl border p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div className="bg-card/60 border-border/50 relative flex flex-col gap-4 overflow-hidden rounded-2xl border p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        {isFetching ? (
+          <div className="absolute inset-x-0 top-0 h-1 overflow-hidden">
+            <div className="from-primary/20 via-primary to-primary/20 h-full w-1/3 animate-[dashboard-progress_1.4s_ease-in-out_infinite] rounded-full bg-linear-to-r" />
+          </div>
+        ) : null}
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold tracking-tight">{t('title')}</h2>
             {isFetching && (
-              <Badge variant="secondary" className="animate-pulse gap-1">
+              <Badge variant="secondary" className="animate-pulse gap-1 shadow-sm">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 {t('updating')}
               </Badge>
@@ -84,6 +89,8 @@ export function PersistentHeader({
           </div>
         </div>
       </div>
+
+      <style>{`@keyframes dashboard-progress { 0% { transform: translateX(-120%); } 100% { transform: translateX(420%); } }`}</style>
     </div>
   )
 }

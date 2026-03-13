@@ -1,5 +1,6 @@
-import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { endOfDay, startOfDay } from 'date-fns'
+import { Loader2 } from 'lucide-react'
 import { type DateRange } from 'react-day-picker'
 import { useLocale, useTranslations } from 'next-intl'
 
@@ -70,12 +71,102 @@ function renderMetricsView(
   )
 }
 
+function renderDashboardContent({
+  data,
+  errorCode,
+  errorMessages,
+  errorTitles,
+  handleRefresh,
+  handleRetry,
+  isError,
+  isPending,
+  isRefetching,
+  showUpdatingOverlay,
+  currentView,
+  headerT,
+}: {
+  data: MetricsResponse | undefined
+  errorCode: keyof typeof errorTitles
+  errorMessages: Record<keyof typeof errorTitles, string>
+  errorTitles: Record<string, string>
+  handleRefresh: () => Promise<void>
+  handleRetry: () => Promise<void>
+  isError: boolean
+  isPending: boolean
+  isRefetching: boolean
+  showUpdatingOverlay: boolean
+  currentView: DashboardView
+  headerT: ReturnType<typeof useTranslations>
+}) {
+  if (isPending) {
+    return <LoadingState />
+  }
+
+  if (isError) {
+    return (
+      <ErrorState
+        title={errorTitles[errorCode]}
+        message={errorMessages[errorCode]}
+        onRetry={handleRetry}
+        isRetrying={isRefetching}
+        showHomeButton={true}
+      />
+    )
+  }
+
+  if (!data || isEmptyData(data)) {
+    return (
+      <NoMetricsEmptyState
+        onRefresh={handleRefresh}
+        isRefreshing={isRefetching}
+      />
+    )
+  }
+
+  return (
+    <div className="relative">
+      <div
+        className={[
+          'animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500 transition-opacity',
+          showUpdatingOverlay ? 'opacity-45' : 'opacity-100',
+        ].join(' ')}
+      >
+        {renderMetricsView(currentView, data)}
+      </div>
+
+      {showUpdatingOverlay ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center rounded-3xl bg-background/35 px-4 pt-8 backdrop-blur-[2px] sm:pt-12"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="bg-card/95 border-border/60 flex max-w-sm items-center gap-3 rounded-2xl border px-4 py-3 text-sm shadow-xl backdrop-blur-md">
+            <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-xl">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+            <div className="space-y-0.5">
+              <p className="font-semibold tracking-tight">
+                {headerT('updatingOverlayTitle')}
+              </p>
+              <p className="text-muted-foreground text-xs sm:text-sm">
+                {headerT('updatingOverlayDescription')}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function MetricsDashboard({ user }: MetricsDashboardProps) {
   const locale = useLocale()
   const t = useTranslations('MetricsErrors')
+  const headerT = useTranslations('PersistentHeader')
 
   const [currentView, setCurrentView] = useState<DashboardView>('overview')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [showUpdatingOverlay, setShowUpdatingOverlay] = useState(false)
 
   const handleDateRangeChange = useCallback((range: DateRange | undefined) => {
     if (!range?.from || !range.to) {
@@ -141,6 +232,21 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
     unknown: t('messages.unknown'),
   } as const
 
+  useEffect(() => {
+    if (!isFetching || isPending) {
+      setShowUpdatingOverlay(false)
+      return
+    }
+
+    const timer = globalThis.setTimeout(() => {
+      setShowUpdatingOverlay(true)
+    }, 180)
+
+    return () => {
+      globalThis.clearTimeout(timer)
+    }
+  }, [isFetching, isPending])
+
   return (
     <AppLayout user={user} view={currentView} onViewChange={setCurrentView}>
       <div className="mx-auto max-w-screen-2xl p-4 sm:p-6 lg:p-8">
@@ -155,26 +261,20 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
           />
         )}
 
-        {isPending ? (
-          <LoadingState />
-        ) : isError ? (
-          <ErrorState
-            title={errorTitles[errorCode]}
-            message={errorMessages[errorCode]}
-            onRetry={isRecoverableError(error) ? handleRetry : undefined}
-            isRetrying={isRefetching}
-            showHomeButton={true}
-          />
-        ) : !data || isEmptyData(data) ? (
-          <NoMetricsEmptyState
-            onRefresh={handleRefresh}
-            isRefreshing={isRefetching}
-          />
-        ) : (
-          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500">
-            {renderMetricsView(currentView, data)}
-          </div>
-        )}
+        {renderDashboardContent({
+          data,
+          errorCode,
+          errorMessages,
+          errorTitles,
+          handleRefresh,
+          handleRetry: isRecoverableError(error) ? handleRetry : handleRefresh,
+          isError,
+          isPending,
+          isRefetching,
+          showUpdatingOverlay,
+          currentView,
+          headerT,
+        })}
       </div>
     </AppLayout>
   )
