@@ -1,101 +1,328 @@
-# 🔐 Logto Self-Hosted Configuration Guide
+# Logto Self-Hosted Setup For The SPA + FastAPI Architecture
 
-This guide details the steps to set up and configure a self-hosted instance of **Logto** for authentication within the ASM2 project.
+This guide documents the current Logto setup for ASM2 using:
 
----
+- `dashboard-ts-router` as a browser SPA
+- `backend/server.py` as the protected FastAPI API
+- an optional Logto machine-to-machine client for default role bootstrap
 
-## 🏗️ 1. Docker Compose Setup
+The old Next.js-only flow is no longer the primary architecture for the dashboard path.
 
-Our setup uses a multi-service Docker environment. The Logto services depend on a dedicated PostgreSQL instance.
+## 1. Architecture Overview
 
-### 📝 Environment Variables
+There are three separate Logto concepts in the current setup.
 
-Ensure the following variables are defined in your root `.env` file:
+### SPA application
+
+This is the browser app used by `dashboard-ts-router`.
+
+It is responsible for:
+
+- redirecting users to Logto sign-in
+- handling the `/callback` route after login
+- requesting access tokens for the backend API resource
+
+Relevant frontend files:
+
+- `dashboard-ts-router/src/lib/logto.ts`
+- `dashboard-ts-router/src/routes/sign-in.tsx`
+- `dashboard-ts-router/src/routes/callback.tsx`
+- `dashboard-ts-router/src/lib/api.ts`
+
+### Backend API resource
+
+This is the protected audience identifier used by FastAPI.
+
+It is responsible for:
+
+- audience validation in backend JWT checks
+- carrying API permissions such as `metrics:read` and `metrics:export`
+
+Relevant backend files:
+
+- `backend/src/config/logto_auth.py`
+- `backend/server.py`
+
+### Optional machine-to-machine application
+
+This is only needed if you want the backend to auto-assign a default Logto role after first sign-in.
+
+It is responsible for:
+
+- obtaining a management API token with client credentials
+- assigning the configured default role to a user through the Logto Management API
+
+Relevant backend files:
+
+- `backend/src/config/logto_management.py`
+- `backend/server.py`
+
+## 2. Self-Hosted Docker Setup
+
+The repository includes a self-hosted Logto service and a dedicated PostgreSQL database in `docker-compose.yml`.
+
+Current container mapping:
+
+- host `3011` -> Logto main endpoint `3001`
+- host `3002` -> Logto admin console `3002`
+
+Required root `.env` values for the Logto containers:
 
 ```env
-# Logto Database
 LOGTO_POSTGRES_PASSWORD=your_secure_password
-
-# Logto Endpoints
-LOGTO_ADMIN_ENDPOINT=http://localhost:3002
 LOGTO_ENDPOINT=http://localhost:3011
+LOGTO_ADMIN_ENDPOINT=http://localhost:3002
 ```
 
-### 🐳 Container Mapping
+Start the stack with:
 
-In the `docker-compose.yml`, the Logto main service is mapped as follows:
+```bash
+docker compose up -d logto logto-postgres
+```
 
-- **Host Port `3011`** → **Container Port `3001`**
-- **Host Port `3002`** → **Container Port `3002`** (Admin Console)
+Then open the admin console:
 
-> [!IMPORTANT]
-> The Logto main endpoint is set to port **3011** because our Dashboard runs on port **3001** on the host.
+- `http://localhost:3002`
 
----
+The first created user becomes an administrator.
 
-## 👤 2. Initial Administrator Creation
+## 3. Create The SPA Application
 
-Once you run `docker-compose up -d`:
+In Logto Admin Console:
 
-1.  **Navigate** to the Admin Console at [http://localhost:3002](http://localhost:3002).
-2.  **Create a User**: The first user you create will automatically be granted **Administrative** privileges.
+1. Go to `Applications`.
+2. Create a new application.
+3. Choose `Single page app`.
 
----
+Use the SPA app for `dashboard-ts-router`.
 
-## 📱 3. Application Configuration (Next.js)
+Recommended local settings:
 
-After entering the dashboard:
+- Redirect URI: `http://localhost:3001/callback`
+- Post sign-out redirect URI: `http://localhost:3001/sign-in`
+- Allowed origin: `http://localhost:3001`
 
-1.  Go to **Applications** in the sidebar.
-2.  Click **Create Application** and select the **Next.js** template.
-3.  **Client Credentials**: Logto will provide you with the following, which you must update in your `.env`:
-    - `LOGTO_APP_ID`
-    - `LOGTO_APP_SECRET`
-    - `LOGTO_COOKIE_SECRET`
+If you deploy the SPA behind Caddy or another hostname, add the production equivalents too.
 
-### 🔗 Callback URI (Critical Bug Fix)
+Example:
 
-There is a known issue in Logto where changing the default redirect URI behavior can fail. To ensure it works correctly:
+- Redirect URI: `https://your-dashboard-host/callback`
+- Post sign-out redirect URI: `https://your-dashboard-host/sign-in`
+- Allowed origin: `https://your-dashboard-host`
 
-- **Set Callback URI to**: `http://localhost:3001/callback`
+For the SPA path, the dashboard uses these frontend environment variables:
 
-> [!CHECK]
-> The project is already configured to handle this at `dashboard/src/app/callback/route.ts`.
+```env
+VITE_LOGTO_ENDPOINT=http://localhost:3011
+VITE_LOGTO_APP_ID=your_spa_app_id
+VITE_LOGTO_API_RESOURCE=https://asm2-api.company.internal
+```
 
----
+Or, if you prefer the shared root env naming used by this repo:
 
-## 🧪 4. Testing the Integration
+```env
+LOGTO_ENDPOINT=http://localhost:3011
+LOGTO_APP_ID=your_spa_app_id
+LOGTO_API_RESOURCE=https://asm2-api.company.internal
+```
 
-With the environment variables set, your application is ready to test:
+Notes:
 
-1.  Restart the dashboard: `docker compose restart dashboard`.
-2.  Open [http://localhost:3001](http://localhost:3001).
-3.  Click **Sign In**.
-4.  Initially, only **Username/Password** registration will be active.
+- `dashboard-ts-router/src/lib/logto.ts` reads the normalized `VITE_*` values.
+- `dashboard-ts-router/src/lib/api.ts` uses `/api` in production and `http://localhost:8000` in local dev when no explicit frontend backend URL is provided.
+- Unlike the old Next.js dashboard flow, the SPA does not need `LOGTO_APP_SECRET` or `LOGTO_COOKIE_SECRET` in browser code.
 
----
+## 4. Create The Backend API Resource
 
-## 🏢 5. Configuring Enterprise SSO
+In Logto Admin Console:
 
-To allow users to sign in with corporate accounts:
+1. Go to `API resources`.
+2. Create a resource for the FastAPI backend.
+3. Choose a stable resource identifier.
 
-1.  Go to the **Enterprise SSO** sidetab in the Logto Admin Console.
-2.  Click **Add enterprise connector**.
-3.  **Choose a Provider**: Select from Google Workspace, Microsoft Entra ID (OIDC/SAML), Okta, etc.
-4.  **Configuration**: Follow the provider's specific steps (uploading metadata or entering Client IDs).
-5.  **Activation**: Once saved, the SSO option will automatically appear on your sign-in page.
+Example identifiers:
 
----
+- `https://asm2-api.company.internal`
+- `https://api.asm2.local`
+- `urn:asm2:backend`
 
-## 🛠️ Technical Reference
+Important:
 
-| Item                 | Value / Path                          |
-| :------------------- | :------------------------------------ |
-| **Admin Console**    | `http://localhost:3002`               |
-| **Auth API**         | `http://localhost:3011`               |
-| **Callback Handler** | `dashboard/src/app/callback/route.ts` |
-| **Config Loader**    | `dashboard/src/lib/logto.ts`          |
+- this value is the API audience identifier
+- it must match exactly in Logto, the SPA token request, and backend validation
+- it is not the same thing as `/api` or a specific metrics route
 
----
+Create these permissions on the API resource:
 
-_Created for the ASM2 Development Team._
+- `metrics:read`
+- `metrics:export`
+
+The SPA currently requests both of these scopes in `dashboard-ts-router/src/lib/logto.ts`.
+
+Recommended role model:
+
+- `user` role should include `metrics:read`.
+- `admin` role should include `metrics:read` and `metrics:export`.
+
+Backend environment values:
+
+```env
+LOGTO_ENDPOINT=http://localhost:3011
+LOGTO_API_RESOURCE=https://asm2-api.company.internal
+CORS_ALLOW_ORIGINS=http://localhost:3001
+```
+
+FastAPI validation behavior:
+
+- fetches OpenID configuration from `${LOGTO_ENDPOINT}/oidc/.well-known/openid-configuration`
+- retrieves signing keys from Logto JWKS
+- validates `iss`, `aud`, `sub`, and token expiry
+- enforces route scopes through FastAPI dependencies
+
+Protected backend routes currently include:
+
+- `GET /metrics/dashboard` requires `metrics:read`
+- `GET /metrics/stats` requires `metrics:read`
+- `GET /metrics/export` requires `metrics:export`
+
+## 5. Optional Default Role Bootstrap
+
+If you want newly signed-in users to automatically receive a default Logto role, create a machine-to-machine application in Logto.
+
+In Logto Admin Console:
+
+1. Go to `Applications`.
+2. Create a `Machine-to-machine` application.
+3. Grant it access to the Logto Management API.
+
+For the backend bootstrap flow, configure:
+
+```env
+LOGTO_MANAGEMENT_APP_ID=your_m2m_app_id
+LOGTO_MANAGEMENT_APP_SECRET=your_m2m_app_secret
+LOGTO_MANAGEMENT_API_RESOURCE=https://default.logto.app/api
+LOGTO_DEFAULT_USER_ROLE_ID=your_default_role_id
+```
+
+Important:
+
+- `LOGTO_MANAGEMENT_API_RESOURCE` is not your backend API resource
+- use the default management API resource for Logto management access: `https://default.logto.app/api`
+- keep `LOGTO_API_RESOURCE` for your own FastAPI audience
+
+Bootstrap flow in this repo:
+
+1. User signs in through the SPA.
+2. Logto redirects to `dashboard-ts-router/src/routes/callback.tsx`.
+3. The SPA requests an API token for `LOGTO_API_RESOURCE`.
+4. The SPA calls `POST /auth/bootstrap` on the backend.
+5. The backend assigns the configured default role if missing.
+6. If Logto role assignment changed permissions, the SPA refreshes the API token.
+7. The SPA navigates to the requested page.
+
+If the management env vars are not configured, bootstrap is skipped and the app continues normally.
+
+## 6. Local Development Configuration
+
+### SPA running locally against local backend
+
+```env
+VITE_LOGTO_ENDPOINT=http://localhost:3011
+VITE_LOGTO_APP_ID=your_spa_app_id
+VITE_LOGTO_API_RESOURCE=https://asm2-api.company.internal
+VITE_BACKEND_URL=http://localhost:8000
+```
+
+Backend:
+
+```env
+LOGTO_ENDPOINT=http://localhost:3011
+LOGTO_API_RESOURCE=https://asm2-api.company.internal
+CORS_ALLOW_ORIGINS=http://localhost:3001
+```
+
+### SPA served behind Caddy in Docker
+
+In the SPA deployment override, the frontend uses `/api` and Caddy proxies it to the internal backend service.
+
+Relevant file:
+
+- `docker-compose.dashboard-spa.yml`
+
+In that mode:
+
+- browser connects to the SPA on port `3001`
+- SPA calls `/api/...`
+- Caddy forwards `/api/*` to `backend:8000`
+
+## 7. Environment Formatting Caveat
+
+Be careful with quoted env values.
+
+For backend runtime values such as URLs and integers, use plain values unless your loader explicitly strips quotes.
+
+Good:
+
+```env
+LOGTO_ENDPOINT=https://logto.example.com
+QUESTDB_PORT=8812
+```
+
+Problematic in this repo's backend runtime if the literal quotes are preserved:
+
+```env
+LOGTO_ENDPOINT="https://logto.example.com"
+QUESTDB_PORT="8812"
+```
+
+Quoted values previously caused:
+
+- OpenID discovery URL failures for `LOGTO_ENDPOINT`
+- integer parsing failures for `QUESTDB_PORT`
+
+If authentication suddenly fails with malformed discovery URLs, check the effective backend value of `LOGTO_ENDPOINT` first.
+
+## 8. Testing The Full Flow
+
+1. Start Logto and its PostgreSQL database.
+2. Start the backend.
+3. Start `dashboard-ts-router` or the SPA deployment stack.
+4. Open `http://localhost:3001`.
+5. Click `Sign In`.
+6. Complete authentication in Logto.
+7. Confirm the app returns to `/callback` and then back to `/`.
+8. Confirm the backend accepts the bearer token and metrics load.
+
+If default-role bootstrap is enabled:
+
+1. Sign in with a user that does not yet have the target role.
+2. Confirm `POST /auth/bootstrap` succeeds.
+3. Confirm the user receives the configured default role in Logto.
+4. Confirm a refreshed token includes the expected API scopes.
+
+## 9. Enterprise SSO
+
+To add enterprise identity providers:
+
+1. Open the Logto Admin Console.
+2. Go to `Enterprise SSO`.
+3. Add the desired connector.
+4. Follow the provider-specific setup for Google Workspace, Microsoft Entra ID, Okta, OIDC, or SAML.
+
+Once enabled, those sign-in methods appear automatically in the hosted Logto experience.
+
+## 10. Technical Reference
+
+| Item | Value / Path |
+| :--- | :--- |
+| Admin Console | `http://localhost:3002` |
+| Self-hosted Logto endpoint | `http://localhost:3011` |
+| SPA sign-in route | `dashboard-ts-router/src/routes/sign-in.tsx` |
+| SPA callback route | `dashboard-ts-router/src/routes/callback.tsx` |
+| SPA Logto config | `dashboard-ts-router/src/lib/logto.ts` |
+| SPA backend URL config | `dashboard-ts-router/src/lib/api.ts` |
+| Backend JWT validation | `backend/src/config/logto_auth.py` |
+| Backend bootstrap endpoint | `backend/server.py` |
+| Backend management API client | `backend/src/config/logto_management.py` |
+
+Created for the ASM2 Development Team.
