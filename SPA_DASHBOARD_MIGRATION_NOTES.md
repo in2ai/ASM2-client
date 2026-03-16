@@ -101,7 +101,8 @@ Key deployment files:
 
 Key dependency files:
 
-- `backend/requirements.txt`
+- `backend/pyproject.toml`
+- `backend/uv.lock`
 - `requirements.txt`
 - `backend/graph/tools.py`
 - `backend/graph/model.py`

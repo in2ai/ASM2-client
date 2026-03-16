@@ -262,6 +262,18 @@ pip install -r requirements.txt
 ./run.sh
 ```
 
+#### Backend FastAPI
+
+```bash
+cd backend
+
+# Crear el entorno del proyecto e instalar dependencias
+uv sync
+
+# Ejecutar el backend
+uv run uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
 #### Dashboard (Next.js)
 
 ```bash
@@ -278,7 +290,7 @@ El dashboard estará disponible en `http://localhost:3001`.
 
 ## Estructura del Proyecto
 
-```
+```text
 ASM2-client/
 ├── dashboard/              # Código fuente de la aplicación Next.js
 ├── src/                    # Código fuente del cliente Python
