@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from 'react'
 
 import { useLogto } from '@logto/react'
+import { Link } from '@tanstack/react-router'
 import {
   BarChart3,
   Building2,
   Loader2,
   LogOut,
   Menu,
+  MessageSquareText,
   Shield,
   User,
   X,
@@ -126,6 +128,19 @@ export function AppLayout({
                   collapsed={!sidebarOpen}
                 />
               ))}
+              <Button
+                asChild
+                variant="ghost"
+                className={cn(
+                  'text-muted-foreground hover:bg-primary/5 hover:text-foreground h-11 w-full justify-start gap-4 rounded-xl px-3 py-2 text-sm font-semibold',
+                  !sidebarOpen && 'justify-center px-0',
+                )}
+              >
+                <Link to="/chat">
+                  <MessageSquareText className="h-5 w-5 shrink-0" />
+                  {!sidebarOpen ? null : <span className="truncate tracking-tight">{t('chat')}</span>}
+                </Link>
+              </Button>
             </nav>
           </div>
         </aside>
@@ -226,7 +241,7 @@ function NavItem({
   )
 }
 
-function CompanyDisplay({ user }: Readonly<{ user: LogtoUser | null }>) {
+export function CompanyDisplay({ user }: Readonly<{ user: LogtoUser | null }>) {
   if (!user) {
     return null
   }
@@ -259,7 +274,7 @@ function getDisplayName(user: LogtoUser | null, fallbackName: string): string {
   return fallbackName
 }
 
-function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
+export function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
   const t = useTranslations('AppLayout')
   const { signOut } = useLogto()
   const [pending, setPending] = useState(false)

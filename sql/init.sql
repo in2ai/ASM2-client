@@ -52,3 +52,9 @@ CREATE TABLE IF NOT EXISTS credentials (
   expires_at TIMESTAMP,
   is_admin BOOLEAN
 ) timestamp(issued_at) PARTITION BY HOUR;
+
+CREATE TABLE IF NOT EXISTS source_preferences (
+  user_id SYMBOL,
+  selected_sources VARCHAR,
+  updated_at TIMESTAMP
+) timestamp(updated_at) PARTITION BY DAY;

@@ -1,9 +1,15 @@
+import json
+import logging
 from typing import List
 
-from googleapiclient.errors import HttpError
-from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from typing import List
 
-from src.config.config import GDRIVE_ROOT
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+from src.config.config import GDRIVE_ROOT, SCOPES
 from src.connectors.source import DataSource
 from src.connectors.vdb_file import GoogleDriveFile
 from src.utils.helpers import safe_execute
@@ -23,9 +29,12 @@ SUPPORTED_MIMES = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
 
+logger = logging.getLogger(__name__)
+
 
 class GoogleDriveSource(DataSource):
-    name = 'GDrive'
+    name = "drive"
+    display_name = "Google Drive"
 
 
     def __init__(self, raw_creds: str):
@@ -33,12 +42,50 @@ class GoogleDriveSource(DataSource):
 
 
     def login(self) -> bool:
-        # TODO: store service and credentials somehow (waiting for global auth)
-        self.service = None
-        self.credentials = None
+        try:
+            self.last_error = None
+            creds_dict = json.loads(self.raw_creds)
+            if not isinstance(creds_dict, dict):
+                self.last_error = "Stored Google Drive credentials are not a JSON object"
+                return False
 
-        self.update_authenticated_principals()
+            self.credentials = Credentials.from_authorized_user_info(creds_dict)
+            if self.credentials.expired and self.credentials.refresh_token:
+                self.credentials.refresh(Request())
 
+            self.service = build("drive", "v3", credentials=self.credentials)
+            about = self.service.about().get(fields="user(emailAddress)").execute()
+            user = about.get("user", {}) or {}
+            self.account_label = user.get("emailAddress")
+            self.update_authenticated_principals()
+            return True
+        except Exception as exc:
+            self.service = None
+            self.credentials = None
+            self.account_label = None
+            self.last_error = str(exc)
+            logger.warning("Google Drive login failed", exc_info=True)
+            return False
+
+    def refresh(self) -> bool:
+        if self.credentials is None or not self.credentials.refresh_token:
+            return False
+
+        try:
+            self.credentials.refresh(Request())
+            self.raw_creds = json.dumps(
+                {
+                    "token": self.credentials.token,
+                    "refresh_token": self.credentials.refresh_token,
+                    "token_uri": self.credentials.token_uri,
+                    "client_id": self.credentials.client_id,
+                    "client_secret": self.credentials.client_secret,
+                    "scopes": list(getattr(self.credentials, "scopes", []) or SCOPES),
+                }
+            )
+            return self.login()
+        except Exception:
+            return False
 
     def get_authenticated_principals(self) -> List[str]:
         result_tokens = set()
@@ -95,17 +142,15 @@ class GoogleDriveSource(DataSource):
         return sorted(result_tokens)
 
 
-    def has_access(self, file_id: str) -> bool:        
+    def has_access(self, file_id: str) -> bool:
         try:
             safe_execute(
                 self.service.files().get(fileId=file_id, fields="id", supportsAllDrives=True)
             )
 
             return True
-        
         except HttpError:
             return False
-        
 
     def get_file_principals(self, file_id: str):
         # List all file permissions
@@ -174,12 +219,8 @@ class GoogleDriveSource(DataSource):
                 acl_anyone = True
                 acl_principals.add("gdrive:anyone")
 
-        return {
-            "anyone": bool(acl_anyone),
-            "allowed": sorted(acl_principals)
-        }
-        
-        
+        return {"anyone": bool(acl_anyone), "allowed": sorted(acl_principals)}
+
     def list_files(self):
         # Discover all files via BFS
         queue = [self.root]
@@ -226,8 +267,8 @@ class GoogleDriveSource(DataSource):
                 "mimeType": f["mimeType"],
                 "modifiedTime": f["modifiedTime"],
                 "webViewLink": f.get("webViewLink"),
-                "permissions": self.get_file_principals(f["id"])
-            } 
+                "permissions": self.get_file_principals(f["id"]),
+            }
             for f in files
         ]
 

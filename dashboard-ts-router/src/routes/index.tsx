@@ -1,10 +1,9 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy } from 'react'
 
-import { useLogto } from '@logto/react'
 import { Navigate, createFileRoute } from '@tanstack/react-router'
 
 import { LoadingState } from '@/app/_components/metrics/loading-state'
-import { type LogtoUser, mapClaimsToUser } from '@/lib/auth'
+import { useAuthenticatedUser } from '@/hooks/use-authenticated-user'
 
 const MetricsDashboard = lazy(() =>
   import('@/app/_components/metrics-dashboard').then((module) => ({
@@ -15,32 +14,7 @@ const MetricsDashboard = lazy(() =>
 export const Route = createFileRoute('/')({ component: DashboardRoute })
 
 function DashboardRoute() {
-  const { isLoading, isAuthenticated, getIdTokenClaims } = useLogto()
-  const [user, setUser] = useState<LogtoUser | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    const loadUser = async () => {
-      if (!isAuthenticated) {
-        setUser(null)
-        return
-      }
-
-      const claims = await getIdTokenClaims()
-      if (!claims || cancelled) {
-        return
-      }
-
-      setUser(mapClaimsToUser(claims))
-    }
-
-    void loadUser()
-
-    return () => {
-      cancelled = true
-    }
-  }, [getIdTokenClaims, isAuthenticated])
+  const { isLoading, isAuthenticated, user } = useAuthenticatedUser()
 
   if ((isLoading && !user) || (isAuthenticated && !user)) {
     return (

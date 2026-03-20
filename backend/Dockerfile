@@ -27,10 +27,11 @@ ENV UV_LINK_MODE=copy
 
 WORKDIR /app
 
-# Install uv and sync locked dependencies
+# Install uv and sync backend dependencies during image build
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /bin/
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --no-dev && \
+RUN mkdir -p /app/secrets && \
+    uv sync --no-dev && \
     mkdir -p /app/models/stanza /app/models/nltk && \
     uv run python -c "import stanza; \
         stanza.download('es', package='ancora', processors='tokenize,mwt,pos,lemma'); \
