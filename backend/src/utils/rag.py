@@ -90,7 +90,7 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
     lang_code = detect_language(query)
 
     # Perform hybrid search
-    search_results = hybrid_search(vectordb, query, k, 25)
+    search_results = hybrid_search(vectordb, query, k, 25, sources)
 
     # Filter by permissions
     allowed_chunks = []
@@ -174,7 +174,7 @@ def prepare_rag_context(query, pool, vectordb, reranker, sources: Dict[str, Data
     insert_metric(pool, Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(query))
 
     with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
-        search_results = hybrid_search(vectordb, query, k, 25)
+        search_results = hybrid_search(vectordb, query, k, 25, sources)
 
         for f in search_results:
             file_id = f.metadata["id"]

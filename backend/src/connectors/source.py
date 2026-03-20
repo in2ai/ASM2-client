@@ -6,10 +6,15 @@ from src.connectors.vdb_file import VDBFile
 
 
 class DataSource:
+    display_name = ""
+
     def __init__(self, name: str, raw_creds: str, root: str):
         self.name = name
         self.raw_creds = raw_creds
         self.root = root
+        self.account_label = None
+        self.authenticated_principals = []
+        self.last_error = None
 
 
     def login(self) -> bool:

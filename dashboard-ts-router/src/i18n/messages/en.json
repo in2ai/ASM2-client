@@ -15,6 +15,7 @@
     "closeSidebarMenu": "Close sidebar",
     "closeNavigationMenu": "Close navigation menu",
     "openNavigationMenu": "Open navigation menu",
+    "chat": "Chat",
     "title": "Metrics Dashboard",
     "live": "Live",
     "realTimeAnalysis": "Real-time analysis",
@@ -246,6 +247,74 @@
       "noData": "Could not retrieve data to export",
       "failed": "Export error: {message}",
       "generic": "Could not export data. Please try again."
+    }
+  },
+  "ChatPage": {
+    "shellTitle": "Enterprise chat",
+    "shellSubtitle": "Secure conversations connected to the ASM2 backend",
+    "shell": {
+      "dashboard": "Dashboard",
+      "openSidebar": "Open conversations",
+      "closeSidebar": "Close conversations"
+    },
+    "sidebar": {
+      "newChat": "New conversation",
+      "emptyTitle": "No conversations yet",
+      "emptyDescription": "Start a conversation and your recent chats will appear here."
+    },
+    "conversation": {
+      "newChatTitle": "New conversation"
+    },
+    "empty": {
+      "title": "Ask your first question",
+      "description": "Choose an existing conversation or start a new one to chat with the assistant.",
+      "gatedTitle": "Connect and select at least one source",
+      "gatedDescription": "Open the sources panel to connect Google Drive before starting the conversation."
+    },
+    "composer": {
+      "placeholder": "Ask a question about your documents, processes, or data...",
+      "disabledHint": "Chat stays disabled until at least one connected source is selected for retrieval."
+    },
+    "messages": {
+      "assistant": "Assistant",
+      "sending": "Generating response...",
+      "user": "You"
+    },
+    "errors": {
+      "title": "Unable to load chat",
+      "loadFailed": "The chat workspace could not be loaded. Please try again.",
+      "sendFailed": "Your message could not be sent. Please try again."
+    },
+    "sources": {
+      "openPanel": "Sources",
+      "title": "Sources and indexing",
+      "description": "Connect Google Drive, choose whether chat retrieval should use it, and reindex documents when needed.",
+      "connected": "Connected",
+      "connectDrive": "Connect Google Drive",
+      "disconnect": "Disconnect",
+      "notConfigured": "This provider is not configured on the backend yet.",
+      "googleDriveHelp": "The browser starts Google OAuth, then the returned authorization code is sent to the backend and stored there.",
+      "selectForChat": "Use this source for chat retrieval",
+      "stepsTitle": "Connection flow",
+      "stepsDescription": "Follow the same pattern each time you connect Google Drive.",
+      "steps": {
+        "connect": "Click the Google Drive connect button in this panel.",
+        "authorize": "Sign in to Google and approve the requested Drive access.",
+        "select": "Return here and keep Google Drive selected for retrieval.",
+        "reindex": "Reindex after connecting so the assistant can search the latest files."
+      },
+      "callbackFailedTitle": "Google Drive connection failed",
+      "callbackCancelled": "Google Drive authorization was cancelled or failed.",
+      "callbackMissingCode": "Missing Google Drive authorization code.",
+      "callbackInvalidState": "Google Drive authorization state is invalid or expired.",
+      "callbackExchangeFailed": "Unable to complete Google Drive connection.",
+      "reindexTitle": "Reindex documents",
+      "reindexDescription": "Refresh the searchable document index after connecting or changing providers.",
+      "reindex": "Start reindex",
+      "reindexing": "Reindexing...",
+      "providers": {
+        "drive": { "description": "Connect your Google Drive files so the assistant can retrieve from them." }
+      }
     }
   },
   "SignInPage": {

@@ -1,27 +1,40 @@
 import asyncio
-import os
+import json
 import logging
+import os
 import requests
 
 from contextlib import asynccontextmanager
-from datetime import date, datetime
-from typing import Annotated
+from datetime import date, datetime, timedelta, timezone
+from urllib.parse import urlparse
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from google_auth_oauthlib.flow import Flow
+
+from src.config.config import (
+    CLIENT_SECRET_FILE,
+    SCOPES,
+)
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
+    disconnect_source,
     get_authenticated_admin_sources,
     get_authenticated_sources,
     get_credentials_to_refresh,
+    get_selected_authenticated_sources,
+    get_selected_sources,
+    normalize_source_key,
+    set_selected_sources,
 )
 from src.config.logto_management import ensure_default_role_assigned
 from src.config.logto_auth import AuthInfo, require_admin, require_auth, require_scopes
 from src.connectors.source import DataSource
-from src.config.sources import SOURCES
+from src.config.sources import SOURCE_LABELS, SOURCES
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
 
 from src.utils.helpers import periodic_task
@@ -50,6 +63,7 @@ from src.metrics.dashboard_queries import (
     top_k_search_terms,
     top_k_topics,
 )
+from src.chat.store import ChatNotFoundError, ChatStore
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
 
@@ -75,6 +89,11 @@ async def lifespan(app: FastAPI):
     app.state.vectorstore = get_vectordb()
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
+    chat_db_path = os.getenv(
+        "CHAT_DB_PATH", os.path.join(os.path.dirname(__file__), "chat_history.sqlite3")
+    )
+    app.state.chat_store = ChatStore(chat_db_path)
+    app.state.source_reindex_jobs = {}
 
     # Async periodic jobs
     jobs = [
@@ -286,6 +305,87 @@ class AuthBootstrapResponseModel(BaseModel):
     refresh_required: bool
 
 
+class ChatMessageModel(BaseModel):
+    id: str
+    chat_id: str
+    role: str
+    content: str
+    created_at: str
+    status: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class ChatSummaryModel(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+    last_message_preview: str | None = None
+
+
+class ChatDetailModel(ChatSummaryModel):
+    messages: list[ChatMessageModel]
+
+
+class CreateChatRequestModel(BaseModel):
+    title: str | None = None
+
+
+class SendMessageRequestModel(BaseModel):
+    content: str
+
+
+class SendMessageResultModel(BaseModel):
+    chat: ChatDetailModel
+    user_message: ChatMessageModel
+    assistant_message: ChatMessageModel
+    detected_lang: str
+
+
+class SourceProviderStatusModel(BaseModel):
+    key: str
+    label: str
+    configured: bool
+    connected: bool
+    selected: bool
+    auth_mode: str
+    account_label: str | None = None
+    oauth_client_id: str | None = None
+
+
+class ReindexStatusModel(BaseModel):
+    in_progress: bool
+    last_started_at: str | None = None
+    last_finished_at: str | None = None
+    error: str | None = None
+
+
+class SourcesStatusModel(BaseModel):
+    providers: list[SourceProviderStatusModel]
+    connected_sources: list[str]
+    selected_sources: list[str]
+    can_chat: bool
+    reindex: ReindexStatusModel
+
+
+class SourceSelectionRequestModel(BaseModel):
+    selected_sources: list[str]
+
+
+class SourceConnectCompleteRequestModel(BaseModel):
+    code: str | None = None
+    redirect_uri: str | None = None
+
+
+class SourceReindexRequestModel(BaseModel):
+    sources: list[str] | None = None
+
+
+class SourceOperationResultModel(BaseModel):
+    success: bool
+    message: str
+
+
 MetricsReadAuth = Annotated[AuthInfo, Depends(require_scopes(["metrics:read"]))]
 MetricsExportAuth = Annotated[AuthInfo, Depends(require_scopes(["metrics:export"]))]
 AuthenticatedAuth = Annotated[AuthInfo, Depends(require_auth())]
@@ -331,6 +431,266 @@ def _fetch_shared_metrics_data(
         "system_health": system_health,
         "avg_docs_per_query": avg_docs_per_query,
     }
+
+
+def _record_user_activity(questdb_pool) -> None:
+    try:
+        register_user_activity(questdb_pool)
+    except Exception:
+        logger.warning("Failed to record user activity", exc_info=True)
+
+
+def _record_token_usage_metrics(questdb_pool, messages: list[Any]) -> None:
+    try:
+        for msg in messages:
+            if isinstance(msg, AIMessage) and msg.usage_metadata:
+                usage = msg.usage_metadata
+                insert_metric(
+                    questdb_pool,
+                    Metrics.NUM_LLM_TOKENS_IN.value,
+                    usage.get("input_tokens", 0),
+                )
+                insert_metric(
+                    questdb_pool,
+                    Metrics.NUM_LLM_TOKENS_OUT.value,
+                    usage.get("output_tokens", 0),
+                )
+    except Exception:
+        logger.warning("Failed to record token usage metrics", exc_info=True)
+
+
+def _provider_auth_mode(provider: str) -> str:
+    return {"drive": "authorization_code"}[provider]
+
+
+def _get_drive_client_config() -> dict[str, Any] | None:
+    if not os.path.isfile(CLIENT_SECRET_FILE):
+        return None
+
+    try:
+        with open(CLIENT_SECRET_FILE, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    for client_type in ("web", "installed"):
+        client_config = payload.get(client_type)
+        if not isinstance(client_config, dict):
+            continue
+        if client_config.get("client_id") and client_config.get("client_secret"):
+            return {client_type: client_config}
+
+    return None
+
+
+def _get_drive_oauth_client_id() -> str | None:
+    client_config = _get_drive_client_config()
+    if not client_config:
+        return None
+
+    client_type = next(iter(client_config))
+    client_id = client_config[client_type].get("client_id")
+    return client_id if isinstance(client_id, str) and client_id else None
+
+
+def _build_drive_flow(redirect_uri: str) -> Flow:
+    client_config = _get_drive_client_config()
+    if not client_config:
+        raise HTTPException(
+            status_code=409,
+            detail="Google Drive OAuth is not configured on the backend",
+        )
+
+    flow = Flow.from_client_config(client_config, scopes=SCOPES)
+    flow.redirect_uri = redirect_uri
+    return flow
+
+
+def _provider_is_configured(provider: str) -> bool:
+    if provider == "drive":
+        return _get_drive_client_config() is not None
+    return False
+
+
+def _validate_provider(provider: str) -> str:
+    normalized = normalize_source_key(provider)
+    if normalized not in SOURCES:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+    return normalized
+
+
+def _validate_redirect_uri(redirect_uri: str | None) -> str:
+    if not redirect_uri:
+        raise HTTPException(status_code=422, detail="redirect_uri is required")
+
+    parsed = urlparse(redirect_uri)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    if origin not in cors_allow_origins:
+        raise HTTPException(
+            status_code=400, detail="redirect_uri origin is not allowed"
+        )
+    return redirect_uri
+
+
+def _serialize_drive_credentials(
+    credentials,
+) -> tuple[str, datetime | None, datetime | None]:
+    expires_at = credentials.expiry
+    needs_refresh_at = (
+        expires_at - timedelta(minutes=5) if expires_at is not None else None
+    )
+    serialized = json.dumps(
+        {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": list(getattr(credentials, "scopes", []) or SCOPES),
+        }
+    )
+    return serialized, needs_refresh_at, expires_at
+
+
+def _build_sources_status(auth: AuthInfo) -> SourcesStatusModel:
+    questdb_pool = app.state.questdb_pool
+    all_connected = get_authenticated_sources(questdb_pool, auth.sub)
+    selected = get_selected_sources(questdb_pool, auth.sub)
+    connected = sorted(all_connected.keys())
+    selected_sources = sorted(
+        source for source in (selected or connected) if source in set(connected)
+    )
+    selected_set = set(selected_sources)
+    connected_set = set(connected)
+
+    providers = []
+    for provider in sorted(SOURCES):
+        source = all_connected.get(provider)
+        providers.append(
+            SourceProviderStatusModel(
+                key=provider,
+                label=SOURCE_LABELS.get(provider, provider.title()),
+                configured=_provider_is_configured(provider),
+                connected=provider in connected_set,
+                selected=provider in selected_set,
+                auth_mode=_provider_auth_mode(provider),
+                account_label=getattr(source, "account_label", None),
+                oauth_client_id=_get_drive_oauth_client_id()
+                if provider == "drive"
+                else None,
+            )
+        )
+
+    job = app.state.source_reindex_jobs.get(auth.sub, {})
+    return SourcesStatusModel(
+        providers=providers,
+        connected_sources=connected,
+        selected_sources=selected_sources,
+        can_chat=bool(selected_sources),
+        reindex=ReindexStatusModel(
+            in_progress=bool(job.get("in_progress")),
+            last_started_at=job.get("last_started_at"),
+            last_finished_at=job.get("last_finished_at"),
+            error=job.get("error"),
+        ),
+    )
+
+
+def _mark_source_selected(questdb_pool, user_id: str, provider: str) -> None:
+    existing = get_selected_sources(questdb_pool, user_id)
+    if existing is None:
+        current = set(get_authenticated_sources(questdb_pool, user_id).keys())
+    else:
+        current = set(existing)
+    current.add(provider)
+    set_selected_sources(questdb_pool, user_id, sorted(current))
+
+
+def _run_user_reindex(user_id: str, source_keys: list[str] | None = None) -> None:
+    status = app.state.source_reindex_jobs.setdefault(user_id, {})
+    status.update(
+        {
+            "in_progress": True,
+            "error": None,
+            "last_started_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    try:
+        questdb_pool = app.state.questdb_pool
+        authenticated = get_selected_authenticated_sources(questdb_pool, user_id)
+        if source_keys:
+            allowed = set(source_keys)
+            authenticated = {
+                key: source for key, source in authenticated.items() if key in allowed
+            }
+
+        if not authenticated:
+            raise RuntimeError("No connected sources available to reindex")
+
+        build_vectordb_from_sources(list(authenticated.values()))
+        status["last_finished_at"] = datetime.now(timezone.utc).isoformat()
+    except Exception as exc:
+        logger.exception("Source reindex failed for %s", user_id)
+        status["error"] = str(exc)
+        status["last_finished_at"] = datetime.now(timezone.utc).isoformat()
+    finally:
+        status["in_progress"] = False
+
+
+async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, str]:
+    questdb_pool = app.state.questdb_pool
+    sources = get_selected_authenticated_sources(questdb_pool, auth.sub)
+    if not sources:
+        raise HTTPException(
+            status_code=409,
+            detail="Connect and select at least one source before chatting",
+        )
+
+    _record_user_activity(questdb_pool)
+
+    config = {
+        "configurable": {
+            "thread_id": chat_id,
+            "vectorstore": app.state.vectorstore,
+            "reranker": app.state.reranker,
+            "questdb_pool": questdb_pool,
+            "sources": sources,
+        }
+    }
+
+    with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
+        try:
+            result = await app.state.graph.ainvoke(
+                {"messages": [HumanMessage(content=query)]}, config
+            )
+        except Exception:
+            logger.exception("Graph invocation failed")
+            raise HTTPException(
+                status_code=500, detail="Internal error processing your request"
+            )
+
+    messages = result.get("messages") or []
+    if not messages:
+        raise HTTPException(status_code=500, detail="No response generated")
+
+    _record_token_usage_metrics(questdb_pool, messages)
+    return {
+        "answer": str(messages[-1].content),
+        "detected_lang": str(result.get("detected_lang", "es")),
+    }
+
+
+def _get_chat_or_404(
+    chat_store: ChatStore, user_id: str, chat_id: str
+) -> dict[str, Any]:
+    chat = chat_store.get_chat(user_id, chat_id)
+    if chat is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return chat
 
 
 @app.get("/metrics/dashboard", response_model=DashboardMetricsResponseModel)
@@ -489,7 +849,11 @@ def refresh_tokens():
             logging.info("Found %s tokens to refresh", len(credentials))
 
             for user_id, s, creds, is_admin in credentials:
-                source: DataSource = SOURCES[s](creds)
+                provider = normalize_source_key(s)
+                if provider not in SOURCES:
+                    continue
+
+                source: DataSource = SOURCES[provider](creds)
 
                 if not source.login() or not source.refresh():
                     continue  # Invalid source
@@ -599,8 +963,7 @@ async def is_vdb_update_active(auth: AdminAuth):
 @app.get("/login-source", status_code=200)
 async def login_source(auth: AuthenticatedAuth, source_token: str, source: str):
     # Check source name
-    if source not in SOURCES:
-        raise HTTPException(500, detail=f"Source {source} does not exist")
+    source = _validate_provider(source)
 
     source_instance: DataSource = SOURCES[source](source_token)
 
@@ -613,68 +976,209 @@ async def login_source(auth: AuthenticatedAuth, source_token: str, source: str):
     is_admin = auth.role == "admin"
 
     add_credentials(questdb_pool, user_id, source, source_token, is_admin)
+    _mark_source_selected(questdb_pool, user_id, source)
+
+
+@app.get("/sources/status", response_model=SourcesStatusModel)
+async def get_sources_status(auth: AuthenticatedAuth):
+    return _build_sources_status(auth)
+
+
+@app.put("/sources/selection", response_model=SourcesStatusModel)
+async def update_sources_selection(
+    auth: AuthenticatedAuth, payload: SourceSelectionRequestModel
+):
+    questdb_pool = app.state.questdb_pool
+    connected = set(get_authenticated_sources(questdb_pool, auth.sub).keys())
+    requested = {_validate_provider(source) for source in payload.selected_sources}
+    invalid = requested - connected
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot select disconnected sources: {', '.join(sorted(invalid))}",
+        )
+
+    set_selected_sources(questdb_pool, auth.sub, sorted(requested))
+    return _build_sources_status(auth)
+
+
+@app.post("/sources/{provider}/connect", response_model=SourceOperationResultModel)
+async def complete_source_connection(
+    auth: AuthenticatedAuth,
+    provider: str,
+    payload: SourceConnectCompleteRequestModel,
+):
+    provider = _validate_provider(provider)
+    questdb_pool = app.state.questdb_pool
+    is_admin = auth.role == "admin"
+
+    if provider == "drive":
+        if not payload.code or not payload.redirect_uri:
+            raise HTTPException(
+                status_code=422, detail="code and redirect_uri are required"
+            )
+
+        redirect_uri = _validate_redirect_uri(payload.redirect_uri)
+        flow = _build_drive_flow(redirect_uri)
+
+        try:
+            flow.fetch_token(code=payload.code)
+        except Exception as exc:
+            logger.warning("Google Drive OAuth exchange failed", exc_info=True)
+            raise HTTPException(
+                status_code=400, detail="Google Drive authorization exchange failed"
+            ) from exc
+
+        serialized, needs_refresh_at, expires_at = _serialize_drive_credentials(
+            flow.credentials
+        )
+        validation_source: DataSource = SOURCES[provider](serialized)
+        if not validation_source.login():
+            detail = getattr(validation_source, "last_error", None)
+            if detail:
+                logger.warning(
+                    "Google Drive validation failed after OAuth exchange: %s", detail
+                )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    detail
+                    or "Google Drive connected, but validating Drive access failed. "
+                    "Check that the Google Drive API is enabled in Google Cloud."
+                ),
+            )
+
+        add_credentials(
+            questdb_pool,
+            auth.sub,
+            provider,
+            serialized,
+            is_admin,
+            needs_refresh_at=needs_refresh_at,
+            expires_at=expires_at,
+        )
+        _mark_source_selected(questdb_pool, auth.sub, provider)
+        return {"success": True, "message": "Google Drive connected"}
+
+    raise HTTPException(status_code=404, detail=f"Provider {provider} is not available")
+
+
+@app.post("/sources/{provider}/disconnect", response_model=SourcesStatusModel)
+async def disconnect_provider(auth: AuthenticatedAuth, provider: str):
+    provider = _validate_provider(provider)
+    questdb_pool = app.state.questdb_pool
+    disconnect_source(questdb_pool, auth.sub, provider, auth.role == "admin")
+    existing = get_selected_sources(questdb_pool, auth.sub)
+    if existing is None:
+        selected = [
+            source
+            for source in get_authenticated_sources(questdb_pool, auth.sub).keys()
+            if source != provider
+        ]
+    else:
+        selected = [source for source in existing if source != provider]
+    set_selected_sources(questdb_pool, auth.sub, selected)
+    return _build_sources_status(auth)
+
+
+@app.post("/sources/reindex", response_model=SourcesStatusModel)
+async def reindex_sources(
+    auth: AuthenticatedAuth, payload: SourceReindexRequestModel | None = None
+):
+    source_keys = None
+    if payload and payload.sources:
+        source_keys = [_validate_provider(source) for source in payload.sources]
+
+    job = app.state.source_reindex_jobs.get(auth.sub, {})
+    if job.get("in_progress"):
+        raise HTTPException(
+            status_code=409, detail="A reindex job is already in progress"
+        )
+
+    asyncio.create_task(asyncio.to_thread(_run_user_reindex, auth.sub, source_keys))
+    return _build_sources_status(auth)
+
+
+@app.get("/chats", response_model=list[ChatSummaryModel])
+async def list_chats(auth: AuthenticatedAuth):
+    chat_store: ChatStore = app.state.chat_store
+    return chat_store.list_chats(auth.sub)
+
+
+@app.post("/chats", response_model=ChatDetailModel)
+async def create_chat(auth: AuthenticatedAuth, payload: CreateChatRequestModel):
+    chat_store: ChatStore = app.state.chat_store
+    return chat_store.create_chat(auth.sub, title=payload.title)
+
+
+@app.get("/chats/{chat_id}", response_model=ChatDetailModel)
+async def get_chat(auth: AuthenticatedAuth, chat_id: str):
+    chat_store: ChatStore = app.state.chat_store
+    return _get_chat_or_404(chat_store, auth.sub, chat_id)
+
+
+@app.post("/chats/{chat_id}/messages", response_model=SendMessageResultModel)
+async def send_chat_message(
+    auth: AuthenticatedAuth,
+    chat_id: str,
+    payload: SendMessageRequestModel,
+):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="content must not be empty")
+
+    chat_store: ChatStore = app.state.chat_store
+    _get_chat_or_404(chat_store, auth.sub, chat_id)
+
+    try:
+        user_message = chat_store.append_message(
+            auth.sub,
+            chat_id,
+            "user",
+            content,
+            status="sent",
+        )
+    except ChatNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Chat not found") from exc
+
+    result = await _run_chat_turn(auth, chat_id, content)
+
+    assistant_message = chat_store.append_message(
+        auth.sub,
+        chat_id,
+        "assistant",
+        result["answer"],
+        status="complete",
+        metadata={"detected_lang": result["detected_lang"]},
+    )
+    chat = _get_chat_or_404(chat_store, auth.sub, chat_id)
+
+    return {
+        "chat": chat,
+        "user_message": user_message,
+        "assistant_message": assistant_message,
+        "detected_lang": result["detected_lang"],
+    }
 
 
 @app.get("/chat")
 async def chat(auth: AuthenticatedAuth, query: str, chat_id: str):
-    vectorstore = app.state.vectorstore
-    reranker = app.state.reranker
+    content = query.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="query must not be empty")
 
-    questdb_pool = app.state.questdb_pool
-    sources = get_authenticated_sources(questdb_pool, auth.sub)
+    chat_store: ChatStore = app.state.chat_store
+    chat_store.ensure_chat(auth.sub, chat_id)
+    chat_store.append_message(auth.sub, chat_id, "user", content, status="sent")
 
-    try:
-        register_user_activity(questdb_pool)
-    except Exception:
-        logger.warning("Failed to record user activity", exc_info=True)
+    result = await _run_chat_turn(auth, chat_id, content)
+    chat_store.append_message(
+        auth.sub,
+        chat_id,
+        "assistant",
+        result["answer"],
+        status="complete",
+        metadata={"detected_lang": result["detected_lang"]},
+    )
 
-    config = {
-        "configurable": {
-            "thread_id": chat_id,
-            "vectorstore": vectorstore,
-            "reranker": reranker,
-            "questdb_pool": questdb_pool,
-            "sources": sources,
-        }
-    }
-
-    with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
-        try:
-            result = await app.state.graph.ainvoke(
-                {"messages": [HumanMessage(content=query)]}, config
-            )
-
-        except Exception:
-            logger.exception("Graph invocation failed")
-            raise HTTPException(
-                status_code=500, detail="Internal error processing your request"
-            )
-
-    messages = result.get("messages") or []
-
-    if not messages:
-        raise HTTPException(status_code=500, detail="No response generated")
-
-    answer = messages[-1].content
-    detected_lang = result.get("detected_lang", "es")
-
-    # Extract token usage from AIMessages
-    try:
-        for msg in result["messages"]:
-            if isinstance(msg, AIMessage) and msg.usage_metadata:
-                usage = msg.usage_metadata
-                insert_metric(
-                    questdb_pool,
-                    Metrics.NUM_LLM_TOKENS_IN.value,
-                    usage.get("input_tokens", 0),
-                )
-                insert_metric(
-                    questdb_pool,
-                    Metrics.NUM_LLM_TOKENS_OUT.value,
-                    usage.get("output_tokens", 0),
-                )
-
-    except Exception:
-        logger.warning("Failed to record token usage metrics", exc_info=True)
-
-    return {"answer": answer, "detected_lang": detected_lang}
+    return {"answer": result["answer"], "detected_lang": result["detected_lang"]}

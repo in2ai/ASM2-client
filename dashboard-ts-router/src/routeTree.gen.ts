@@ -10,12 +10,19 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as ChatRouteImport } from './routes/chat'
 import { Route as CallbackRouteImport } from './routes/callback'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ChatProviderCallbackRouteImport } from './routes/chat.provider-callback'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CallbackRoute = CallbackRouteImport.update({
@@ -28,34 +35,57 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChatProviderCallbackRoute = ChatProviderCallbackRouteImport.update({
+  id: '/provider-callback',
+  path: '/provider-callback',
+  getParentRoute: () => ChatRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/chat': typeof ChatRouteWithChildren
   '/sign-in': typeof SignInRoute
+  '/chat/provider-callback': typeof ChatProviderCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/chat': typeof ChatRouteWithChildren
   '/sign-in': typeof SignInRoute
+  '/chat/provider-callback': typeof ChatProviderCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/callback': typeof CallbackRoute
+  '/chat': typeof ChatRouteWithChildren
   '/sign-in': typeof SignInRoute
+  '/chat/provider-callback': typeof ChatProviderCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/callback' | '/sign-in'
+  fullPaths:
+    | '/'
+    | '/callback'
+    | '/chat'
+    | '/sign-in'
+    | '/chat/provider-callback'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/callback' | '/sign-in'
-  id: '__root__' | '/' | '/callback' | '/sign-in'
+  to: '/' | '/callback' | '/chat' | '/sign-in' | '/chat/provider-callback'
+  id:
+    | '__root__'
+    | '/'
+    | '/callback'
+    | '/chat'
+    | '/sign-in'
+    | '/chat/provider-callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CallbackRoute: typeof CallbackRoute
+  ChatRoute: typeof ChatRouteWithChildren
   SignInRoute: typeof SignInRoute
 }
 
@@ -66,6 +96,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/callback': {
@@ -82,12 +119,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/chat/provider-callback': {
+      id: '/chat/provider-callback'
+      path: '/provider-callback'
+      fullPath: '/chat/provider-callback'
+      preLoaderRoute: typeof ChatProviderCallbackRouteImport
+      parentRoute: typeof ChatRoute
+    }
   }
 }
+
+interface ChatRouteChildren {
+  ChatProviderCallbackRoute: typeof ChatProviderCallbackRoute
+}
+
+const ChatRouteChildren: ChatRouteChildren = {
+  ChatProviderCallbackRoute: ChatProviderCallbackRoute,
+}
+
+const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CallbackRoute: CallbackRoute,
+  ChatRoute: ChatRouteWithChildren,
   SignInRoute: SignInRoute,
 }
 export const routeTree = rootRouteImport

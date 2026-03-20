@@ -1,4 +1,4 @@
-import os, logging
+import logging
 from dotenv import load_dotenv
 
 from qdrant_client.http.models import SearchParams
@@ -8,10 +8,17 @@ from src.config.env import get_env
 load_dotenv(override=True)
 
 # Drive
-CLIENT_SECRET_FILE  = "client_secret.json"
-SCOPES              = ["https://www.googleapis.com/auth/drive.readonly"]
-GDRIVE_ROOT         = get_env("GDRIVE_ROOT", "")
-REDIRECT_URI        = get_env("REDIRECT_URI", "")
+CLIENT_SECRET_FILE = get_env(
+    "GOOGLE_CLIENT_SECRET_FILE",
+    get_env("CLIENT_SECRET_FILE", "secrets/client_secret.json"),
+)
+SCOPES = [
+    "https://www.googleapis.com/auth/drive.readonly",
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
+GDRIVE_ROOT = get_env("GDRIVE_ROOT", "")
 
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
