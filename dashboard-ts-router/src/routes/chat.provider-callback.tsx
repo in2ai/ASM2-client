@@ -17,6 +17,7 @@ import {
 const callbackSearchSchema = z.object({
   code: z.string().optional(),
   error: z.string().optional(),
+  error_description: z.string().optional(),
   state: z.string().optional(),
 })
 
@@ -47,13 +48,17 @@ function ProviderCallbackRoute() {
     }
 
     if (search.error) {
+      clearGoogleDriveOAuthRequest()
       if (!didUnmountRef.current) {
-        setCallbackError(t('sources.callbackCancelled'))
+        setCallbackError(
+          search.error_description ?? t('sources.callbackCancelled'),
+        )
       }
       return
     }
 
     if (!search.code || !search.state) {
+      clearGoogleDriveOAuthRequest()
       if (!didUnmountRef.current) {
         setCallbackError(t('sources.callbackMissingCode'))
       }
@@ -62,6 +67,7 @@ function ProviderCallbackRoute() {
 
     const storedRequest = readGoogleDriveOAuthRequest()
     if (!storedRequest || storedRequest.state !== search.state) {
+      clearGoogleDriveOAuthRequest()
       if (!didUnmountRef.current) {
         setCallbackError(t('sources.callbackInvalidState'))
       }
@@ -73,25 +79,41 @@ function ProviderCallbackRoute() {
 
     void (async () => {
       try {
-        await request<{ success: boolean; message: string }>('/sources/drive/connect', {
-          body: JSON.stringify({ code: search.code, redirect_uri: storedRequest.redirectUri }),
-          method: 'POST',
-        })
+        await request<{ success: boolean; message: string }>(
+          '/sources/drive/connect',
+          {
+            body: JSON.stringify({
+              code: search.code,
+              redirect_uri: storedRequest.redirectUri,
+            }),
+            method: 'POST',
+          },
+        )
         if (!didUnmountRef.current) {
           clearGoogleDriveOAuthRequest()
-          window.location.assign('/chat')
+          globalThis.location.replace(storedRequest.returnTo)
         }
       } catch (error: unknown) {
         hasStartedRef.current = false
         if (!didUnmountRef.current) {
           setIsSubmitting(false)
           setCallbackError(
-            error instanceof Error ? error.message : t('sources.callbackExchangeFailed'),
+            error instanceof Error
+              ? error.message
+              : t('sources.callbackExchangeFailed'),
           )
         }
       }
     })()
-  }, [isLoading, request, search.code, search.error, search.state, t])
+  }, [
+    isLoading,
+    request,
+    search.code,
+    search.error,
+    search.error_description,
+    search.state,
+    t,
+  ])
 
   if (isLoading || isSubmitting) {
     return (

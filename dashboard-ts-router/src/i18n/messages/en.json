@@ -277,6 +277,8 @@
     },
     "messages": {
       "assistant": "Assistant",
+      "openSource": "Open source",
+      "sources": "Sources",
       "sending": "Generating response...",
       "user": "You"
     },

@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-
-import { useLocale, useTranslations } from 'next-intl'
-import { Settings2 } from 'lucide-react'
-
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import { type AppLocale } from '@/i18n/config'
 import { type LogtoUser } from '@/lib/auth'
-
+import { Settings2 } from 'lucide-react'
+import { useLocale, useTranslations } from 'next-intl'
+import { useEffect, useMemo, useState } from 'react'
 import {
   useChatQuery,
   useChatsQuery,
@@ -28,7 +25,11 @@ interface ChatPageProps {
   user: LogtoUser
 }
 
-export function ChatPage({ onSelectChat, selectedChatId, user }: Readonly<ChatPageProps>) {
+export function ChatPage({
+  onSelectChat,
+  selectedChatId,
+  user,
+}: Readonly<ChatPageProps>) {
   const t = useTranslations('ChatPage')
   const locale = useLocale() as AppLocale
   const [composerValue, setComposerValue] = useState('')
@@ -61,13 +62,17 @@ export function ChatPage({ onSelectChat, selectedChatId, user }: Readonly<ChatPa
     return undefined
   }, [chatQuery.data, createChatMutation.data, effectiveChatId])
 
-  const pageError = chatsQuery.error ?? chatQuery.error ?? createChatMutation.error ?? sourcesQuery.error
+  const pageError =
+    chatsQuery.error ??
+    chatQuery.error ??
+    createChatMutation.error ??
+    sourcesQuery.error
   const isBusy = createChatMutation.isPending || sendMessageMutation.isPending
   const chatEnabled = sourcesQuery.data?.can_chat ?? false
 
   const handleCreateChat = async () => {
     setComposerError(undefined)
-    const chat = await createChatMutation.mutateAsync()
+    const chat = await createChatMutation.mutateAsync(undefined)
     onSelectChat(chat.id)
   }
 
@@ -82,7 +87,7 @@ export function ChatPage({ onSelectChat, selectedChatId, user }: Readonly<ChatPa
 
     try {
       if (!activeChatId) {
-        const chat = await createChatMutation.mutateAsync()
+        const chat = await createChatMutation.mutateAsync(undefined)
         activeChatId = chat.id
         onSelectChat(chat.id)
       }
@@ -109,9 +114,9 @@ export function ChatPage({ onSelectChat, selectedChatId, user }: Readonly<ChatPa
   }
 
   const retry = () => {
-    void chatsQuery.refetch()
+    chatsQuery.refetch()
     if (effectiveChatId) {
-      void chatQuery.refetch()
+      chatQuery.refetch()
     }
   }
 
@@ -119,12 +124,16 @@ export function ChatPage({ onSelectChat, selectedChatId, user }: Readonly<ChatPa
     <ChatShell
       closeSidebarLabel={t('shell.closeSidebar')}
       dashboardLabel={t('shell.dashboard')}
-        headerActions={
-          <Button variant="outline" className="rounded-2xl" onClick={() => setSourcesOpen(true)}>
-            <Settings2 className="mr-2 h-4 w-4" />
-            {t('sources.openPanel')}
-          </Button>
-        }
+      headerActions={
+        <Button
+          variant="outline"
+          className="rounded-2xl"
+          onClick={() => setSourcesOpen(true)}
+        >
+          <Settings2 className="mr-2 h-4 w-4" />
+          {t('sources.openPanel')}
+        </Button>
+      }
       openSidebarLabel={t('shell.openSidebar')}
       user={user}
       title={t('shellTitle')}
@@ -144,7 +153,11 @@ export function ChatPage({ onSelectChat, selectedChatId, user }: Readonly<ChatPa
         />
       }
     >
-        <SourcesPanel open={sourcesOpen} onOpenChange={setSourcesOpen} status={sourcesQuery.data} />
+      <SourcesPanel
+        open={sourcesOpen}
+        onOpenChange={setSourcesOpen}
+        status={sourcesQuery.data}
+      />
       {pageError ? (
         <div className="p-4 sm:p-6">
           <ErrorState
@@ -159,18 +172,27 @@ export function ChatPage({ onSelectChat, selectedChatId, user }: Readonly<ChatPa
           chat={activeChat}
           composerDisabled={!chatEnabled}
           composerHint={chatEnabled ? undefined : t('composer.disabledHint')}
-          title={getChatTitle(activeChat?.title, t('conversation.newChatTitle'))}
+          title={getChatTitle(
+            activeChat?.title,
+            t('conversation.newChatTitle'),
+          )}
           composerPlaceholder={t('composer.placeholder')}
           composerValue={composerValue}
           emptyTitle={chatEnabled ? t('empty.title') : t('empty.gatedTitle')}
-          emptyDescription={chatEnabled ? t('empty.description') : t('empty.gatedDescription')}
-          emptyPrimaryActionLabel={!chatEnabled ? t('sources.openPanel') : undefined}
+          emptyDescription={
+            chatEnabled ? t('empty.description') : t('empty.gatedDescription')
+          }
+          emptyPrimaryActionLabel={
+            !chatEnabled ? t('sources.openPanel') : undefined
+          }
           errorMessage={composerError}
           isLoading={Boolean(effectiveChatId) && chatQuery.isLoading}
           isSending={isBusy}
           locale={locale}
           messageLabels={{
             assistant: t('messages.assistant'),
+            openSource: t('messages.openSource'),
+            sources: t('messages.sources'),
             sending: t('messages.sending'),
             user: t('messages.user'),
           }}

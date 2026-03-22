@@ -1,17 +1,15 @@
+import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 import { useLogto } from '@logto/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-
-import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
-
 import type {
   ChatDetail,
   ChatSummary,
   CreateChatInput,
+  SendMessageInput,
+  SendMessageResult,
   SourceConnectCompleteInput,
   SourceProviderKey,
   SourcesStatus,
-  SendMessageInput,
-  SendMessageResult,
 } from './types'
 
 export const chatQueryKeys = {
@@ -24,7 +22,10 @@ export const chatQueryKeys = {
 export function useAuthorizedChatRequest() {
   const { getAccessToken } = useLogto()
 
-  return async function authorizedChatRequest<T>(path: string, init?: RequestInit) {
+  return async function authorizedChatRequest<T>(
+    path: string,
+    init?: RequestInit,
+  ) {
     const token = await getAccessToken(API_RESOURCE)
     if (!token) {
       throw new Error('Missing access token')
@@ -35,14 +36,14 @@ export function useAuthorizedChatRequest() {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        ...(init?.headers ?? {}),
+        ...init?.headers,
       },
     })
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as
-        | { detail?: string }
-        | null
+      const payload = (await response.json().catch(() => null)) as {
+        detail?: string
+      } | null
       throw new Error(payload?.detail ?? `Request failed (${response.status})`)
     }
 
@@ -65,6 +66,8 @@ export function useSourcesStatusQuery() {
   return useQuery({
     queryKey: chatQueryKeys.sources,
     queryFn: () => request<SourcesStatus>('/sources/status'),
+    refetchInterval: (query) =>
+      query.state.data?.reindex.in_progress ? 2_000 : false,
   })
 }
 
@@ -73,7 +76,9 @@ export function useChatQuery(chatId?: string) {
 
   return useQuery({
     enabled: Boolean(chatId),
-    queryKey: chatId ? chatQueryKeys.detail(chatId) : ['chat', 'detail', 'empty'],
+    queryKey: chatId
+      ? chatQueryKeys.detail(chatId)
+      : ['chat', 'detail', 'empty'],
     queryFn: () => request<ChatDetail>(`/chats/${chatId}`),
   })
 }
@@ -90,7 +95,7 @@ export function useCreateChatMutation() {
       }),
     onSuccess: (chat) => {
       queryClient.setQueryData(chatQueryKeys.detail(chat.id), chat)
-      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
+      queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
     },
   })
 }
@@ -106,8 +111,11 @@ export function useSendMessageMutation() {
         method: 'POST',
       }),
     onSuccess: (result, variables) => {
-      queryClient.setQueryData(chatQueryKeys.detail(variables.chatId), result.chat)
-      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
+      queryClient.setQueryData(
+        chatQueryKeys.detail(variables.chatId),
+        result.chat,
+      )
+      queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
     },
   })
 }
@@ -134,12 +142,15 @@ export function useCompleteSourceConnectionMutation() {
 
   return useMutation({
     mutationFn: ({ provider, code, redirectUri }: SourceConnectCompleteInput) =>
-      request<{ success: boolean; message: string }>(`/sources/${provider}/connect`, {
-        body: JSON.stringify({ code, redirect_uri: redirectUri }),
-        method: 'POST',
-      }),
+      request<{ success: boolean; message: string }>(
+        `/sources/${provider}/connect`,
+        {
+          body: JSON.stringify({ code, redirect_uri: redirectUri }),
+          method: 'POST',
+        },
+      ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.sources })
+      queryClient.invalidateQueries({ queryKey: chatQueryKeys.sources })
     },
   })
 }
@@ -149,7 +160,10 @@ export function useDisconnectSourceMutation(provider: SourceProviderKey) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => request<SourcesStatus>(`/sources/${provider}/disconnect`, { method: 'POST' }),
+    mutationFn: () =>
+      request<SourcesStatus>(`/sources/${provider}/disconnect`, {
+        method: 'POST',
+      }),
     onSuccess: (result) => {
       queryClient.setQueryData(chatQueryKeys.sources, result)
     },
