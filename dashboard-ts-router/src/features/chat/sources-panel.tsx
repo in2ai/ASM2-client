@@ -1,10 +1,11 @@
-import { useState } from 'react'
-
-import { useTranslations } from 'next-intl'
-import { CheckCircle2, CloudCog, RefreshCw, Unplug } from 'lucide-react'
-
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Sheet,
@@ -13,7 +14,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-
+import { CheckCircle2, CloudCog, RefreshCw, Unplug } from 'lucide-react'
+import { useTranslations } from 'next-intl'
+import { useState } from 'react'
 import {
   useDisconnectSourceMutation,
   useReindexSourcesMutation,
@@ -21,9 +24,9 @@ import {
 } from './api'
 import {
   buildGoogleDriveAuthorizeUrl,
-  persistGoogleDriveOAuthRequest,
   createGoogleDriveOAuthState,
   GOOGLE_DRIVE_CALLBACK_PATH,
+  persistGoogleDriveOAuthRequest,
 } from './google-drive-auth'
 import type { SourceProviderKey, SourcesStatus } from './types'
 
@@ -33,7 +36,11 @@ interface SourcesPanelProps {
   status?: SourcesStatus
 }
 
-export function SourcesPanel({ onOpenChange, open, status }: Readonly<SourcesPanelProps>) {
+export function SourcesPanel({
+  onOpenChange,
+  open,
+  status,
+}: Readonly<SourcesPanelProps>) {
   const t = useTranslations('ChatPage')
   const [inlineError, setInlineError] = useState<string>()
 
@@ -41,11 +48,16 @@ export function SourcesPanel({ onOpenChange, open, status }: Readonly<SourcesPan
   const disconnectDriveMutation = useDisconnectSourceMutation('drive')
   const reindexMutation = useReindexSourcesMutation()
 
-  const driveProvider = status?.providers.find((provider) => provider.key === 'drive')
+  const driveProvider = status?.providers.find(
+    (provider) => provider.key === 'drive',
+  )
 
   const selectedSet = new Set(status?.selected_sources ?? [])
 
-  const handleToggle = async (provider: SourceProviderKey, checked: boolean) => {
+  const handleToggle = async (
+    provider: SourceProviderKey,
+    checked: boolean,
+  ) => {
     if (!status) return
     setInlineError(undefined)
 
@@ -54,9 +66,13 @@ export function SourcesPanel({ onOpenChange, open, status }: Readonly<SourcesPan
     else next.delete(provider)
 
     try {
-      await updateSelectionMutation.mutateAsync(Array.from(next) as SourceProviderKey[])
+      await updateSelectionMutation.mutateAsync(
+        Array.from(next) as SourceProviderKey[],
+      )
     } catch (error) {
-      setInlineError(error instanceof Error ? error.message : t('errors.sendFailed'))
+      setInlineError(
+        error instanceof Error ? error.message : t('errors.sendFailed'),
+      )
     }
   }
 
@@ -68,16 +84,16 @@ export function SourcesPanel({ onOpenChange, open, status }: Readonly<SourcesPan
       return
     }
 
-    const redirectUri = `${window.location.origin}${GOOGLE_DRIVE_CALLBACK_PATH}`
+    const redirectUri = `${globalThis.location.origin}${GOOGLE_DRIVE_CALLBACK_PATH}`
     const state = createGoogleDriveOAuthState()
 
     persistGoogleDriveOAuthRequest({
       redirectUri,
-      returnTo: window.location.pathname + window.location.search,
+      returnTo: globalThis.location.pathname + globalThis.location.search,
       state,
     })
 
-    window.location.assign(
+    globalThis.location.assign(
       buildGoogleDriveAuthorizeUrl({
         clientId: driveProvider.oauth_client_id,
         redirectUri,
@@ -95,9 +111,11 @@ export function SourcesPanel({ onOpenChange, open, status }: Readonly<SourcesPan
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6">
-          {inlineError ? <p className="text-sm text-red-500">{inlineError}</p> : null}
+          {inlineError ? (
+            <p className="text-sm text-red-500">{inlineError}</p>
+          ) : null}
 
-          <Card className="gap-4 rounded-3xl border-primary/10 bg-gradient-to-br from-primary/5 to-transparent">
+          <Card className="gap-4 rounded-3xl border-primary/10 bg-linear-to-br from-primary/5 to-transparent">
             <CardHeader className="gap-3">
               <CardTitle>{t('sources.stepsTitle')}</CardTitle>
               <CardDescription>{t('sources.stepsDescription')}</CardDescription>
@@ -122,7 +140,8 @@ export function SourcesPanel({ onOpenChange, open, status }: Readonly<SourcesPan
                       {driveProvider.label}
                     </CardTitle>
                     <CardDescription>
-                      {driveProvider.account_label ?? t('sources.providers.drive.description')}
+                      {driveProvider.account_label ??
+                        t('sources.providers.drive.description')}
                     </CardDescription>
                   </div>
                   {driveProvider.connected ? (
@@ -135,27 +154,49 @@ export function SourcesPanel({ onOpenChange, open, status }: Readonly<SourcesPan
               </CardHeader>
               <CardContent className="space-y-4">
                 {!driveProvider.configured ? (
-                  <p className="text-muted-foreground text-sm">{t('sources.notConfigured')}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {t('sources.notConfigured')}
+                  </p>
                 ) : (
-                  <p className="text-muted-foreground text-sm">{t('sources.googleDriveHelp')}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {t('sources.googleDriveHelp')}
+                  </p>
                 )}
+                {driveProvider.last_error ? (
+                  <p className="text-sm text-red-500">
+                    {driveProvider.last_error}
+                  </p>
+                ) : null}
 
                 <label className="flex items-center gap-3 text-sm">
                   <Checkbox
                     checked={selectedSet.has(driveProvider.key)}
-                    disabled={!driveProvider.connected || updateSelectionMutation.isPending}
-                    onCheckedChange={(checked) => void handleToggle(driveProvider.key, checked === true)}
+                    disabled={
+                      !driveProvider.connected ||
+                      updateSelectionMutation.isPending
+                    }
+                    onCheckedChange={(checked) =>
+                      void handleToggle(driveProvider.key, checked === true)
+                    }
                   />
                   <span>{t('sources.selectForChat')}</span>
                 </label>
 
                 <div className="flex flex-wrap gap-2">
                   {!driveProvider.connected ? (
-                    <Button disabled={!driveProvider.configured} onClick={startDrive}>
+                    <Button
+                      disabled={!driveProvider.configured}
+                      onClick={startDrive}
+                    >
                       {t('sources.connectDrive')}
                     </Button>
                   ) : (
-                    <Button variant="outline" onClick={() => void disconnectDriveMutation.mutateAsync()}>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        disconnectDriveMutation.mutateAsync(undefined)
+                      }
+                    >
                       <Unplug className="mr-2 h-4 w-4" />
                       {t('sources.disconnect')}
                     </Button>
@@ -168,17 +209,30 @@ export function SourcesPanel({ onOpenChange, open, status }: Readonly<SourcesPan
           <Card className="gap-4 rounded-3xl">
             <CardHeader>
               <CardTitle>{t('sources.reindexTitle')}</CardTitle>
-              <CardDescription>{t('sources.reindexDescription')}</CardDescription>
+              <CardDescription>
+                {t('sources.reindexDescription')}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {status?.reindex.error ? <p className="text-sm text-red-500">{status.reindex.error}</p> : null}
+              {status?.reindex.error ? (
+                <p className="text-sm text-red-500">{status.reindex.error}</p>
+              ) : null}
+              {status?.reindex.message ? (
+                <p className="text-muted-foreground text-sm">
+                  {status.reindex.message}
+                </p>
+              ) : null}
               <Button
                 variant="secondary"
-                disabled={status?.reindex.in_progress || !driveProvider?.connected}
-                onClick={() => void reindexMutation.mutateAsync()}
+                disabled={
+                  status?.reindex.in_progress || !status?.reindex.available
+                }
+                onClick={() => reindexMutation.mutateAsync(undefined)}
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                {status?.reindex.in_progress ? t('sources.reindexing') : t('sources.reindex')}
+                {status?.reindex.in_progress
+                  ? t('sources.reindexing')
+                  : t('sources.reindex')}
               </Button>
             </CardContent>
           </Card>

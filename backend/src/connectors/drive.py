@@ -72,6 +72,7 @@ class GoogleDriveSource(DataSource):
             return False
 
         try:
+            self.last_error = None
             self.credentials.refresh(Request())
             self.raw_creds = json.dumps(
                 {
@@ -84,7 +85,8 @@ class GoogleDriveSource(DataSource):
                 }
             )
             return self.login()
-        except Exception:
+        except Exception as exc:
+            self.last_error = str(exc)
             return False
 
     def get_authenticated_principals(self) -> List[str]:
@@ -222,6 +224,13 @@ class GoogleDriveSource(DataSource):
         return {"anyone": bool(acl_anyone), "allowed": sorted(acl_principals)}
 
     def list_files(self):
+        if not self.root:
+            self.last_error = (
+                "Google Drive indexing root is not configured. "
+                "Set GDRIVE_ROOT or FOLDER_ID on the backend."
+            )
+            raise RuntimeError(self.last_error)
+
         # Discover all files via BFS
         queue = [self.root]
         files = []

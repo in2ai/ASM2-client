@@ -277,6 +277,8 @@
     },
     "messages": {
       "assistant": "Asistente",
+      "openSource": "Abrir fonte",
+      "sources": "Fontes",
       "sending": "Xerando resposta...",
       "user": "Ti"
     },

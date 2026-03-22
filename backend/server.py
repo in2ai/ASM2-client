@@ -17,12 +17,14 @@ from google_auth_oauthlib.flow import Flow
 
 from src.config.config import (
     CLIENT_SECRET_FILE,
+    GDRIVE_ROOT,
     SCOPES,
 )
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
     disconnect_source,
+    get_admin_credentials,
     get_authenticated_admin_sources,
     get_authenticated_sources,
     get_credentials_to_refresh,
@@ -65,13 +67,14 @@ from src.metrics.dashboard_queries import (
 )
 from src.chat.store import ChatNotFoundError, ChatStore
 from src.utils.nlp import init_nlp
-from src.utils.rag import get_reranker
+from src.utils.rag import get_reranker, retrieve_and_rerank
 
 from graph.agent import build_graph
 from graph import get_checkpointer
 from langchain_core.messages import AIMessage, HumanMessage
 
 logger = logging.getLogger(__name__)
+SHARED_REINDEX_JOB_KEY = "__shared__"
 
 
 # ---------------------------------
@@ -342,6 +345,12 @@ class SendMessageResultModel(BaseModel):
     detected_lang: str
 
 
+class ChatSourceModel(BaseModel):
+    title: str
+    source_type: str
+    link: str | None = None
+
+
 class SourceProviderStatusModel(BaseModel):
     key: str
     label: str
@@ -351,6 +360,7 @@ class SourceProviderStatusModel(BaseModel):
     auth_mode: str
     account_label: str | None = None
     oauth_client_id: str | None = None
+    last_error: str | None = None
 
 
 class ReindexStatusModel(BaseModel):
@@ -358,6 +368,8 @@ class ReindexStatusModel(BaseModel):
     last_started_at: str | None = None
     last_finished_at: str | None = None
     error: str | None = None
+    available: bool
+    message: str | None = None
 
 
 class SourcesStatusModel(BaseModel):
@@ -555,6 +567,54 @@ def _serialize_drive_credentials(
     return serialized, needs_refresh_at, expires_at
 
 
+def _get_shared_reindex_job() -> dict[str, Any]:
+    return app.state.source_reindex_jobs.setdefault(SHARED_REINDEX_JOB_KEY, {})
+
+
+def _has_connected_admin_source(provider: str) -> bool:
+    questdb_pool = app.state.questdb_pool
+    for source_key, credentials, _issued_at, _is_admin in get_admin_credentials(questdb_pool) or []:
+        if normalize_source_key(source_key) != provider:
+            continue
+        try:
+            parsed = json.loads(credentials) if credentials else {}
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and parsed:
+            return True
+    return False
+
+
+def _build_reindex_status(auth: AuthInfo) -> ReindexStatusModel:
+    job = _get_shared_reindex_job()
+    available = True
+    message = None
+
+    if auth.role != "admin":
+        available = False
+        message = "Only admins can rebuild the shared Google Drive index."
+    elif not GDRIVE_ROOT:
+        available = False
+        message = (
+            "Google Drive indexing root is not configured. "
+            "Set GDRIVE_ROOT or FOLDER_ID on the backend."
+        )
+    elif not _has_connected_admin_source("drive"):
+        available = False
+        message = (
+            "Connect Google Drive with an admin account before reindexing the shared corpus."
+        )
+
+    return ReindexStatusModel(
+        in_progress=bool(job.get("in_progress")),
+        last_started_at=job.get("last_started_at"),
+        last_finished_at=job.get("last_finished_at"),
+        error=job.get("error"),
+        available=available,
+        message=message,
+    )
+
+
 def _build_sources_status(auth: AuthInfo) -> SourcesStatusModel:
     questdb_pool = app.state.questdb_pool
     all_connected = get_authenticated_sources(questdb_pool, auth.sub)
@@ -581,21 +641,16 @@ def _build_sources_status(auth: AuthInfo) -> SourcesStatusModel:
                 oauth_client_id=_get_drive_oauth_client_id()
                 if provider == "drive"
                 else None,
+                last_error=getattr(source, "last_error", None),
             )
         )
 
-    job = app.state.source_reindex_jobs.get(auth.sub, {})
     return SourcesStatusModel(
         providers=providers,
         connected_sources=connected,
         selected_sources=selected_sources,
         can_chat=bool(selected_sources),
-        reindex=ReindexStatusModel(
-            in_progress=bool(job.get("in_progress")),
-            last_started_at=job.get("last_started_at"),
-            last_finished_at=job.get("last_finished_at"),
-            error=job.get("error"),
-        ),
+        reindex=_build_reindex_status(auth),
     )
 
 
@@ -609,19 +664,12 @@ def _mark_source_selected(questdb_pool, user_id: str, provider: str) -> None:
     set_selected_sources(questdb_pool, user_id, sorted(current))
 
 
-def _run_user_reindex(user_id: str, source_keys: list[str] | None = None) -> None:
-    status = app.state.source_reindex_jobs.setdefault(user_id, {})
-    status.update(
-        {
-            "in_progress": True,
-            "error": None,
-            "last_started_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
-
+def _run_shared_reindex(source_keys: list[str] | None = None) -> None:
+    status = _get_shared_reindex_job()
     try:
         questdb_pool = app.state.questdb_pool
-        authenticated = get_selected_authenticated_sources(questdb_pool, user_id)
+        authenticated_list = get_authenticated_admin_sources(questdb_pool) or []
+        authenticated = {source.name: source for source in authenticated_list}
         if source_keys:
             allowed = set(source_keys)
             authenticated = {
@@ -629,19 +677,21 @@ def _run_user_reindex(user_id: str, source_keys: list[str] | None = None) -> Non
             }
 
         if not authenticated:
-            raise RuntimeError("No connected sources available to reindex")
+            raise RuntimeError(
+                "No connected admin Google Drive source is available to reindex the shared corpus."
+            )
 
         build_vectordb_from_sources(list(authenticated.values()))
         status["last_finished_at"] = datetime.now(timezone.utc).isoformat()
     except Exception as exc:
-        logger.exception("Source reindex failed for %s", user_id)
+        logger.exception("Shared source reindex failed")
         status["error"] = str(exc)
         status["last_finished_at"] = datetime.now(timezone.utc).isoformat()
     finally:
         status["in_progress"] = False
 
 
-async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, str]:
+async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
     questdb_pool = app.state.questdb_pool
     sources = get_selected_authenticated_sources(questdb_pool, auth.sub)
     if not sources:
@@ -677,10 +727,22 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     if not messages:
         raise HTTPException(status_code=500, detail="No response generated")
 
+    available_sources: list[dict[str, Any]] = []
+    try:
+        _chunks, available_sources, _lang_code = retrieve_and_rerank(
+            query,
+            app.state.vectorstore,
+            app.state.reranker,
+            sources,
+        )
+    except Exception:
+        logger.warning("Failed to collect chat source metadata", exc_info=True)
+
     _record_token_usage_metrics(questdb_pool, messages)
     return {
         "answer": str(messages[-1].content),
         "detected_lang": str(result.get("detected_lang", "es")),
+        "sources": available_sources,
     }
 
 
@@ -862,7 +924,7 @@ def refresh_tokens():
                 new_creds = source.raw_creds
                 add_credentials(questdb_pool, user_id, source.name, new_creds, is_admin)
 
-            logging.info("Finished token refesh job", len(credentials))
+            logging.info("Finished token refresh job", len(credentials))
 
     periodic_task(refresh, 300)  # Once every five minutes
 
@@ -1085,17 +1147,48 @@ async def disconnect_provider(auth: AuthenticatedAuth, provider: str):
 async def reindex_sources(
     auth: AuthenticatedAuth, payload: SourceReindexRequestModel | None = None
 ):
+    if auth.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Only admins can rebuild the shared Google Drive index",
+        )
+
+    if not GDRIVE_ROOT:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Google Drive indexing root is not configured. "
+                "Set GDRIVE_ROOT or FOLDER_ID on the backend."
+            ),
+        )
+
+    if not _has_connected_admin_source("drive"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Connect Google Drive with an admin account before reindexing the shared corpus."
+            ),
+        )
+
     source_keys = None
     if payload and payload.sources:
         source_keys = [_validate_provider(source) for source in payload.sources]
 
-    job = app.state.source_reindex_jobs.get(auth.sub, {})
+    job = _get_shared_reindex_job()
     if job.get("in_progress"):
         raise HTTPException(
             status_code=409, detail="A reindex job is already in progress"
         )
 
-    asyncio.create_task(asyncio.to_thread(_run_user_reindex, auth.sub, source_keys))
+    job.update(
+        {
+            "in_progress": True,
+            "error": None,
+            "last_started_at": datetime.now(timezone.utc).isoformat(),
+            "last_finished_at": None,
+        }
+    )
+    asyncio.create_task(asyncio.to_thread(_run_shared_reindex, source_keys))
     return _build_sources_status(auth)
 
 
@@ -1149,7 +1242,10 @@ async def send_chat_message(
         "assistant",
         result["answer"],
         status="complete",
-        metadata={"detected_lang": result["detected_lang"]},
+        metadata={
+            "detected_lang": result["detected_lang"],
+            "sources": result["sources"],
+        },
     )
     chat = _get_chat_or_404(chat_store, auth.sub, chat_id)
 
@@ -1178,7 +1274,14 @@ async def chat(auth: AuthenticatedAuth, query: str, chat_id: str):
         "assistant",
         result["answer"],
         status="complete",
-        metadata={"detected_lang": result["detected_lang"]},
+        metadata={
+            "detected_lang": result["detected_lang"],
+            "sources": result["sources"],
+        },
     )
 
-    return {"answer": result["answer"], "detected_lang": result["detected_lang"]}
+    return {
+        "answer": result["answer"],
+        "detected_lang": result["detected_lang"],
+        "sources": result["sources"],
+    }

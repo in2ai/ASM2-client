@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useRef } from 'react'
-
-import { ArrowUp, Bot, Loader2, User2 } from 'lucide-react'
-
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
-import { cn } from '@/lib/utils'
-
 import { type AppLocale } from '@/i18n/config'
-
+import { cn } from '@/lib/utils'
+import { ArrowUp, Bot, ExternalLink, Loader2, User2 } from 'lucide-react'
+import { useEffect, useMemo, useRef } from 'react'
 import { ChatConversationLoadingState } from './chat-loading-state'
-import type { ChatDetail, ChatMessage } from './types'
+import type { ChatDetail, ChatMessage, ChatSource } from './types'
 import { formatMessageTimestamp } from './utils'
 
 interface ConversationViewProps {
@@ -29,6 +25,8 @@ interface ConversationViewProps {
   locale: AppLocale
   messageLabels: {
     assistant: string
+    openSource: string
+    sources: string
     sending: string
     user: string
   }
@@ -61,7 +59,10 @@ export function ConversationView({
 }: Readonly<ConversationViewProps>) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const messages = useMemo(
-    () => [...(chat?.messages ?? []), ...(pendingMessage ? [pendingMessage] : [])],
+    () => [
+      ...(chat?.messages ?? []),
+      ...(pendingMessage ? [pendingMessage] : []),
+    ],
     [chat?.messages, pendingMessage],
   )
 
@@ -73,7 +74,9 @@ export function ConversationView({
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b px-4 py-4 sm:px-6">
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-        <p className="text-muted-foreground mt-1 text-sm">{chat?.title ?? emptyDescription}</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {chat?.title ?? emptyDescription}
+        </p>
       </div>
 
       <div className="bg-muted/10 min-h-0 flex-1 overflow-hidden">
@@ -85,9 +88,14 @@ export function ConversationView({
               <Bot className="text-primary h-7 w-7" />
             </div>
             <p className="text-xl font-semibold tracking-tight">{emptyTitle}</p>
-            <p className="text-muted-foreground mt-2 max-w-lg text-sm">{emptyDescription}</p>
+            <p className="text-muted-foreground mt-2 max-w-lg text-sm">
+              {emptyDescription}
+            </p>
             {emptyPrimaryActionLabel && onEmptyPrimaryAction ? (
-              <Button className="mt-5 rounded-2xl" onClick={onEmptyPrimaryAction}>
+              <Button
+                className="mt-5 rounded-2xl"
+                onClick={onEmptyPrimaryAction}
+              >
                 {emptyPrimaryActionLabel}
               </Button>
             ) : null}
@@ -109,7 +117,9 @@ export function ConversationView({
               {isSending ? (
                 <div className="flex items-center gap-3 px-1 text-sm">
                   <Loader2 className="text-primary h-4 w-4 animate-spin" />
-                  <span className="text-muted-foreground">{messageLabels.sending}</span>
+                  <span className="text-muted-foreground">
+                    {messageLabels.sending}
+                  </span>
                 </div>
               ) : null}
 
@@ -126,7 +136,9 @@ export function ConversationView({
           </div>
         ) : null}
         {!errorMessage && composerHint ? (
-          <div className="text-muted-foreground mb-3 text-sm">{composerHint}</div>
+          <div className="text-muted-foreground mb-3 text-sm">
+            {composerHint}
+          </div>
         ) : null}
 
         <div className="rounded-3xl border bg-card p-3 shadow-sm">
@@ -153,7 +165,11 @@ export function ConversationView({
               disabled={composerDisabled || !composerValue.trim() || isSending}
               onClick={onSendMessage}
             >
-              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+              {isSending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>
@@ -173,6 +189,7 @@ function MessageBubble({
 }>) {
   const isUser = message.role === 'user'
   const authorLabel = isUser ? labels.user : labels.assistant
+  const sources = getMessageSources(message)
 
   return (
     <div className={cn('flex gap-3', isUser ? 'justify-end' : 'justify-start')}>
@@ -180,7 +197,9 @@ function MessageBubble({
       <div
         className={cn(
           'max-w-[85%] rounded-3xl border px-4 py-3 shadow-sm',
-          isUser ? 'bg-primary text-primary-foreground border-primary/20' : 'bg-card',
+          isUser
+            ? 'bg-primary text-primary-foreground border-primary/20'
+            : 'bg-card',
         )}
       >
         <div className="mb-2 flex items-center gap-2">
@@ -190,12 +209,75 @@ function MessageBubble({
           <span className="text-xs opacity-70">
             {formatMessageTimestamp(message.created_at, locale)}
           </span>
-          {message.status === 'sending' ? <Badge variant="outline">{labels.sending}</Badge> : null}
+          {message.status === 'sending' ? (
+            <Badge variant="outline">{labels.sending}</Badge>
+          ) : null}
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+        <p className="whitespace-pre-wrap text-sm leading-6">
+          {message.content}
+        </p>
+        {!isUser && sources.length > 0 ? (
+          <div className="mt-4 border-t pt-3">
+            <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-[0.18em]">
+              {labels.sources}
+            </p>
+            <div className="space-y-2">
+              {sources.map((source) => (
+                <SourceCitation
+                  key={`${source.source_type}-${source.title}-${source.link ?? 'nolink'}`}
+                  source={source}
+                  openLabel={labels.openSource}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
       {isUser ? <BubbleAvatar isUser={true} /> : null}
     </div>
+  )
+}
+
+function SourceCitation({
+  openLabel,
+  source,
+}: Readonly<{
+  openLabel: string
+  source: ChatSource
+}>) {
+  return (
+    <div className="bg-muted/40 rounded-2xl border px-3 py-2">
+      <p className="text-sm font-medium">{source.title}</p>
+      <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
+        <span>{source.source_type}</span>
+        {source.link ? (
+          <a
+            href={source.link}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary inline-flex items-center gap-1 hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            {openLabel}
+          </a>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function getMessageSources(message: ChatMessage): ChatSource[] {
+  if (!message.metadata?.sources || !Array.isArray(message.metadata.sources)) {
+    return []
+  }
+
+  return message.metadata.sources.filter((source): source is ChatSource =>
+    Boolean(
+      source &&
+      typeof source.title === 'string' &&
+      typeof source.source_type === 'string' &&
+      (typeof source.link === 'string' || source.link === null),
+    ),
   )
 }
 

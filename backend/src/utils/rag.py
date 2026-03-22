@@ -41,6 +41,13 @@ class RAGResponse(BaseModel):
         description="List of the relevant sources used to craft the answer"
     )
 
+
+def _resolve_source_label(source_key: str, sources: Dict[str, DataSource]) -> str:
+    source = sources.get(source_key)
+    if source is not None and getattr(source, "display_name", ""):
+        return source.display_name
+    return source_key or "Unknown"
+
 # ---------------------------------
 # RAG-related functions
 # ---------------------------------
@@ -118,7 +125,7 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
         doc_id = d.metadata.get("id")
         if doc_id not in seen_ids:
             seen_ids.add(doc_id)
-            tag = d.metadata.get("source", "Unknown")
+            tag = _resolve_source_label(d.metadata.get("source", "Unknown"), sources)
             title = d.metadata.get("title") or d.metadata.get("name") or "(sin titulo)"
             link = d.metadata.get("webViewLink")
             available_sources.append({"title": title, "source_type": tag, "link": link})

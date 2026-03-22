@@ -1,5 +1,16 @@
 export type ChatRole = 'user' | 'assistant' | 'system'
 
+export interface ChatSource {
+  title: string
+  source_type: string
+  link: string | null
+}
+
+export interface ChatMessageMetadata {
+  detected_lang?: string
+  sources?: ChatSource[]
+}
+
 export interface ChatMessage {
   id: string
   chat_id: string
@@ -7,7 +18,7 @@ export interface ChatMessage {
   content: string
   created_at: string
   status: string | null
-  metadata: Record<string, unknown> | null
+  metadata: ChatMessageMetadata | null
 }
 
 export interface ChatSummary {
@@ -49,6 +60,7 @@ export interface SourceProviderStatus {
   auth_mode: 'authorization_code'
   account_label: string | null
   oauth_client_id: string | null
+  last_error?: string | null
 }
 
 export interface ReindexStatus {
@@ -56,6 +68,8 @@ export interface ReindexStatus {
   last_started_at: string | null
   last_finished_at: string | null
   error: string | null
+  available: boolean
+  message: string | null
 }
 
 export interface SourcesStatus {

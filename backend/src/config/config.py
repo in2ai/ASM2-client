@@ -18,7 +18,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
-GDRIVE_ROOT = get_env("GDRIVE_ROOT", "")
+GDRIVE_ROOT = get_env("GDRIVE_ROOT", get_env("FOLDER_ID", "")).strip()
 
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
