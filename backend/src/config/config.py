@@ -8,10 +8,6 @@ from src.config.env import get_env
 load_dotenv(override=True)
 
 # Drive
-CLIENT_SECRET_FILE = get_env(
-    "GOOGLE_CLIENT_SECRET_FILE",
-    get_env("CLIENT_SECRET_FILE", "secrets/client_secret.json"),
-)
 SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
     "openid",

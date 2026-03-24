@@ -29,12 +29,8 @@ SUPPORTED_MIMES = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
 
-logger = logging.getLogger(__name__)
-
-
 class GoogleDriveSource(DataSource):
     name = "drive"
-    display_name = "Google Drive"
 
 
     def __init__(self, raw_creds: str):
@@ -43,28 +39,23 @@ class GoogleDriveSource(DataSource):
 
     def login(self) -> bool:
         try:
-            self.last_error = None
             creds_dict = json.loads(self.raw_creds)
+
             if not isinstance(creds_dict, dict):
-                self.last_error = "Stored Google Drive credentials are not a JSON object"
                 return False
 
             self.credentials = Credentials.from_authorized_user_info(creds_dict)
-            if self.credentials.expired and self.credentials.refresh_token:
-                self.credentials.refresh(Request())
-
             self.service = build("drive", "v3", credentials=self.credentials)
-            about = self.service.about().get(fields="user(emailAddress)").execute()
-            user = about.get("user", {}) or {}
-            self.account_label = user.get("emailAddress")
+
             self.update_authenticated_principals()
+
             return True
-        except Exception as exc:
+        
+        except Exception:
             self.service = None
             self.credentials = None
-            self.account_label = None
-            self.last_error = str(exc)
-            logger.warning("Google Drive login failed", exc_info=True)
+            logging.warning("Google Drive login failed", exc_info=True)
+
             return False
 
     def refresh(self) -> bool:
@@ -72,7 +63,6 @@ class GoogleDriveSource(DataSource):
             return False
 
         try:
-            self.last_error = None
             self.credentials.refresh(Request())
             self.raw_creds = json.dumps(
                 {
@@ -84,9 +74,10 @@ class GoogleDriveSource(DataSource):
                     "scopes": list(getattr(self.credentials, "scopes", []) or SCOPES),
                 }
             )
+
             return self.login()
-        except Exception as exc:
-            self.last_error = str(exc)
+
+        except Exception:
             return False
 
     def get_authenticated_principals(self) -> List[str]:
@@ -224,13 +215,6 @@ class GoogleDriveSource(DataSource):
         return {"anyone": bool(acl_anyone), "allowed": sorted(acl_principals)}
 
     def list_files(self):
-        if not self.root:
-            self.last_error = (
-                "Google Drive indexing root is not configured. "
-                "Set GDRIVE_ROOT or FOLDER_ID on the backend."
-            )
-            raise RuntimeError(self.last_error)
-
         # Discover all files via BFS
         queue = [self.root]
         files = []
