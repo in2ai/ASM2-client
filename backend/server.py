@@ -269,7 +269,7 @@ async def is_vdb_update_active(auth: AdminAuth):
     return {"active": os.path.isfile(VDB_LOCK)}
 
 
-@app.get("/login-source", status_code=200)
+@app.post("/login-source", status_code=200)
 async def login_source(auth: AuthenticatedAuth, source_token: str, source: str):
     # Check source name
     source = validate_source(source)
