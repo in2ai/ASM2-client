@@ -12,9 +12,7 @@ class DataSource:
         self.name = name
         self.raw_creds = raw_creds
         self.root = root
-        self.account_label = None
         self.authenticated_principals = []
-        self.last_error = None
 
 
     def login(self) -> bool:

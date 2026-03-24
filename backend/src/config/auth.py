@@ -10,41 +10,8 @@ from src.metrics.connection import execute_query
 USER_ID = "user in2ai"
 USER_ROLE = "admin in2ai"
 
-SOURCE_ALIASES = {
-    "gdrive": "drive",
-    "drive": "drive",
-    "GDrive": "drive",
-    "Drive": "drive",
-    "dropbox": "dropbox",
-    "Dropbox": "dropbox",
-    "onedrive": "onedrive",
-    "Onedrive": "onedrive",
-    "OneDrive": "onedrive",
-}
 
-
-def normalize_source_key(source: str) -> str:
-    return SOURCE_ALIASES.get(source, source.lower())
-
-
-def _is_missing_source_preferences_table_error(exc: Exception) -> bool:
-    message = str(exc).lower()
-    return "source_preferences" in message and "table does not exist" in message
-
-
-def _collapse_records(rows):
-    latest = {}
-    for row in rows or []:
-        normalized = normalize_source_key(row[0])
-        previous = latest.get(normalized)
-        if previous is None or (row[2] and previous[2] and row[2] > previous[2]):
-            latest[normalized] = (normalized, row[1], row[2], row[3])
-        elif previous is None:
-            latest[normalized] = (normalized, row[1], row[2], row[3])
-    return list(latest.values())
-
-
-def _to_questdb_timestamp(value: datetime | None) -> datetime | None:
+def normalize_timestamp(value: datetime | None) -> datetime | None:
     if value is None or value.tzinfo is None:
         return value
 
@@ -71,10 +38,10 @@ def add_credentials(
         query,
         (
             user_id,
-            normalize_source_key(source),
+            source,
             credentials,
-            _to_questdb_timestamp(needs_refresh_at),
-            _to_questdb_timestamp(expires_at),
+            normalize_timestamp(needs_refresh_at),
+            normalize_timestamp(expires_at),
             is_admin,
         ),
     )
@@ -102,7 +69,7 @@ def get_user_credentials(pool: ThreadedConnectionPool, user_id: str):
     LATEST ON issued_at PARTITION BY user_id, source
     """
 
-    return _collapse_records(execute_query(pool, query, (user_id,)))
+    return execute_query(pool, query, (user_id,))
 
 
 def get_admin_credentials(pool: ThreadedConnectionPool):
@@ -115,7 +82,7 @@ def get_admin_credentials(pool: ThreadedConnectionPool):
     LATEST ON issued_at PARTITION BY user_id, source
     """
 
-    return _collapse_records(execute_query(pool, query))
+    return execute_query(pool, query)
 
 
 def get_credentials_to_refresh(pool: ThreadedConnectionPool):
@@ -137,7 +104,7 @@ def set_selected_sources(pool: ThreadedConnectionPool, user_id: str, sources: li
     INSERT INTO source_preferences (user_id, selected_sources, updated_at)
     VALUES (%s, %s, NOW())
     """
-    normalized = [normalize_source_key(source) for source in sources]
+    normalized = [source for source in sources]
     execute_query(pool, query, (user_id, json.dumps(sorted(set(normalized)))))
 
 
@@ -148,33 +115,24 @@ def get_selected_sources(pool: ThreadedConnectionPool, user_id: str) -> list[str
     WHERE user_id = %s
     LATEST ON updated_at PARTITION BY user_id
     """
+    
     try:
         rows = execute_query(pool, query, (user_id,)) or []
-    except Exception as exc:
-        if _is_missing_source_preferences_table_error(exc):
-            return None
-        raise
-
-    if not rows:
-        return None
-
-    try:
         parsed = json.loads(rows[0][0])
-    except (TypeError, json.JSONDecodeError):
-        return None
 
-    if not isinstance(parsed, list):
-        return None
-
-    return [normalize_source_key(str(source)) for source in parsed]
+        return [str(source) for source in parsed]
+    
+    except:
+        return []
 
 
 def get_authenticated_sources(pool: ThreadedConnectionPool, user_id: str):
     stored_credentials = get_user_credentials(pool, user_id)
     authenticated = {}
 
-    for source_key, credentials, _issued_at, _is_admin in stored_credentials or []:
+    for source_key, credentials, _issued_at, _is_admin in stored_credentials:
         source_class = SOURCES.get(source_key)
+
         if source_class is None:
             continue
 
@@ -188,6 +146,7 @@ def get_authenticated_sources(pool: ThreadedConnectionPool, user_id: str):
 def get_selected_authenticated_sources(pool: ThreadedConnectionPool, user_id: str):
     authenticated = get_authenticated_sources(pool, user_id)
     selected = get_selected_sources(pool, user_id)
+
     if not selected:
         return authenticated
 
