@@ -22,7 +22,7 @@ from src.config.auth import (
     set_selected_sources,
 )
 from src.config.logto_management import ensure_default_role_assigned
-from src.config.logto_auth import AuthInfo
+from src.config.logto_auth import AuthInfo, METRICS_EXPORT_SCOPE, has_scope
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
@@ -229,19 +229,19 @@ def extract_usage_metrics():
 @app.post(
     "/auth/bootstrap",
     response_model=AuthBootstrapResponseModel,
-    responses={503: {"description": "Unable to assign default Logto role"}},
+    responses={503: {"description": "Unable to assign default Logto global user role"}},
 )
 async def auth_bootstrap(auth: AuthenticatedAuth):
     try:
         return ensure_default_role_assigned(auth.sub)
     except requests.RequestException:
-        logging.exception("Failed to bootstrap default Logto role")
+        logging.exception("Failed to bootstrap default Logto global user role")
         raise HTTPException(
             status_code=503,
-            detail="Unable to assign default Logto role",
+            detail="Unable to assign default Logto global user role",
         )
     except RuntimeError as exc:
-        logging.warning("Default Logto role bootstrap is unavailable: %s", exc)
+        logging.warning("Default Logto global user role bootstrap is unavailable: %s", exc)
         return {
             "enabled": False,
             "assigned": False,
@@ -282,7 +282,7 @@ async def login_source(auth: AuthenticatedAuth, source_token: str, source: str):
     # Store credentials in database
     questdb_pool = app.state.questdb_pool
     user_id = auth.sub
-    is_admin = auth.role == "admin"
+    is_admin = has_scope(auth, METRICS_EXPORT_SCOPE)
 
     add_credentials(questdb_pool, user_id, source, source_token, is_admin)
     select_source(questdb_pool, user_id, source)

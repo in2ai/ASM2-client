@@ -107,7 +107,9 @@ def _management_request(
 ) -> requests.Response:
     config = _get_management_config()
     if config is None:
-        raise RuntimeError("Logto default role bootstrap is not configured")
+        raise RuntimeError(
+            "Logto default global user role bootstrap is not configured"
+        )
 
     (
         logto_endpoint,
@@ -179,7 +181,11 @@ def ensure_default_role_assigned(user_id: str) -> dict[str, bool]:
             "refresh_required": False,
         }
 
-    logger.info("Assigning default Logto role %s to user %s", default_user_role_id, user_id)
+    logger.info(
+        "Assigning default Logto global user role %s to user %s",
+        default_user_role_id,
+        user_id,
+    )
     _management_request(
         "POST",
         f"/api/users/{user_id}/roles",

@@ -6,7 +6,28 @@ export interface LogtoUser {
   lastName?: string | null
   email?: string | null
   role?: string | null
-  organizationId?: string | null
+}
+
+function extractGlobalRole(claims: IdTokenClaims): string {
+  const rawRoles = claims.roles as string[] | string | undefined
+
+  if (Array.isArray(rawRoles)) {
+    const roles = rawRoles.filter(
+      (role): role is string => typeof role === 'string' && role.length > 0,
+    )
+
+    if (roles.includes('admin')) {
+      return 'admin'
+    }
+
+    if (roles.length > 0) {
+      return roles[0]
+    }
+  } else if (typeof rawRoles === 'string' && rawRoles.length > 0) {
+    return rawRoles
+  }
+
+  return 'user'
 }
 
 export function mapClaimsToUser(claims: IdTokenClaims): LogtoUser {
@@ -14,23 +35,11 @@ export function mapClaimsToUser(claims: IdTokenClaims): LogtoUser {
   const firstName = nameParts[0] ?? null
   const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null
 
-  const organizationRoles = claims.organization_roles ?? []
-  let role: string | null = 'user'
-
-  if (organizationRoles.length > 0) {
-    const firstRole = organizationRoles[0]
-    if (typeof firstRole === 'string') {
-      const roleParts = firstRole.split(':')
-      role = roleParts.length > 1 ? roleParts[1] || 'user' : 'user'
-    }
-  }
-
   return {
     sub: claims.sub,
     firstName,
     lastName,
     email: claims.email ?? null,
-    role,
-    organizationId: claims.organizations?.[0] ?? null,
+    role: extractGlobalRole(claims),
   }
 }

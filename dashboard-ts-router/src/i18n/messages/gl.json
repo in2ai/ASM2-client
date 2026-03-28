@@ -231,11 +231,11 @@
     },
     "noNodes": {
       "title": "Non hai nodos dispoñibles",
-      "message": "Non hai nodos de organización configurados no sistema. Contacta co teu administrador ou executa o script de configuración.",
+      "message": "Non hai nodos configurados no sistema. Contacta co teu administrador ou executa o script de configuración.",
       "refresh": "Actualizar",
       "tips": {
         "setupScript": "Executa el script de configuración de nodos para crear nodos iniciais",
-        "logtoOrganizations": "Asegura que as organizacións de Logto estean configuradas correctamente",
+        "logtoOrganizations": "Asegura que os roles globais e os permisos do API resource de Logto estean configurados correctamente",
         "contactAdmin": "Contacta co teu administrador do sistema para obter axuda"
       }
     }

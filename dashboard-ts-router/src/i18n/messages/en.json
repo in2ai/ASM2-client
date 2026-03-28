@@ -231,11 +231,11 @@
     },
     "noNodes": {
       "title": "No nodes available",
-      "message": "No organization nodes are configured in the system. Contact your administrator or run the setup script.",
+      "message": "No nodes are configured in the system. Contact your administrator or run the setup script.",
       "refresh": "Refresh",
       "tips": {
         "setupScript": "Run the node setup script to create initial nodes",
-        "logtoOrganizations": "Ensure Logto organizations are properly configured",
+        "logtoOrganizations": "Ensure Logto global roles and API permissions are configured correctly",
         "contactAdmin": "Contact your system administrator for assistance"
       }
     }

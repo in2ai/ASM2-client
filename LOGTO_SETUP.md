@@ -4,7 +4,7 @@ This guide documents the current Logto setup for ASM2 using:
 
 - `dashboard-ts-router` as a browser SPA
 - `backend/server.py` as the protected FastAPI API
-- an optional Logto machine-to-machine client for default role bootstrap
+- an optional Logto machine-to-machine client for default global user role bootstrap
 
 The old Next.js-only flow is no longer the primary architecture for the dashboard path.
 
@@ -45,7 +45,7 @@ Relevant backend files:
 
 ### Optional machine-to-machine application
 
-This is only needed if you want the backend to auto-assign a default Logto role after first sign-in.
+This is only needed if you want the backend to auto-assign a default global user role after first sign-in.
 
 It is responsible for:
 
@@ -131,6 +131,7 @@ Notes:
 - `dashboard-ts-router/src/lib/logto.ts` reads the normalized `VITE_*` values.
 - `dashboard-ts-router/src/lib/api.ts` uses `/api` in production and `http://localhost:8000` in local dev when no explicit frontend backend URL is provided.
 - Unlike the old Next.js dashboard flow, the SPA does not need `LOGTO_APP_SECRET` or `LOGTO_COOKIE_SECRET` in browser code.
+- No Logto organization template is required for this setup.
 
 ## 4. Create The Backend API Resource
 
@@ -185,9 +186,9 @@ Protected backend routes currently include:
 - `GET /metrics/stats` requires `metrics:read`
 - `GET /metrics/export` requires `metrics:export`
 
-## 5. Optional Default Role Bootstrap
+## 5. Optional Default Global User Role Bootstrap
 
-If you want newly signed-in users to automatically receive a default Logto role, create a machine-to-machine application in Logto.
+If you want newly signed-in users to automatically receive a default global user role, create a machine-to-machine application in Logto.
 
 In Logto Admin Console:
 
@@ -216,7 +217,7 @@ Bootstrap flow in this repo:
 2. Logto redirects to `dashboard-ts-router/src/routes/callback.tsx`.
 3. The SPA requests an API token for `LOGTO_API_RESOURCE`.
 4. The SPA calls `POST /auth/bootstrap` on the backend.
-5. The backend assigns the configured default role if missing.
+5. The backend assigns the configured default global user role if missing.
 6. If Logto role assignment changed permissions, the SPA refreshes the API token.
 7. The SPA navigates to the requested page.
 

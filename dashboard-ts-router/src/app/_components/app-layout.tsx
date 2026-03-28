@@ -1,10 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { useLogto } from '@logto/react'
 import { Link } from '@tanstack/react-router'
 import {
   BarChart3,
-  Building2,
   Loader2,
   LogOut,
   Menu,
@@ -12,14 +12,12 @@ import {
   Shield,
   User,
   X,
-  type LucideIcon,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
-import {
-  DASHBOARD_VIEWS,
-  type DashboardView,
-} from '@/app/_components/dashboard-views'
+import { DASHBOARD_VIEWS } from '@/app/_components/dashboard-views'
+import type { DashboardView } from '@/app/_components/dashboard-views'
 import { ChartVisibilityControls } from '@/components/chart-visibility-controls'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -34,7 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ChartVisibilityProvider } from '@/contexts/chart-visibility-context'
-import { type LogtoUser } from '@/lib/auth'
+import type { LogtoUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 
 interface AppLayoutProps {
@@ -255,20 +253,20 @@ export function CompanyDisplay({ user }: Readonly<{ user: LogtoUser | null }>) {
 }
 
 function getInitials(user: LogtoUser | null): string {
-  if (user?.firstName && user?.lastName) {
+  if (user && user.firstName && user.lastName) {
     return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
   }
-  if (user?.email) {
+  if (user && user.email) {
     return user.email.substring(0, 2).toUpperCase()
   }
   return 'U'
 }
 
 function getDisplayName(user: LogtoUser | null, fallbackName: string): string {
-  if (user?.firstName && user?.lastName) {
+  if (user && user.firstName && user.lastName) {
     return `${user.firstName} ${user.lastName}`
   }
-  if (user?.firstName) {
+  if (user && user.firstName) {
     return user.firstName
   }
   return fallbackName
@@ -285,7 +283,7 @@ export function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
   const handleSignOut = async () => {
     try {
       setPending(true)
-      await signOut(`${window.location.origin}/sign-in`)
+      await signOut(`${globalThis.location.origin}/sign-in`)
     } finally {
       setPending(false)
     }
@@ -326,12 +324,6 @@ export function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
             <p className="text-muted-foreground text-xs leading-none">
               {user?.email ?? t('fallbackEmail')}
             </p>
-            {user?.role !== 'admin' && user?.organizationId && (
-              <p className="text-muted-foreground flex items-center gap-1 text-xs leading-none">
-                <Building2 className="h-3 w-3" />
-                {user.organizationId}
-              </p>
-            )}
           </div>
         </DropdownMenuLabel>
 
