@@ -20,6 +20,8 @@ _JWKS_ENDPOINT = ""
 security = HTTPBearer(auto_error=False)
 
 _SUPPORTED_JWT_ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"]
+METRICS_READ_SCOPE = "metrics:read"
+METRICS_EXPORT_SCOPE = "metrics:export"
 
 
 @dataclass(frozen=True)
@@ -84,14 +86,22 @@ def _get_jwks_client(logto_endpoint: str) -> jwt.PyJWKClient:
 
 
 def _extract_role(payload: dict[str, Any]) -> str:
-    organization_roles = payload.get("organization_roles")
+    raw_roles = payload.get("roles")
 
-    if isinstance(organization_roles, list) and organization_roles:
-        first_role = organization_roles[0]
-        if isinstance(first_role, str) and ":" in first_role:
-            return first_role.split(":", 1)[1]
+    if isinstance(raw_roles, list):
+        roles = [role for role in raw_roles if isinstance(role, str) and role]
+        if "admin" in roles:
+            return "admin"
+        if roles:
+            return roles[0]
+    elif isinstance(raw_roles, str) and raw_roles:
+        return raw_roles
 
     return "user"
+
+
+def has_scope(auth_info: AuthInfo, required_scope: str) -> bool:
+    return required_scope in auth_info.scopes
 
 
 def _get_allowed_jwt_algorithms(signing_key: jwt.PyJWK) -> list[str]:
@@ -175,8 +185,11 @@ def require_auth():
 
 def require_admin():
     def _dependency(auth_info: AuthInfo = Depends(require_auth())) -> AuthInfo:
-        if auth_info.role != "admin":
-            raise HTTPException(status_code=403, detail="Admin role required")
+        if not has_scope(auth_info, METRICS_EXPORT_SCOPE):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Missing required scope: {METRICS_EXPORT_SCOPE}",
+            )
 
         return auth_info
 
@@ -186,7 +199,7 @@ def require_admin():
 def require_scopes(required_scopes: list[str]):
     def _dependency(auth_info: AuthInfo = Depends(require_auth())) -> AuthInfo:
         missing_scopes = [
-            scope for scope in required_scopes if scope not in auth_info.scopes
+            scope for scope in required_scopes if not has_scope(auth_info, scope)
         ]
         if missing_scopes:
             raise HTTPException(

@@ -3,7 +3,14 @@ from typing import Annotated, Any
 
 from fastapi import Depends
 
-from src.config.logto_auth import AuthInfo, require_admin, require_auth, require_scopes
+from src.config.logto_auth import (
+    AuthInfo,
+    METRICS_EXPORT_SCOPE,
+    METRICS_READ_SCOPE,
+    require_admin,
+    require_auth,
+    require_scopes,
+)
 
 
 class MetricsByTagModel(BaseModel):
@@ -242,7 +249,9 @@ class SourceOperationResultModel(BaseModel):
     message: str
 
 
-MetricsReadAuth = Annotated[AuthInfo, Depends(require_scopes(["metrics:read"]))]
-MetricsExportAuth = Annotated[AuthInfo, Depends(require_scopes(["metrics:export"]))]
+MetricsReadAuth = Annotated[AuthInfo, Depends(require_scopes([METRICS_READ_SCOPE]))]
+MetricsExportAuth = Annotated[
+    AuthInfo, Depends(require_scopes([METRICS_EXPORT_SCOPE]))
+]
 AuthenticatedAuth = Annotated[AuthInfo, Depends(require_auth())]
 AdminAuth = Annotated[AuthInfo, Depends(require_admin())]

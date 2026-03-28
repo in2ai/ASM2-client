@@ -231,11 +231,11 @@
     },
     "noNodes": {
       "title": "No hay nodos disponibles",
-      "message": "No hay nodos de organización configurados en el sistema. Contacta a tu administrador o ejecuta el script de configuración.",
+      "message": "No hay nodos configurados en el sistema. Contacta a tu administrador o ejecuta el script de configuración.",
       "refresh": "Actualizar",
       "tips": {
         "setupScript": "Ejecuta el script de configuración de nodos para crear nodos iniciales",
-        "logtoOrganizations": "Asegura que las organizaciones de Logto estén configuradas correctamente",
+        "logtoOrganizations": "Asegura que los roles globales y los permisos del API resource de Logto estén configurados correctamente",
         "contactAdmin": "Contacta a tu administrador del sistema para obtener ayuda"
       }
     }
