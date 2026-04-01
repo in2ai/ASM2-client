@@ -273,7 +273,7 @@
     },
     "composer": {
       "placeholder": "Ask a question about your documents, processes, or data...",
-      "disabledHint": "Chat stays disabled until at least one connected source is selected for retrieval."
+      "disabledHint": "Chat stays disabled until at least one source is connected."
     },
     "messages": {
       "assistant": "Assistant",
@@ -289,8 +289,8 @@
     },
     "sources": {
       "openPanel": "Sources",
-      "title": "Sources and indexing",
-      "description": "Connect Google Drive, choose whether chat retrieval should use it, and reindex documents when needed.",
+      "title": "Sources",
+      "description": "Connect Google Drive so the assistant can retrieve from it.",
       "connected": "Connected",
       "connectDrive": "Connect Google Drive",
       "disconnect": "Disconnect",
@@ -302,18 +302,13 @@
       "steps": {
         "connect": "Click the Google Drive connect button in this panel.",
         "authorize": "Sign in to Google and approve the requested Drive access.",
-        "select": "Return here and keep Google Drive selected for retrieval.",
-        "reindex": "Reindex after connecting so the assistant can search the latest files."
+        "select": "Return here and confirm Google Drive appears as connected."
       },
       "callbackFailedTitle": "Google Drive connection failed",
       "callbackCancelled": "Google Drive authorization was cancelled or failed.",
       "callbackMissingCode": "Missing Google Drive authorization code.",
       "callbackInvalidState": "Google Drive authorization state is invalid or expired.",
       "callbackExchangeFailed": "Unable to complete Google Drive connection.",
-      "reindexTitle": "Reindex documents",
-      "reindexDescription": "Refresh the searchable document index after connecting or changing providers.",
-      "reindex": "Start reindex",
-      "reindexing": "Reindexing...",
       "providers": {
         "drive": { "description": "Connect your Google Drive files so the assistant can retrieve from them." }
       }

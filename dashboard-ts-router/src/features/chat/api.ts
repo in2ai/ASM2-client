@@ -7,8 +7,6 @@ import type {
   CreateChatInput,
   SendMessageInput,
   SendMessageResult,
-  SourceConnectCompleteInput,
-  SourceProviderKey,
   SourcesStatus,
 } from './types'
 
@@ -47,7 +45,16 @@ export function useAuthorizedChatRequest() {
       throw new Error(payload?.detail ?? `Request failed (${response.status})`)
     }
 
-    return (await response.json()) as T
+    if (response.status === 204) {
+      return undefined as T
+    }
+
+    const responseText = await response.text()
+    if (!responseText) {
+      return undefined as T
+    }
+
+    return JSON.parse(responseText) as T
   }
 }
 
@@ -66,8 +73,6 @@ export function useSourcesStatusQuery() {
   return useQuery({
     queryKey: chatQueryKeys.sources,
     queryFn: () => request<SourcesStatus>('/sources/status'),
-    refetchInterval: (query) =>
-      query.state.data?.reindex.in_progress ? 2_000 : false,
   })
 }
 
@@ -116,72 +121,6 @@ export function useSendMessageMutation() {
         result.chat,
       )
       queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
-    },
-  })
-}
-
-export function useUpdateSourceSelectionMutation() {
-  const request = useAuthorizedChatRequest()
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (selectedSources: SourceProviderKey[]) =>
-      request<SourcesStatus>('/sources/selection', {
-        body: JSON.stringify({ selected_sources: selectedSources }),
-        method: 'PUT',
-      }),
-    onSuccess: (result) => {
-      queryClient.setQueryData(chatQueryKeys.sources, result)
-    },
-  })
-}
-
-export function useCompleteSourceConnectionMutation() {
-  const request = useAuthorizedChatRequest()
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ provider, code, redirectUri }: SourceConnectCompleteInput) =>
-      request<{ success: boolean; message: string }>(
-        `/sources/${provider}/connect`,
-        {
-          body: JSON.stringify({ code, redirect_uri: redirectUri }),
-          method: 'POST',
-        },
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: chatQueryKeys.sources })
-    },
-  })
-}
-
-export function useDisconnectSourceMutation(provider: SourceProviderKey) {
-  const request = useAuthorizedChatRequest()
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: () =>
-      request<SourcesStatus>(`/sources/${provider}/disconnect`, {
-        method: 'POST',
-      }),
-    onSuccess: (result) => {
-      queryClient.setQueryData(chatQueryKeys.sources, result)
-    },
-  })
-}
-
-export function useReindexSourcesMutation() {
-  const request = useAuthorizedChatRequest()
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (sources?: SourceProviderKey[]) =>
-      request<SourcesStatus>('/sources/reindex', {
-        body: JSON.stringify(sources ? { sources } : {}),
-        method: 'POST',
-      }),
-    onSuccess: (result) => {
-      queryClient.setQueryData(chatQueryKeys.sources, result)
     },
   })
 }

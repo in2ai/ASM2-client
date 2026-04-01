@@ -207,28 +207,16 @@ class SourceProviderStatusModel(BaseModel):
     label: str
     configured: bool
     connected: bool
-    selected: bool
     auth_mode: str
     account_label: str | None = None
     oauth_client_id: str | None = None
     last_error: str | None = None
 
 
-class ReindexStatusModel(BaseModel):
-    in_progress: bool
-    last_started_at: str | None = None
-    last_finished_at: str | None = None
-    error: str | None = None
-    available: bool
-    message: str | None = None
-
-
 class SourcesStatusModel(BaseModel):
     providers: list[SourceProviderStatusModel]
     connected_sources: list[str]
-    selected_sources: list[str]
     can_chat: bool
-    reindex: ReindexStatusModel
 
 
 class SourceSelectionRequestModel(BaseModel):

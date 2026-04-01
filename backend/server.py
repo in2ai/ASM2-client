@@ -23,6 +23,7 @@ from src.config.auth import (
 )
 from src.config.logto_management import ensure_default_role_assigned
 from src.config.logto_auth import AuthInfo, METRICS_EXPORT_SCOPE, has_scope
+from src.connectors.drive import get_drive_oauth_client_id
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
@@ -269,12 +270,67 @@ async def is_vdb_update_active(auth: AdminAuth):
     return {"active": os.path.isfile(VDB_LOCK)}
 
 
+@app.get("/sources/status", response_model=SourcesStatusModel, status_code=200)
+async def get_sources_status(auth: AuthenticatedAuth):
+    questdb_pool = app.state.questdb_pool
+    user_id = auth.sub
+
+    authenticated_sources = get_authenticated_sources(questdb_pool, user_id)
+    connected_sources = sorted(authenticated_sources.keys())
+    drive_source = authenticated_sources.get("drive")
+    drive_oauth_client_id = get_drive_oauth_client_id()
+
+    return {
+        "providers": [
+            {
+                "key": "drive",
+                "label": getattr(SOURCES["drive"], "display_name", "Google Drive")
+                or "Google Drive",
+                "configured": bool(drive_oauth_client_id),
+                "connected": drive_source is not None,
+                "auth_mode": "authorization_code",
+                "account_label": getattr(drive_source, "account_label", None),
+                "oauth_client_id": drive_oauth_client_id,
+                "last_error": getattr(drive_source, "last_error", None),
+            }
+        ],
+        "connected_sources": connected_sources,
+        "can_chat": len(connected_sources) > 0,
+    }
+
+
 @app.post("/login-source", status_code=200)
-async def login_source(auth: AuthenticatedAuth, source_token: str, source: str):
+async def login_source(
+    auth: AuthenticatedAuth,
+    source_token: str,
+    source: str,
+    redirect_uri: str | None = None,
+):
     # Check source name
     source = validate_source(source)
 
-    source_instance: DataSource = SOURCES[source](source_token)
+    source_class = SOURCES[source]
+    auth_code_factory = getattr(source_class, "from_authorization_code", None)
+
+    try:
+        if callable(auth_code_factory):
+            if not redirect_uri:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"redirect_uri is required for source {source}",
+                )
+
+            source_instance = auth_code_factory(
+                source_token,
+                redirect_uri,
+            )
+        else:
+            source_instance = source_class(source_token)
+    except HTTPException:
+        raise
+    except Exception:
+        logging.warning("Source authorization code exchange failed", exc_info=True)
+        raise HTTPException(500, detail=f"Authentication failed for source {source}")
 
     if not source_instance.login():
         raise HTTPException(500, detail=f"Authentication failed for source {source}")
@@ -285,7 +341,15 @@ async def login_source(auth: AuthenticatedAuth, source_token: str, source: str):
     is_admin = has_scope(auth, METRICS_EXPORT_SCOPE)
     needs_refresh_at, expires_at = source_instance.expiry()
 
-    add_credentials(questdb_pool, user_id, source, source_token, is_admin, needs_refresh_at, expires_at)
+    add_credentials(
+        questdb_pool,
+        user_id,
+        source,
+        source_instance.raw_creds,
+        is_admin,
+        needs_refresh_at=needs_refresh_at,
+        expires_at=expires_at,
+    )
     select_source(questdb_pool, user_id, source)
 
 
@@ -326,11 +390,11 @@ async def get_chat(auth: AuthenticatedAuth, chat_id: str):
 
 async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
     questdb_pool = app.state.questdb_pool
-    sources = get_selected_authenticated_sources(questdb_pool, auth.sub)
+    sources = get_authenticated_sources(questdb_pool, auth.sub)
     if not sources:
         raise HTTPException(
             status_code=409,
-            detail="Connect and select at least one source before chatting",
+            detail="Connect at least one source before chatting",
         )
 
     register_user_activity(questdb_pool)

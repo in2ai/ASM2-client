@@ -14,7 +14,16 @@ SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
 ]
-CLIENT_SECRET_FILE = "client_secret.json"
+CLIENT_SECRET_FILE = get_env(
+    "GOOGLE_CLIENT_SECRET_FILE",
+    get_env("CLIENT_SECRET_FILE", "secrets/client_secret.json"),
+)
+CLIENT_SECRET_WEBSITE_FILE = get_env(
+    "GOOGLE_CLIENT_SECRET_WEBSITE_FILE",
+    get_env("CLIENT_SECRET_WEBSITE_FILE", "secrets/client_secret_website.json"),
+)
+CLIENT_SECRET = get_env("CLIENT_SECRET", "")
+CLIENT_SECRET_WEBSITE = get_env("CLIENT_SECRET_WEBSITE", "")
 GDRIVE_ROOT = get_env("GDRIVE_ROOT", get_env("FOLDER_ID", "")).strip()
 
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
