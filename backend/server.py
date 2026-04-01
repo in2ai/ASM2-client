@@ -283,9 +283,18 @@ async def login_source(auth: AuthenticatedAuth, source_token: str, source: str):
     questdb_pool = app.state.questdb_pool
     user_id = auth.sub
     is_admin = has_scope(auth, METRICS_EXPORT_SCOPE)
+    needs_refresh_at, expires_at = source_instance.expiry()
 
-    add_credentials(questdb_pool, user_id, source, source_token, is_admin)
+    add_credentials(questdb_pool, user_id, source, source_token, is_admin, needs_refresh_at, expires_at)
     select_source(questdb_pool, user_id, source)
+
+
+@app.get("/authenticated-sources", status_code=200)
+async def get_auth_sources(auth: AuthenticatedAuth):
+    questdb_pool = app.state.questdb_pool
+    user_id = auth.sub
+
+    return list(get_authenticated_sources(questdb_pool, user_id).keys())
 
 
 @app.get("/chats", response_model=list[ChatSummaryModel])
