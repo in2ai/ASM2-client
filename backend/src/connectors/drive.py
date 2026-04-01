@@ -1,15 +1,16 @@
+from datetime import datetime, timedelta
 import json
 import logging
-from typing import List
+import os
+from typing import Any, List, Tuple
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from typing import List
-
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google_auth_oauthlib.flow import Flow
 
-from src.config.config import GDRIVE_ROOT, SCOPES
+from src.config.config import CLIENT_SECRET_FILE, GDRIVE_ROOT, SCOPES
 from src.connectors.source import DataSource
 from src.connectors.vdb_file import GoogleDriveFile
 from src.utils.helpers import safe_execute
@@ -29,6 +30,55 @@ SUPPORTED_MIMES = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
 
+
+def get_drive_client_config() -> dict[str, Any] | None:
+    if not os.path.isfile(CLIENT_SECRET_FILE):
+        return None
+
+    try:
+        with open(CLIENT_SECRET_FILE, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    for client_type in ("web", "installed"):
+        client_config = payload.get(client_type)
+        if not isinstance(client_config, dict):
+            continue
+        if client_config.get("client_id") and client_config.get("client_secret"):
+            return {client_type: client_config}
+
+    return None
+
+
+def build_drive_flow(redirect_uri: str) -> Flow:
+    client_config = get_drive_client_config()
+    
+    if not client_config:
+        return None
+    
+    flow = Flow.from_client_config(client_config, scopes=SCOPES)
+    flow.redirect_uri = redirect_uri
+
+    return flow
+
+
+def serialize_drive_credentials(credentials):
+    return json.dumps(
+        {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": list(getattr(credentials, "scopes", []) or SCOPES),
+        }
+    )
+
+
 class GoogleDriveSource(DataSource):
     name = "drive"
 
@@ -38,6 +88,18 @@ class GoogleDriveSource(DataSource):
 
 
     def login(self) -> bool:
+        # First login (transform code to creds_dict)
+        try:
+            creds_dict = json.loads(self.raw_creds)
+
+            flow = build_drive_flow("")
+            flow.fetch_token(code=self.raw_creds)
+            self.raw_creds = serialize_drive_credentials(flow.credentials)
+        
+        except Exception:
+            pass
+
+        # Next logins
         try:
             creds_dict = json.loads(self.raw_creds)
 
@@ -57,6 +119,7 @@ class GoogleDriveSource(DataSource):
             logging.warning("Google Drive login failed", exc_info=True)
 
             return False
+        
 
     def refresh(self) -> bool:
         if self.credentials is None or not self.credentials.refresh_token:
@@ -64,21 +127,20 @@ class GoogleDriveSource(DataSource):
 
         try:
             self.credentials.refresh(Request())
-            self.raw_creds = json.dumps(
-                {
-                    "token": self.credentials.token,
-                    "refresh_token": self.credentials.refresh_token,
-                    "token_uri": self.credentials.token_uri,
-                    "client_id": self.credentials.client_id,
-                    "client_secret": self.credentials.client_secret,
-                    "scopes": list(getattr(self.credentials, "scopes", []) or SCOPES),
-                }
-            )
+            self.raw_creds = serialize_drive_credentials(self.credentials)
 
-            return self.login()
+            return True
 
         except Exception:
             return False
+        
+
+    def expiry(self) -> Tuple[datetime, datetime]:
+        expiry = self.credentials.expiry
+        needs_refresh_at = expiry - timedelta(minutes=20) if expiry is not None else None
+
+        return needs_refresh_at, expiry
+
 
     def get_authenticated_principals(self) -> List[str]:
         result_tokens = set()
@@ -144,6 +206,7 @@ class GoogleDriveSource(DataSource):
             return True
         except HttpError:
             return False
+
 
     def get_file_principals(self, file_id: str):
         # List all file permissions
@@ -213,6 +276,7 @@ class GoogleDriveSource(DataSource):
                 acl_principals.add("gdrive:anyone")
 
         return {"anyone": bool(acl_anyone), "allowed": sorted(acl_principals)}
+
 
     def list_files(self):
         # Discover all files via BFS
