@@ -10,7 +10,14 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import Flow
 
-from src.config.config import CLIENT_SECRET_FILE, GDRIVE_ROOT, SCOPES
+from src.config.config import (
+    CLIENT_SECRET,
+    CLIENT_SECRET_FILE,
+    CLIENT_SECRET_WEBSITE,
+    CLIENT_SECRET_WEBSITE_FILE,
+    GDRIVE_ROOT,
+    SCOPES,
+)
 from src.connectors.source import DataSource
 from src.connectors.vdb_file import GoogleDriveFile
 from src.utils.helpers import safe_execute
@@ -31,16 +38,7 @@ SUPPORTED_MIMES = (
 )
 
 
-def get_drive_client_config() -> dict[str, Any] | None:
-    if not os.path.isfile(CLIENT_SECRET_FILE):
-        return None
-
-    try:
-        with open(CLIENT_SECRET_FILE, "r", encoding="utf-8") as file:
-            payload = json.load(file)
-    except (OSError, json.JSONDecodeError):
-        return None
-
+def _extract_drive_client_config(payload: Any) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
         return None
 
@@ -52,6 +50,42 @@ def get_drive_client_config() -> dict[str, Any] | None:
             return {client_type: client_config}
 
     return None
+
+
+def _load_drive_client_config_from_json(raw_payload: str | None) -> dict[str, Any] | None:
+    if not raw_payload:
+        return None
+
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return None
+
+    return _extract_drive_client_config(payload)
+
+
+def _load_drive_client_config_from_file(path: str | None) -> dict[str, Any] | None:
+    if not path or not os.path.isfile(path):
+        return None
+
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    return _extract_drive_client_config(payload)
+
+
+def get_drive_client_config() -> dict[str, Any] | None:
+    return (
+        _load_drive_client_config_from_json(CLIENT_SECRET_WEBSITE)
+        or _load_drive_client_config_from_json(CLIENT_SECRET)
+        or _load_drive_client_config_from_file(CLIENT_SECRET_WEBSITE_FILE)
+        or _load_drive_client_config_from_file(CLIENT_SECRET_FILE)
+        or _load_drive_client_config_from_file("client_secret_website.json")
+        or _load_drive_client_config_from_file("client_secret.json")
+    )
 
 
 def build_drive_flow(redirect_uri: str) -> Flow:
@@ -79,8 +113,35 @@ def serialize_drive_credentials(credentials):
     )
 
 
+def get_drive_oauth_client_id() -> str | None:
+    client_config = get_drive_client_config()
+    if not client_config:
+        return None
+
+    config = next(iter(client_config.values()), None)
+    if not isinstance(config, dict):
+        return None
+
+    client_id = config.get("client_id")
+    return client_id if isinstance(client_id, str) and client_id else None
+
+
 class GoogleDriveSource(DataSource):
     name = "drive"
+    display_name = "Google Drive"
+
+    @classmethod
+    def from_authorization_code(
+        cls,
+        authorization_code: str,
+        redirect_uri: str,
+    ) -> "GoogleDriveSource":
+        flow = build_drive_flow(redirect_uri)
+        if flow is None:
+            raise RuntimeError("Google Drive OAuth client configuration is unavailable")
+
+        flow.fetch_token(code=authorization_code)
+        return cls(serialize_drive_credentials(flow.credentials))
 
 
     def __init__(self, raw_creds: str):
@@ -88,21 +149,12 @@ class GoogleDriveSource(DataSource):
 
 
     def login(self) -> bool:
-        # First login (transform code to creds_dict)
         try:
             creds_dict = json.loads(self.raw_creds)
+        except (TypeError, json.JSONDecodeError):
+            creds_dict = None
 
-            flow = build_drive_flow("")
-            flow.fetch_token(code=self.raw_creds)
-            self.raw_creds = serialize_drive_credentials(flow.credentials)
-        
-        except Exception:
-            pass
-
-        # Next logins
         try:
-            creds_dict = json.loads(self.raw_creds)
-
             if not isinstance(creds_dict, dict):
                 return False
 

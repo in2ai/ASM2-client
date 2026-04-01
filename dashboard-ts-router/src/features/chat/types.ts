@@ -56,32 +56,14 @@ export interface SourceProviderStatus {
   label: string
   configured: boolean
   connected: boolean
-  selected: boolean
   auth_mode: 'authorization_code'
   account_label: string | null
   oauth_client_id: string | null
   last_error?: string | null
 }
 
-export interface ReindexStatus {
-  in_progress: boolean
-  last_started_at: string | null
-  last_finished_at: string | null
-  error: string | null
-  available: boolean
-  message: string | null
-}
-
 export interface SourcesStatus {
   providers: SourceProviderStatus[]
   connected_sources: SourceProviderKey[]
-  selected_sources: SourceProviderKey[]
   can_chat: boolean
-  reindex: ReindexStatus
-}
-
-export interface SourceConnectCompleteInput {
-  provider: SourceProviderKey
-  code?: string
-  redirectUri?: string
 }

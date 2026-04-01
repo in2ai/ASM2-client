@@ -76,19 +76,19 @@ function ProviderCallbackRoute() {
 
     hasStartedRef.current = true
     setIsSubmitting(true)
+    const authCode = search.code
 
     void (async () => {
       try {
-        await request<{ success: boolean; message: string }>(
-          '/sources/drive/connect',
-          {
-            body: JSON.stringify({
-              code: search.code,
-              redirect_uri: storedRequest.redirectUri,
-            }),
-            method: 'POST',
-          },
-        )
+        const params = new URLSearchParams([
+          ['redirect_uri', storedRequest.redirectUri],
+          ['source', 'drive'],
+          ['source_token', authCode],
+        ])
+
+        await request<void>(`/login-source?${params.toString()}`, {
+          method: 'POST',
+        })
         if (!didUnmountRef.current) {
           clearGoogleDriveOAuthRequest()
           globalThis.location.replace(storedRequest.returnTo)

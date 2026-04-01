@@ -289,8 +289,8 @@
     },
     "sources": {
       "openPanel": "Fuentes",
-      "title": "Fuentes e indexación",
-      "description": "Conecta Google Drive, elige si el chat debe usarlo para la recuperación y reindexa documentos cuando sea necesario.",
+      "title": "Fuentes",
+      "description": "Conecta Google Drive para que el asistente pueda recuperar contenido desde él.",
       "connected": "Conectado",
       "connectDrive": "Conectar Google Drive",
       "disconnect": "Desconectar",
@@ -302,18 +302,13 @@
       "steps": {
         "connect": "Haz clic en el botón para conectar Google Drive en este panel.",
         "authorize": "Inicia sesión en Google y autoriza el acceso solicitado a Drive.",
-        "select": "Vuelve aquí y mantén Google Drive seleccionado para la recuperación.",
-        "reindex": "Reindexa después de conectar para que el asistente pueda buscar los archivos más recientes."
+        "select": "Vuelve aquí y confirma que Google Drive aparece como conectado."
       },
       "callbackFailedTitle": "La conexión con Google Drive falló",
       "callbackCancelled": "La autorización de Google Drive fue cancelada o falló.",
       "callbackMissingCode": "Falta el código de autorización de Google Drive.",
       "callbackInvalidState": "El estado de autorización de Google Drive es inválido o ha expirado.",
       "callbackExchangeFailed": "No se pudo completar la conexión con Google Drive.",
-      "reindexTitle": "Reindexar documentos",
-      "reindexDescription": "Actualiza el índice de documentos consultable después de conectar o cambiar proveedores.",
-      "reindex": "Iniciar reindexación",
-      "reindexing": "Reindexando...",
       "providers": {
         "drive": { "description": "Conecta tus archivos de Google Drive para que el asistente pueda recuperarlos." }
       }
