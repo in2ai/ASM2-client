@@ -23,7 +23,6 @@ from src.config.auth import (
 )
 from src.config.logto_management import ensure_default_role_assigned
 from src.config.logto_auth import AuthInfo, METRICS_EXPORT_SCOPE, has_scope
-from src.connectors.drive import get_drive_oauth_client_id
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
@@ -270,33 +269,11 @@ async def is_vdb_update_active(auth: AdminAuth):
     return {"active": os.path.isfile(VDB_LOCK)}
 
 
-@app.get("/sources/status", response_model=SourcesStatusModel, status_code=200)
-async def get_sources_status(auth: AuthenticatedAuth):
-    questdb_pool = app.state.questdb_pool
-    user_id = auth.sub
-
-    authenticated_sources = get_authenticated_sources(questdb_pool, user_id)
-    connected_sources = sorted(authenticated_sources.keys())
-    drive_source = authenticated_sources.get("drive")
-    drive_oauth_client_id = get_drive_oauth_client_id()
-
-    return {
-        "providers": [
-            {
-                "key": "drive",
-                "label": getattr(SOURCES["drive"], "display_name", "Google Drive")
-                or "Google Drive",
-                "configured": bool(drive_oauth_client_id),
-                "connected": drive_source is not None,
-                "auth_mode": "authorization_code",
-                "account_label": getattr(drive_source, "account_label", None),
-                "oauth_client_id": drive_oauth_client_id,
-                "last_error": getattr(drive_source, "last_error", None),
-            }
-        ],
-        "connected_sources": connected_sources,
-        "can_chat": len(connected_sources) > 0,
-    }
+@app.get("/sources/login-info", response_model=SourceLoginInfoModel, status_code=200)
+async def get_source_login_info(auth: AuthenticatedAuth, source: str):
+    source = validate_source(source)
+    source_class = SOURCES[source]
+    return source_class.login_info() or {}
 
 
 @app.post("/login-source", status_code=200)
@@ -358,7 +335,11 @@ async def get_auth_sources(auth: AuthenticatedAuth):
     questdb_pool = app.state.questdb_pool
     user_id = auth.sub
 
-    return list(get_authenticated_sources(questdb_pool, user_id).keys())
+    connected_sources = sorted(get_authenticated_sources(questdb_pool, user_id).keys())
+    return {
+        "connected_sources": connected_sources,
+        "can_chat": len(connected_sources) > 0,
+    }
 
 
 @app.get("/chats", response_model=list[ChatSummaryModel])

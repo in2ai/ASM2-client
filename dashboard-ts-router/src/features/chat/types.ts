@@ -51,19 +51,12 @@ export interface SendMessageResult {
 
 export type SourceProviderKey = 'drive'
 
-export interface SourceProviderStatus {
-  key: SourceProviderKey
-  label: string
-  configured: boolean
-  connected: boolean
+export interface SourceLoginInfo {
   auth_mode: 'authorization_code'
-  account_label: string | null
   oauth_client_id: string | null
-  last_error?: string | null
 }
 
 export interface SourcesStatus {
-  providers: SourceProviderStatus[]
   connected_sources: SourceProviderKey[]
   can_chat: boolean
 }

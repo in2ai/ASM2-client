@@ -202,21 +202,14 @@ class ChatSourceModel(BaseModel):
     link: str | None = None
 
 
-class SourceProviderStatusModel(BaseModel):
-    key: str
-    label: str
-    configured: bool
-    connected: bool
-    auth_mode: str
-    account_label: str | None = None
-    oauth_client_id: str | None = None
-    last_error: str | None = None
-
-
 class SourcesStatusModel(BaseModel):
-    providers: list[SourceProviderStatusModel]
     connected_sources: list[str]
     can_chat: bool
+
+
+class SourceLoginInfoModel(BaseModel):
+    auth_mode: str | None = None
+    oauth_client_id: str | None = None
 
 
 class SourceSelectionRequestModel(BaseModel):

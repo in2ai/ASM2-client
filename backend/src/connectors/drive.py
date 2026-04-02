@@ -131,6 +131,17 @@ class GoogleDriveSource(DataSource):
     display_name = "Google Drive"
 
     @classmethod
+    def login_info(cls) -> dict[str, Any] | None:
+        oauth_client_id = get_drive_oauth_client_id()
+        if not oauth_client_id:
+            return None
+
+        return {
+            "auth_mode": "authorization_code",
+            "oauth_client_id": oauth_client_id,
+        }
+
+    @classmethod
     def from_authorization_code(
         cls,
         authorization_code: str,
