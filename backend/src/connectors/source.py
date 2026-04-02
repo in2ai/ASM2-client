@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue, MatchAny
 
@@ -26,6 +26,11 @@ class DataSource:
 
     def expiry(self) -> Tuple[datetime, datetime]:
         ...
+
+
+    @classmethod
+    def login_info(cls) -> dict[str, Any] | None:
+        return None
         
 
     def update_authenticated_principals(self):

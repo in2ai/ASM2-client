@@ -16,6 +16,7 @@ import {
 import { CheckCircle2, CloudCog } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
+import { useSourceLoginInfoQuery } from './api'
 import {
   buildGoogleDriveAuthorizeUrl,
   createGoogleDriveOAuthState,
@@ -37,15 +38,19 @@ export function SourcesPanel({
 }: Readonly<SourcesPanelProps>) {
   const t = useTranslations('ChatPage')
   const [inlineError, setInlineError] = useState<string>()
-
-  const driveProvider = status?.providers.find(
-    (provider) => provider.key === 'drive',
-  )
+  const driveLoginInfoQuery = useSourceLoginInfoQuery('drive')
+  const driveConnected = status?.connected_sources.includes('drive') ?? false
+  const driveOauthClientId = driveLoginInfoQuery.data?.oauth_client_id ?? null
+  const driveConfigured = Boolean(driveOauthClientId)
+  const driveLoginError =
+    driveLoginInfoQuery.error instanceof Error
+      ? driveLoginInfoQuery.error.message
+      : undefined
 
   const startDrive = () => {
     setInlineError(undefined)
 
-    if (!driveProvider?.oauth_client_id) {
+    if (!driveOauthClientId) {
       setInlineError(t('sources.notConfigured'))
       return
     }
@@ -61,7 +66,7 @@ export function SourcesPanel({
 
     globalThis.location.assign(
       buildGoogleDriveAuthorizeUrl({
-        clientId: driveProvider.oauth_client_id,
+        clientId: driveOauthClientId,
         redirectUri,
         state,
       }),
@@ -95,57 +100,51 @@ export function SourcesPanel({
             </CardContent>
           </Card>
 
-          {driveProvider ? (
-            <Card className="gap-4 rounded-3xl">
-              <CardHeader className="gap-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <CloudCog className="h-4 w-4" />
-                      {driveProvider.label}
-                    </CardTitle>
-                    <CardDescription>
-                      {driveProvider.account_label ??
-                        t('sources.providers.drive.description')}
-                    </CardDescription>
-                  </div>
-                  {driveProvider.connected ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      {t('sources.connected')}
-                    </span>
-                  ) : null}
+          <Card className="gap-4 rounded-3xl">
+            <CardHeader className="gap-3">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CloudCog className="h-4 w-4" />
+                    Google Drive
+                  </CardTitle>
+                  <CardDescription>
+                    {t('sources.providers.drive.description')}
+                  </CardDescription>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {!driveProvider.configured ? (
-                  <p className="text-muted-foreground text-sm">
-                    {t('sources.notConfigured')}
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground text-sm">
-                    {t('sources.googleDriveHelp')}
-                  </p>
-                )}
-                {driveProvider.last_error ? (
-                  <p className="text-sm text-red-500">
-                    {driveProvider.last_error}
-                  </p>
+                {driveConnected ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {t('sources.connected')}
+                  </span>
                 ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {driveLoginError ? (
+                <p className="text-sm text-red-500">{driveLoginError}</p>
+              ) : driveConfigured ? (
+                <p className="text-muted-foreground text-sm">
+                  {t('sources.googleDriveHelp')}
+                </p>
+              ) : driveLoginInfoQuery.isLoading ? null : (
+                <p className="text-muted-foreground text-sm">
+                  {t('sources.notConfigured')}
+                </p>
+              )}
 
-                <div className="flex flex-wrap gap-2">
-                  {!driveProvider.connected ? (
-                    <Button
-                      disabled={!driveProvider.configured}
-                      onClick={startDrive}
-                    >
-                      {t('sources.connectDrive')}
-                    </Button>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
+              <div className="flex flex-wrap gap-2">
+                {!driveConnected ? (
+                  <Button
+                    disabled={!driveConfigured || driveLoginInfoQuery.isLoading}
+                    onClick={startDrive}
+                  >
+                    {t('sources.connectDrive')}
+                  </Button>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </SheetContent>
     </Sheet>

@@ -7,6 +7,7 @@ import type {
   CreateChatInput,
   SendMessageInput,
   SendMessageResult,
+  SourceLoginInfo,
   SourcesStatus,
 } from './types'
 
@@ -72,7 +73,19 @@ export function useSourcesStatusQuery() {
 
   return useQuery({
     queryKey: chatQueryKeys.sources,
-    queryFn: () => request<SourcesStatus>('/sources/status'),
+    queryFn: () => request<SourcesStatus>('/authenticated-sources'),
+  })
+}
+
+export function useSourceLoginInfoQuery(source: string) {
+  const request = useAuthorizedChatRequest()
+
+  return useQuery({
+    queryKey: [...chatQueryKeys.sources, 'login-info', source],
+    queryFn: () =>
+      request<SourceLoginInfo>(
+        `/sources/login-info?source=${encodeURIComponent(source)}`,
+      ),
   })
 }
 
