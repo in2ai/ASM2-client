@@ -10,9 +10,9 @@
 
 El proyecto se compone ahora de varios módulos integrados:
 
-1. **Cliente Python (Streamlit)**: Interfaz de usuario para la interacción directa con modelos y gestión de documentos.
-2. **Base de Datos (QuestDB)**: Base de datos de series temporales para almacenar métricas de alto rendimiento.
-3. **Dashboard (Next.js)**: Nueva interfaz de administración y visualización de analíticas avanzada, con autenticación gestionada por Logto.
+1. **Backend FastAPI**: API principal para chat, conectores, autenticación y métricas.
+2. **Dashboard SPA**: Frontend React/TanStack Router servido por Caddy y conectado al backend vía `/api`.
+3. **Servicios auxiliares**: QuestDB para métricas, Qdrant para vectores y Logto para autenticación.
 
 Este sistema permite:
 
@@ -28,10 +28,12 @@ El sistema se despliega mediante contenedores Docker orquestados:
 
 | Servicio       | Descripción                                        |
 | -------------- | -------------------------------------------------- |
-| `app`          | Servicio de Streamlit (Python)                     |
-| `questdb`      | Base de datos Time-Series                          |
-| `dashboard`    | Aplicación Next.js para métricas y administración  |
+| `backend`      | API FastAPI para chat, métricas y conectores       |
+| `dashboard`    | SPA React servida por Caddy                        |
+| `qdrant`       | Base vectorial para búsqueda híbrida               |
+| `questdb`      | Base de datos Time-Series para métricas            |
 | `questdb-init` | Contenedor efímero para inicialización de esquemas |
+| `logto`        | Proveedor de autenticación local opcional          |
 
 ## Requisitos
 
@@ -74,19 +76,18 @@ cp .env.example .env
 
 | Variable              | Descripción                                                         |
 | --------------------- | ------------------------------------------------------------------- |
-| `LOGTO_APP_ID`        | ID de aplicación de Logto                                           |
-| `LOGTO_APP_SECRET`    | Secret de aplicación de Logto                                       |
-| `LOGTO_ENDPOINT`      | Endpoint de Logto (ej. `http://localhost:3002`)                     |
-| `LOGTO_COOKIE_SECRET` | Contraseña segura para encriptación de cookies (mín. 32 caracteres) |
-| `REDIRECT_URI`        | URI de redirección para Streamlit (ej. `http://localhost:8501/`)    |
+| `VITE_LOGTO_APP_ID`     | ID de la aplicación SPA en Logto                                |
+| `VITE_LOGTO_ENDPOINT`   | Endpoint público de Logto usado por el navegador                |
+| `LOGTO_ENDPOINT`        | Endpoint que usa el backend para discovery/JWKS                 |
+| `VITE_LOGTO_API_RESOURCE` | Audience del API para la SPA                                 |
+| `LOGTO_API_RESOURCE`    | Audience del API para validación estricta en FastAPI            |
 
 #### Aplicación
 
 | Variable              | Descripción                                                                                   | Default                 |
 | --------------------- | --------------------------------------------------------------------------------------------- | ----------------------- |
 | `NODE_ENV`            | Entorno de ejecución (`development`, `production`)                                            | `development`           |
-| `PORT`                | Puerto del dashboard Next.js                                                                  | `3001`                  |
-| `NEXT_PUBLIC_APP_URL` | URL pública de la app (para redirects y OAuth). En Dokploy: `https://${{DOKPLOY_DEPLOY_URL}}` | `http://localhost:3001` |
+| `FRONTEND_URL`        | URL pública de la SPA para redirects y callbacks                                                | `http://localhost:3001` |
 | `TZ`                  | Zona horaria                                                                                  | `Europe/Madrid`         |
 | `SKIP_ENV_VALIDATION` | Omitir validación de variables (útil para builds)                                             | `false`                 |
 
@@ -101,13 +102,9 @@ cp .env.example .env
 
 ### Desarrollo Local del Dashboard
 
-Para **desarrollo local del Dashboard**, crea un archivo `.env.local` en la carpeta `dashboard/` para asegurar la conexión a la base de datos (que se ejecuta en Docker pero se accede via `localhost`):
+Para el desarrollo del frontend fuera de Docker, usa `dashboard-ts-router/.env.local` con la URL del backend y el endpoint público de Logto.
 
-```env
-QUESTDB_HOST=localhost
-```
-
-> **Nota:** Asegúrate de tener los archivos de secrets (`client_secret.json`, etc.) en la carpeta `secrets/` si son requeridos por el cliente Python.
+> **Nota:** El backend en Docker sigue necesitando los archivos de `secrets/` para los flujos OAuth de conectores como Google Drive.
 
 ## Instalación y Uso
 
@@ -115,86 +112,62 @@ QUESTDB_HOST=localhost
 
 | Archivo                            | Descripción                                              |
 | ---------------------------------- | -------------------------------------------------------- |
-| `docker-compose.yml`               | Stack completo local (app, questdb, dashboard, init)     |
-| `docker-compose.remote.yml`        | Solo app y dashboard, conecta a QuestDB remoto           |
-| `docker-compose.gpu.yml`           | Override para habilitar soporte GPU en el servicio `app` |
+| `docker-compose.yml`               | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) |
+| `docker-compose.local.yml`         | Override para infraestructura local (`questdb`, `questdb-init`, `logto`) |
+| `docker-compose.gpu.yml`           | Override para habilitar soporte GPU en `backend` |
 | `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA                      |
 | `docker-compose.qdrant-amd.yml`    | Override para Qdrant con GPU AMD (ROCm)                  |
 
-### Opción 1: Docker Stack Completo (Recomendada)
+### Opción 1: Stack Local Completo (Recomendada)
 
-Levanta todos los servicios con un solo comando:
+Levanta backend, SPA, Qdrant, QuestDB y Logto local con un solo comando:
 
 ```bash
-docker compose up --build
+./run.sh up
 ```
 
 Esto iniciará:
 
 - **Dashboard**: [http://localhost:3001](http://localhost:3001)
-- **Cliente Streamlit**: [http://localhost:8501](http://localhost:8501)
+- **Backend API**: [http://localhost:8001](http://localhost:8001)
 - **Consola QuestDB**: [http://localhost:9000](http://localhost:9000)
+- **Logto**: [http://localhost:3011](http://localhost:3011)
 
-### Opción 2: Docker con QuestDB Remoto (VPS)
+### Opción 2: Servicios Remotos
 
-Si ya tienes QuestDB desplegado en un VPS, puedes ejecutar solo los servicios `app` y `dashboard` conectándose a la instancia remota:
+Si QuestDB y Logto ya están desplegados fuera de Docker, ejecuta solo `backend`, `dashboard` y `qdrant`:
 
 ```bash
-# Configurar en .env:
-COMPOSE_FILE=docker-compose.remote.yml
-
-# O especificar el archivo directamente:
-docker compose -f docker-compose.remote.yml up
-
-# Modo desacoplado (background)
-docker compose -f docker-compose.remote.yml up -d
-
-# Reconstruir imágenes
-docker compose -f docker-compose.remote.yml up --build
+./run.sh up --remote
 ```
 
 **Requisitos previos:**
 
-1. Actualiza tu archivo `.env` con la conexión a QuestDB del VPS:
+1. Actualiza tu archivo `.env` con las URLs y credenciales remotas de QuestDB y Logto.
 
    ```env
    QUESTDB_HOST=tu-ip-o-hostname-vps
    QUESTDB_PORT=8812
    QUESTDB_USER=admin
    QUESTDB_PASSWORD=tu_contraseña
+    LOGTO_ENDPOINT=https://tu-logto-remoto
+    VITE_LOGTO_ENDPOINT=https://tu-logto-remoto
    ```
-
-2. Asegúrate de que los puertos de QuestDB en el VPS sean accesibles:
-   - `8812` - Protocolo PostgreSQL wire (requerido)
-   - `9000` - Consola web/REST API (opcional, para debugging)
-   - `9009` - Protocolo InfluxDB Line (si es necesario)
 
 Esto iniciará:
 
 - **Dashboard**: [http://localhost:3001](http://localhost:3001)
-- **Cliente Streamlit**: [http://localhost:8501](http://localhost:8501)
+- **Backend API**: [http://localhost:8001](http://localhost:8001)
 
-### Opción 3: Docker con Soporte GPU (App)
+### Opción 3: Docker con Soporte GPU (Backend)
 
-El servicio `app` puede utilizar GPU para acelerar el procesamiento. Para habilitar GPU:
+El servicio `backend` puede utilizar GPU para acelerar el procesamiento. Para habilitar GPU:
 
 ```bash
-# Usando variable de entorno (en .env):
-# Linux/macOS:
-COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml
+./run.sh up --gpu
 
-# Windows:
-COMPOSE_FILE=docker-compose.yml;docker-compose.gpu.yml
-
-# O combinando con QuestDB remoto y GPU:
-# Linux/macOS:
-COMPOSE_FILE=docker-compose.remote.yml:docker-compose.gpu.yml
-
-# Windows:
-COMPOSE_FILE=docker-compose.remote.yml;docker-compose.gpu.yml
-
-# O mediante línea de comandos:
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+# Con servicios remotos:
+./run.sh up --remote --gpu
 ```
 
 **Requisitos para GPU:**
@@ -215,14 +188,10 @@ Qdrant soporta aceleración GPU para indexación vectorial. Por defecto, se usa 
 #### GPU NVIDIA
 
 ```bash
-# Usando variable de entorno (en .env):
-COMPOSE_FILE=docker-compose.yml:docker-compose.qdrant-nvidia.yml
+./run.sh up --qdrant nvidia
 
-# O mediante línea de comandos:
-docker compose -f docker-compose.yml -f docker-compose.qdrant-nvidia.yml up
-
-# Combinando con GPU para app:
-COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml:docker-compose.qdrant-nvidia.yml
+# Combinando con GPU del backend:
+./run.sh up --gpu --qdrant nvidia
 ```
 
 **Requisitos NVIDIA:**
@@ -233,11 +202,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.gpu.yml:docker-compose.qdrant-nvi
 #### GPU AMD (ROCm)
 
 ```bash
-# Usando variable de entorno (en .env):
-COMPOSE_FILE=docker-compose.yml:docker-compose.qdrant-amd.yml
-
-# O mediante línea de comandos:
-docker compose -f docker-compose.yml -f docker-compose.qdrant-amd.yml up
+./run.sh up --qdrant amd
 ```
 
 **Requisitos AMD:**
@@ -248,20 +213,6 @@ docker compose -f docker-compose.yml -f docker-compose.qdrant-amd.yml up
 
 ### Opción 5: Desarrollo Local
 
-#### Cliente Python
-
-```bash
-# Crear entorno virtual
-python3 -m venv venv
-source venv/bin/activate
-
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Ejecutar script de inicio
-./run.sh
-```
-
 #### Backend FastAPI
 
 ```bash
@@ -271,13 +222,13 @@ cd backend
 uv sync
 
 # Ejecutar el backend
-uv run uvicorn server:app --host 0.0.0.0 --port 8000
+uv run uvicorn server:app --host 0.0.0.0 --port 8001
 ```
 
-#### Dashboard (Next.js)
+#### Dashboard (React SPA)
 
 ```bash
-cd dashboard
+cd dashboard-ts-router
 
 # Instalar dependencias
 pnpm install
@@ -292,20 +243,21 @@ El dashboard estará disponible en `http://localhost:3001`.
 
 ```text
 ASM2-client/
-├── dashboard/              # Código fuente de la aplicación Next.js
-├── src/                    # Código fuente del cliente Python
+├── backend/                # Backend FastAPI y conectores
+├── dashboard-ts-router/    # SPA React/TanStack Router
+├── src/                    # Código fuente legacy del cliente Python
 ├── sql/                    # Scripts de inicialización de base de datos
 ├── secrets/                # Credenciales y ficheros sensibles
 ├── img/                    # Imágenes y assets
-├── faiss_index/           # Índices FAISS (generado en runtime)
+├── qdrant_index/           # Estado auxiliar y manifest del índice vectorial
 ├── questdb/               # Datos persistentes de QuestDB (generado)
-├── docker-compose.yml     # Stack completo local
-├── docker-compose.remote.yml  # Configuración para QuestDB remoto
-├── docker-compose.gpu.yml # Override para soporte GPU (app)
+├── docker-compose.yml     # Stack base backend + SPA + qdrant
+├── docker-compose.local.yml    # Infraestructura local (QuestDB + Logto)
+├── docker-compose.gpu.yml # Override para soporte GPU (backend)
 ├── docker-compose.qdrant-nvidia.yml # Override para Qdrant GPU NVIDIA
 ├── docker-compose.qdrant-amd.yml    # Override para Qdrant GPU AMD
 ├── .env.example           # Plantilla de variables de entorno
-└── Dockerfile             # Imagen del cliente Python
+└── run.sh                 # Wrapper de modos de ejecución Docker
 ```
 
 ---

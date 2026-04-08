@@ -1,7 +1,8 @@
 # Qdrant AMD GPU override configuration
 # Usage:
-#   - Via COMPOSE_FILE env var: Set COMPOSE_FILE=docker-compose.yml:docker-compose.qdrant-amd.yml in .env
-#   - Via command line: docker compose -f docker-compose.yml -f docker-compose.qdrant-amd.yml up
+#   - Base stack only: docker compose -f docker-compose.yml -f docker-compose.qdrant-amd.yml up
+#   - Local infra: docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.qdrant-amd.yml up
+#   - Helper script: ./run.sh up --qdrant amd
 services:
   qdrant:
     image: qdrant/qdrant:gpu-amd-latest

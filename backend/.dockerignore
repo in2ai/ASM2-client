@@ -1,0 +1,7 @@
+__pycache__
+.git
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.venv
+chat_history.sqlite3
