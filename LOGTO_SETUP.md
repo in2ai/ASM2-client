@@ -129,7 +129,7 @@ LOGTO_API_RESOURCE=https://asm2-api.company.internal
 Notes:
 
 - `dashboard-ts-router/src/lib/logto.ts` reads the normalized `VITE_*` values.
-- `dashboard-ts-router/src/lib/api.ts` uses `/api` in production and `http://localhost:8000` in local dev when no explicit frontend backend URL is provided.
+- `dashboard-ts-router/src/lib/api.ts` uses `/api` in production and `http://localhost:8001` in local dev when no explicit frontend backend URL is provided.
 - Unlike the old Next.js dashboard flow, the SPA does not need `LOGTO_APP_SECRET` or `LOGTO_COOKIE_SECRET` in browser code.
 - No Logto organization template is required for this setup.
 
@@ -231,7 +231,7 @@ If the management env vars are not configured, bootstrap is skipped and the app 
 VITE_LOGTO_ENDPOINT=http://localhost:3011
 VITE_LOGTO_APP_ID=your_spa_app_id
 VITE_LOGTO_API_RESOURCE=https://asm2-api.company.internal
-VITE_BACKEND_URL=http://localhost:8000
+VITE_BACKEND_URL=http://localhost:8001
 ```
 
 Backend:
@@ -244,17 +244,18 @@ CORS_ALLOW_ORIGINS=http://localhost:3001
 
 ### SPA served behind Caddy in Docker
 
-In the SPA deployment override, the frontend uses `/api` and Caddy proxies it to the internal backend service.
+In the canonical Docker stack, the frontend uses `/api` and Caddy proxies it to the internal backend service.
 
-Relevant file:
+Relevant files:
 
-- `docker-compose.dashboard-spa.yml`
+- `docker-compose.yml`
+- `docker-compose.local.yml` when running Logto locally
 
 In that mode:
 
 - browser connects to the SPA on port `3001`
 - SPA calls `/api/...`
-- Caddy forwards `/api/*` to `backend:8000`
+- Caddy forwards `/api/*` to `backend:8001`
 
 ## 7. Environment Formatting Caveat
 

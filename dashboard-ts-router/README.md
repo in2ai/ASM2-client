@@ -10,7 +10,7 @@ Create `.env` at repository root (or `dashboard-ts-router/.env.local`) with:
 VITE_BACKEND_URL=/api
 VITE_LOGTO_ENDPOINT=http://localhost:3011
 VITE_LOGTO_APP_ID=your_logto_app_id
-VITE_LOGTO_API_RESOURCE=http://10.0.0.15:8000
+VITE_LOGTO_API_RESOURCE=http://10.0.0.15:8001
 ```
 
 You can also use existing root keys without the `VITE_` prefix:
@@ -19,14 +19,14 @@ You can also use existing root keys without the `VITE_` prefix:
 BACKEND_URL=/api
 LOGTO_ENDPOINT=http://localhost:3011
 LOGTO_APP_ID=your_logto_app_id
-LOGTO_API_RESOURCE=http://10.0.0.15:8000
+LOGTO_API_RESOURCE=http://10.0.0.15:8001
 ```
 
 Make sure backend env also defines:
 
 ```env
 LOGTO_ENDPOINT=http://localhost:3011
-LOGTO_API_RESOURCE=http://10.0.0.15:8000
+LOGTO_API_RESOURCE=http://10.0.0.15:8001
 CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5173
 ```
 
@@ -68,7 +68,7 @@ Both configs:
 
 - serve static assets
 - rewrite unknown routes to `index.html` for TanStack Router
-- reverse proxy `/api/*` to `http://backend:8000/*`
+- reverse proxy `/api/*` to `http://backend:8001/*`
 
 Example build commands:
 
@@ -79,12 +79,12 @@ docker build -f dashboard-ts-router/Dockerfile.caddy -t asm2-dashboard:caddy das
 Compose integration (from repo root):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dashboard-spa.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 ```
 
-This override file replaces the legacy `dashboard` service with the TanStack SPA image (served by Caddy) and adds the `backend` API service.
+The base compose stack now includes the TanStack SPA image (served by Caddy), the FastAPI backend, and Qdrant. The local override adds QuestDB and Logto.
 
-In the SPA override, the backend is only exposed to the internal Docker network. Public traffic goes through Caddy on port `3001`, which serves the SPA and proxies `/api/*` to `backend:8000`.
+In the Docker stack, public traffic goes through Caddy on port `3001`, which serves the SPA and proxies `/api/*` to `backend:8001`.
 
 Both services now include health checks:
 

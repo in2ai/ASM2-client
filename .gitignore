@@ -221,3 +221,8 @@ backend/graph/README.md
 backend/graph/test.py
 backend/graph/graph_diagram.png
 docs
+
+# Skills
+.kiro/
+.augment/
+.agents/skills/

@@ -1,6 +1,6 @@
 export const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
-  (import.meta.env.PROD ? '/api' : 'http://localhost:8000')
+  (import.meta.env.PROD ? '/api' : 'http://localhost:8001')
 
 export const API_RESOURCE = import.meta.env.VITE_LOGTO_API_RESOURCE
 

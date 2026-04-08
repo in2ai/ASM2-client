@@ -1,7 +1,8 @@
 # Qdrant NVIDIA GPU override configuration
 # Usage:
-#   - Via COMPOSE_FILE env var: Set COMPOSE_FILE=docker-compose.yml:docker-compose.qdrant-nvidia.yml in .env
-#   - Via command line: docker compose -f docker-compose.yml -f docker-compose.qdrant-nvidia.yml up
+#   - Base stack only: docker compose -f docker-compose.yml -f docker-compose.qdrant-nvidia.yml up
+#   - Local infra: docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.qdrant-nvidia.yml up
+#   - Helper script: ./run.sh up --qdrant nvidia
 services:
   qdrant:
     image: qdrant/qdrant:gpu-nvidia-latest

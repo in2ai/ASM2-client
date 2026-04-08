@@ -1,8 +1,16 @@
-FROM node:24-alpine AS build
+# syntax=docker/dockerfile:1
+
+FROM node:24-alpine AS deps
 
 WORKDIR /app
 
 RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+	pnpm install --frozen-lockfile
+
+FROM deps AS build
 
 ARG VITE_BACKEND_URL=/api
 ARG VITE_LOGTO_ENDPOINT
@@ -14,17 +22,23 @@ ENV VITE_LOGTO_ENDPOINT=$VITE_LOGTO_ENDPOINT
 ENV VITE_LOGTO_APP_ID=$VITE_LOGTO_APP_ID
 ENV VITE_LOGTO_API_RESOURCE=$VITE_LOGTO_API_RESOURCE
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
-
 COPY . .
 RUN pnpm build
 
-FROM caddy:2.10-alpine
+FROM caddy:2.10-alpine AS runtime
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl \
+	&& addgroup -S caddy \
+	&& adduser -S -D -H -h /var/lib/caddy -s /sbin/nologin -G caddy caddy \
+	&& mkdir -p /config /data /srv /var/lib/caddy \
+	&& chown -R caddy:caddy /config /data /srv /etc/caddy /var/lib/caddy
 
 COPY Caddyfile /etc/caddy/Caddyfile
-COPY --from=build /app/dist /srv
+COPY --from=build --chown=caddy:caddy /app/dist /srv
+
+USER caddy
 
 EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
+	CMD curl -fsS http://127.0.0.1/ >/dev/null || exit 1

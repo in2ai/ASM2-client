@@ -1,71 +1,38 @@
 services:
-  app:
-    build: .
-    image: mi-streamlit:latest
-    container_name: mi-streamlit
-    ports:
-      - "8501:8501"
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: asm2-backend:latest
     env_file:
       - .env
+    environment:
+      CHAT_DB_PATH: /app/data/chat_history.sqlite3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8001:8001"
     volumes:
       - ./qdrant_index:/app/qdrant_index:rw
-      - ./secrets/client_secret.json:/app/client_secret.json:ro
-      - ./secrets/client_secret_website.json:/app/client_secret_website.json:ro
-      - ./img:/app/img:rw
-      - ./src:/app/src:rw
-      - ./app.py:/app/app.py:rw
-    user: "${UID}:${GID}"
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
-      - net.ipv6.conf.default.disable_ipv6=1
-    restart: unless-stopped
+      - ./secrets:/app/secrets:ro
+      - backend-data:/app/data
+    depends_on:
+      qdrant:
+        condition: service_started
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "wget -qO- http://127.0.0.1:8501/_stcore/health || exit 1",
+          "curl -fsS http://127.0.0.1:8001/healthz || exit 1",
         ]
       interval: 15s
       timeout: 5s
       retries: 5
-
-  questdb:
-    image: questdb/questdb:latest
-    container_name: questdb
+      start_period: 20s
     restart: unless-stopped
-    # Ports:
-    # 9000 - QuestDB web console / REST API (HTTP)
-    # 8812 - Postgres wire protocol (useable with psql / Postgres clients / SQL interfaces)
-    # 9009 - InfluxDB Line Protocol (ILP)
-    ports:
-      - "9000:9000"
-      - "8812:8812"
-      - "9009:9009"
-    volumes:
-      - ./questdb:/root/.questdb:rw
-    env_file:
-      - .env
-
-  questdb-init:
-    image: postgres:15-alpine
-    container_name: questdb-init
-    restart: "no"
-    depends_on:
-      - questdb
-    volumes:
-      - ./sql/init.sql:/init/init.sql:ro
-      - ./sql/init.sh:/init/init.sh:ro
-    env_file:
-      - .env
-    working_dir: /init
-    entrypoint: ["sh", "/init/init.sh"]
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: qdrant
     restart: unless-stopped
     ports:
       - "6333:6333" # HTTP / REST API
@@ -75,80 +42,30 @@ services:
 
   dashboard:
     build:
-      context: ./dashboard
-      dockerfile: Dockerfile
+      context: ./dashboard-ts-router
+      dockerfile: Dockerfile.caddy
       args:
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
-        LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
-        LOGTO_APP_ID: ${LOGTO_APP_ID}
-        QUESTDB_HOST: ${QUESTDB_HOST}
-        QUESTDB_PORT: ${QUESTDB_PORT}
-        QUESTDB_USER: ${QUESTDB_USER}
-        QUESTDB_DB: ${QUESTDB_DB}
-      # SECURITY: Secrets are mounted via BuildKit during build only.
-      # They are available at /run/secrets/<id> during the build step
-      # but are NOT persisted in image layers.
-      secrets:
-        - LOGTO_APP_SECRET
-        - LOGTO_COOKIE_SECRET
-        - QUESTDB_PASSWORD
-    image: dashboard:latest
-    container_name: dashboard
+        VITE_BACKEND_URL: /api
+        VITE_LOGTO_ENDPOINT: ${VITE_LOGTO_ENDPOINT}
+        VITE_LOGTO_APP_ID: ${VITE_LOGTO_APP_ID}
+        VITE_LOGTO_API_RESOURCE: ${VITE_LOGTO_API_RESOURCE}
+    image: asm2-dashboard:latest
     depends_on:
-      - questdb
-    ports:
-      - "3001:3001"
-    env_file:
-      - .env
-    restart: unless-stopped
-
-  # Logto Authentication Service
-  logto:
-    depends_on:
-      logto-postgres:
+      backend:
         condition: service_healthy
-    image: ghcr.io/logto-io/logto:1.36.0
-    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
     ports:
-      - "3011:3001" # Main Logto endpoint (mapped to 3011)
-      - "3002:3002" # Admin console
-    environment:
-      TRUST_PROXY_HEADER: 1
-      DB_URL: postgres://logto:${LOGTO_POSTGRES_PASSWORD}@logto-postgres:5432/logto
-      ENDPOINT: ${LOGTO_ENDPOINT}
-      ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT}
-    volumes:
-      - logto-connectors:/etc/logto/packages/core/connectors
-    restart: unless-stopped
-
-  # PostgreSQL for Logto
-  logto-postgres:
-    image: postgres:18-alpine
-    container_name: logto-postgres
-    user: postgres
-    environment:
-      POSTGRES_USER: logto
-      POSTGRES_DB: logto
-      POSTGRES_PASSWORD: ${LOGTO_POSTGRES_PASSWORD}
-    volumes:
-      - logto-postgres-data:/var/lib/postgresql/data
+      - "3001:80"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U logto -d logto"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1/ >/dev/null || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
 
-# Build-time secrets (read from environment variables)
-# These are used during docker build only and are NOT stored in image layers
-secrets:
-  LOGTO_APP_SECRET:
-    environment: LOGTO_APP_SECRET
-  LOGTO_COOKIE_SECRET:
-    environment: LOGTO_COOKIE_SECRET
-  QUESTDB_PASSWORD:
-    environment: QUESTDB_PASSWORD
-
 volumes:
-  logto-connectors:
-  logto-postgres-data:
+  backend-data:
