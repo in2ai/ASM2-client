@@ -30,6 +30,7 @@
     "grayscale",
     "healthcheck",
     "healthz",
+    "hnsw",
     "httplib",
     "huggingface",
     "igraph",
