@@ -60,3 +60,7 @@ export interface SourcesStatus {
   connected_sources: SourceProviderKey[]
   can_chat: boolean
 }
+
+export interface VdbUpdateStatus {
+  active: boolean
+}

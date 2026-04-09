@@ -9,6 +9,7 @@ import type {
   SendMessageResult,
   SourceLoginInfo,
   SourcesStatus,
+  VdbUpdateStatus,
 } from './types'
 
 export const chatQueryKeys = {
@@ -16,6 +17,7 @@ export const chatQueryKeys = {
   detail: (chatId: string) => ['chat', 'detail', chatId] as const,
   list: ['chat', 'list'] as const,
   sources: ['chat', 'sources'] as const,
+  vdbUpdate: ['chat', 'vdb-update'] as const,
 }
 
 export function useAuthorizedChatRequest() {
@@ -89,6 +91,16 @@ export function useSourceLoginInfoQuery(source: string) {
   })
 }
 
+export function useVdbUpdateStatusQuery(enabled: boolean) {
+  const request = useAuthorizedChatRequest()
+
+  return useQuery({
+    enabled,
+    queryKey: chatQueryKeys.vdbUpdate,
+    queryFn: () => request<VdbUpdateStatus>('/vdb-update-status'),
+  })
+}
+
 export function useChatQuery(chatId?: string) {
   const request = useAuthorizedChatRequest()
 
@@ -134,6 +146,36 @@ export function useSendMessageMutation() {
         result.chat,
       )
       queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
+    },
+  })
+}
+
+export function useStartVdbUpdateMutation() {
+  const request = useAuthorizedChatRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () =>
+      request<void>('/start-vdb-update', {
+        method: 'POST',
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: chatQueryKeys.vdbUpdate })
+    },
+  })
+}
+
+export function useStopVdbUpdateMutation() {
+  const request = useAuthorizedChatRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () =>
+      request<void>('/stop-vdb-update', {
+        method: 'POST',
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: chatQueryKeys.vdbUpdate })
     },
   })
 }
