@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 
 import { useLogto } from '@logto/react'
 
-import { type LogtoUser, mapClaimsToUser } from '@/lib/auth'
+import { API_RESOURCE } from '@/lib/api'
+import { ADMIN_SCOPE, hasScopeInAccessToken, mapClaimsToUser } from '@/lib/auth'
+import type { LogtoUser } from '@/lib/auth'
 
 export function useAuthenticatedUser() {
-  const { isLoading, isAuthenticated, getIdTokenClaims } = useLogto()
+  const { isLoading, isAuthenticated, getAccessToken, getIdTokenClaims } = useLogto()
   const [user, setUser] = useState<LogtoUser | null>(null)
 
   useEffect(() => {
@@ -17,12 +19,22 @@ export function useAuthenticatedUser() {
         return
       }
 
-      const claims = await getIdTokenClaims()
+      const [claims, accessToken] = await Promise.all([
+        getIdTokenClaims(),
+        getAccessToken(API_RESOURCE).catch(() => null),
+      ])
+
       if (!claims || cancelled) {
         return
       }
 
-      setUser(mapClaimsToUser(claims))
+      const nextUser = mapClaimsToUser(claims)
+
+      setUser(
+        hasScopeInAccessToken(accessToken, ADMIN_SCOPE)
+          ? { ...nextUser, role: 'admin' }
+          : nextUser,
+      )
     }
 
     void loadUser()
@@ -30,7 +42,7 @@ export function useAuthenticatedUser() {
     return () => {
       cancelled = true
     }
-  }, [getIdTokenClaims, isAuthenticated])
+  }, [getAccessToken, getIdTokenClaims, isAuthenticated])
 
   return {
     isAuthenticated,
