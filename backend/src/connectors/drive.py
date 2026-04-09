@@ -11,10 +11,7 @@ from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import Flow
 
 from src.config.config import (
-    CLIENT_SECRET,
     CLIENT_SECRET_FILE,
-    CLIENT_SECRET_WEBSITE,
-    CLIENT_SECRET_WEBSITE_FILE,
     GDRIVE_ROOT,
     SCOPES,
 )
@@ -52,18 +49,6 @@ def _extract_drive_client_config(payload: Any) -> dict[str, Any] | None:
     return None
 
 
-def _load_drive_client_config_from_json(raw_payload: str | None) -> dict[str, Any] | None:
-    if not raw_payload:
-        return None
-
-    try:
-        payload = json.loads(raw_payload)
-    except json.JSONDecodeError:
-        return None
-
-    return _extract_drive_client_config(payload)
-
-
 def _load_drive_client_config_from_file(path: str | None) -> dict[str, Any] | None:
     if not path or not os.path.isfile(path):
         return None
@@ -78,14 +63,7 @@ def _load_drive_client_config_from_file(path: str | None) -> dict[str, Any] | No
 
 
 def get_drive_client_config() -> dict[str, Any] | None:
-    return (
-        _load_drive_client_config_from_json(CLIENT_SECRET_WEBSITE)
-        or _load_drive_client_config_from_json(CLIENT_SECRET)
-        or _load_drive_client_config_from_file(CLIENT_SECRET_WEBSITE_FILE)
-        or _load_drive_client_config_from_file(CLIENT_SECRET_FILE)
-        or _load_drive_client_config_from_file("client_secret_website.json")
-        or _load_drive_client_config_from_file("client_secret.json")
-    )
+    return _load_drive_client_config_from_file(CLIENT_SECRET_FILE)
 
 
 def build_drive_flow(redirect_uri: str) -> Flow:

@@ -3,7 +3,6 @@ set -euo pipefail
 
 REQUIRED_FILES=(
   "./secrets/client_secret.json"
-  "./secrets/client_secret_website.json"
 )
 
 usage() {
