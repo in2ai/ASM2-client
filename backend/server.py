@@ -363,6 +363,30 @@ def _get_chat_or_404(
     return chat
 
 
+def _used_vectordb_search_in_latest_turn(messages: list[Any]) -> bool:
+    last_human_index = next(
+        (
+            index
+            for index in range(len(messages) - 1, -1, -1)
+            if isinstance(messages[index], HumanMessage)
+        ),
+        -1,
+    )
+
+    if last_human_index == -1:
+        return False
+
+    for message in messages[last_human_index + 1 :]:
+        if not isinstance(message, AIMessage):
+            continue
+
+        for tool_call in message.tool_calls or []:
+            if tool_call.get("name") == "vectordb_search":
+                return True
+
+    return False
+
+
 @app.get("/chats/{chat_id}", response_model=ChatDetailModel)
 async def get_chat(auth: AuthenticatedAuth, chat_id: str):
     chat_store: ChatStore = app.state.chat_store
@@ -406,15 +430,16 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
         raise HTTPException(status_code=500, detail="No response generated")
 
     available_sources: list[dict[str, Any]] = []
-    try:
-        _chunks, available_sources, _lang_code = retrieve_and_rerank(
-            query,
-            app.state.vectorstore,
-            app.state.reranker,
-            sources,
-        )
-    except Exception:
-        logging.warning("Failed to collect chat source metadata", exc_info=True)
+    if _used_vectordb_search_in_latest_turn(messages):
+        try:
+            _chunks, available_sources, _lang_code = retrieve_and_rerank(
+                query,
+                app.state.vectorstore,
+                app.state.reranker,
+                sources,
+            )
+        except Exception:
+            logging.warning("Failed to collect chat source metadata", exc_info=True)
 
     record_token_usage_metrics(questdb_pool, messages)
     return {
