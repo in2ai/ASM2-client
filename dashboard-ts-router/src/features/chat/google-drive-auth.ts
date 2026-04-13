@@ -7,6 +7,19 @@ const GOOGLE_DRIVE_SCOPES = [
 
 export const GOOGLE_DRIVE_CALLBACK_PATH = '/chat/provider-callback'
 
+const GOOGLE_DRIVE_INTERNAL_URL_BASE = 'https://dashboard.invalid'
+const GOOGLE_DRIVE_OAUTH_RESPONSE_KEYS = [
+  'authuser',
+  'code',
+  'error',
+  'error_description',
+  'hd',
+  'iss',
+  'prompt',
+  'scope',
+  'state',
+]
+
 const GOOGLE_DRIVE_RETURN_TO_KEY = 'chat:providerReturnTo'
 const GOOGLE_DRIVE_STATE_KEY = 'chat:driveOAuthState'
 const GOOGLE_DRIVE_REDIRECT_URI_KEY = 'chat:driveRedirectUri'
@@ -29,20 +42,57 @@ export interface StoredGoogleDriveOAuthRequest {
   state: string
 }
 
-export function normalizeGoogleDriveReturnTo(returnTo: string | null | undefined) {
-  if (!returnTo || !returnTo.startsWith('/')) {
+function createSearchParams(search: string | URLSearchParams) {
+  if (search instanceof URLSearchParams) {
+    return new URLSearchParams(search)
+  }
+
+  return new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
+}
+
+function stripGoogleDriveOAuthResponseParams(search: string) {
+  const params = createSearchParams(search)
+
+  if (!hasGoogleDriveOAuthResponseParams(params)) {
+    return search
+  }
+
+  for (const key of GOOGLE_DRIVE_OAUTH_RESPONSE_KEYS) {
+    params.delete(key)
+  }
+
+  const nextSearch = params.toString()
+  return nextSearch ? `?${nextSearch}` : ''
+}
+
+export function normalizeGoogleDriveReturnTo(
+  returnTo: string | null | undefined,
+) {
+  if (!returnTo?.startsWith('/')) {
     return '/chat'
   }
 
-  if (isGoogleDriveCallbackPath(returnTo.split('?')[0] ?? returnTo)) {
+  const url = new URL(returnTo, GOOGLE_DRIVE_INTERNAL_URL_BASE)
+
+  if (isGoogleDriveCallbackPath(url.pathname)) {
     return '/chat'
   }
 
-  return returnTo
+  return `${url.pathname}${stripGoogleDriveOAuthResponseParams(url.search)}${url.hash}`
+}
+
+export function hasGoogleDriveOAuthResponseParams(
+  search: string | URLSearchParams,
+) {
+  const params = createSearchParams(search)
+  return params.has('code') || params.has('error')
 }
 
 export function createGoogleDriveOAuthState() {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  )
 }
 
 export function persistGoogleDriveOAuthRequest({
@@ -50,7 +100,10 @@ export function persistGoogleDriveOAuthRequest({
   returnTo,
   state,
 }: Readonly<PersistGoogleDriveOAuthRequestInput>) {
-  sessionStorage.setItem(GOOGLE_DRIVE_RETURN_TO_KEY, returnTo)
+  sessionStorage.setItem(
+    GOOGLE_DRIVE_RETURN_TO_KEY,
+    normalizeGoogleDriveReturnTo(returnTo),
+  )
   sessionStorage.setItem(GOOGLE_DRIVE_STATE_KEY, state)
   sessionStorage.setItem(GOOGLE_DRIVE_REDIRECT_URI_KEY, redirectUri)
 }
@@ -66,7 +119,9 @@ export function readGoogleDriveOAuthRequest(): StoredGoogleDriveOAuthRequest | n
   return {
     state,
     redirectUri,
-    returnTo: normalizeGoogleDriveReturnTo(sessionStorage.getItem(GOOGLE_DRIVE_RETURN_TO_KEY)),
+    returnTo: normalizeGoogleDriveReturnTo(
+      sessionStorage.getItem(GOOGLE_DRIVE_RETURN_TO_KEY),
+    ),
   }
 }
 

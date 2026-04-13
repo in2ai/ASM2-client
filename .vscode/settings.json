@@ -6,6 +6,7 @@
     "appuser",
     "asyncio",
     "authkit",
+    "authuser",
     "Caddyfile",
     "Cantarell",
     "checkpointer",

@@ -4,6 +4,7 @@ import {
   buildGoogleDriveAuthorizeUrl,
   clearGoogleDriveOAuthRequest,
   GOOGLE_DRIVE_CALLBACK_PATH,
+  hasGoogleDriveOAuthResponseParams,
   isGoogleDriveCallbackPath,
   normalizeGoogleDriveReturnTo,
   persistGoogleDriveOAuthRequest,
@@ -40,7 +41,9 @@ describe('google drive auth helpers', () => {
     expect(url.origin).toBe('https://accounts.google.com')
     expect(url.pathname).toBe('/o/oauth2/v2/auth')
     expect(url.searchParams.get('client_id')).toBe('google-client-id')
-    expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:3001/chat/provider-callback')
+    expect(url.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:3001/chat/provider-callback',
+    )
     expect(url.searchParams.get('response_type')).toBe('code')
     expect(url.searchParams.get('scope')).toBe(
       [
@@ -88,7 +91,27 @@ describe('google drive auth helpers', () => {
   it('normalizes invalid callback return targets back to /chat', () => {
     expect(normalizeGoogleDriveReturnTo(undefined)).toBe('/chat')
     expect(normalizeGoogleDriveReturnTo('https://example.com')).toBe('/chat')
-    expect(normalizeGoogleDriveReturnTo('/chat/provider-callback?code=abc')).toBe('/chat')
-    expect(normalizeGoogleDriveReturnTo('/chat?panel=sources')).toBe('/chat?panel=sources')
+    expect(
+      normalizeGoogleDriveReturnTo('/chat/provider-callback?code=abc'),
+    ).toBe('/chat')
+    expect(
+      normalizeGoogleDriveReturnTo(
+        '/chat?code=abc&state=oauth-state&scope=drive&iss=https://accounts.google.com&hd=in2ai.com',
+      ),
+    ).toBe('/chat')
+    expect(normalizeGoogleDriveReturnTo('/chats?code=abc&panel=sources')).toBe(
+      '/chats?panel=sources',
+    )
+    expect(normalizeGoogleDriveReturnTo('/chat?panel=sources')).toBe(
+      '/chat?panel=sources',
+    )
+  })
+
+  it('detects OAuth callback params even outside the callback route', () => {
+    expect(
+      hasGoogleDriveOAuthResponseParams('?code=abc&state=oauth-state'),
+    ).toBe(true)
+    expect(hasGoogleDriveOAuthResponseParams('?error=access_denied')).toBe(true)
+    expect(hasGoogleDriveOAuthResponseParams('?panel=sources')).toBe(false)
   })
 })

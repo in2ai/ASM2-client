@@ -1,11 +1,18 @@
-import { Suspense, lazy } from 'react'
-
-import { Navigate, Outlet, createFileRoute, useLocation, useNavigate } from '@tanstack/react-router'
-import { z } from 'zod'
-
 import { LoadingState } from '@/app/_components/metrics/loading-state'
-import { isGoogleDriveCallbackPath } from '@/features/chat/google-drive-auth'
+import {
+  hasGoogleDriveOAuthResponseParams,
+  isGoogleDriveCallbackPath,
+} from '@/features/chat/google-drive-auth'
 import { useAuthenticatedUser } from '@/hooks/use-authenticated-user'
+import {
+  Navigate,
+  Outlet,
+  createFileRoute,
+  useLocation,
+  useNavigate,
+} from '@tanstack/react-router'
+import { Suspense, lazy } from 'react'
+import { z } from 'zod'
 
 const ChatPage = lazy(() =>
   import('@/features/chat/chat-page').then((module) => ({
@@ -27,9 +34,26 @@ function ChatRoute() {
   const location = useLocation()
   const search = Route.useSearch()
   const { isAuthenticated, isLoading, user } = useAuthenticatedUser()
+  const callbackSearchParams = new URLSearchParams(globalThis.location.search)
 
   if (isGoogleDriveCallbackPath(location.pathname)) {
     return <Outlet />
+  }
+
+  if (hasGoogleDriveOAuthResponseParams(callbackSearchParams)) {
+    return (
+      <Navigate
+        to="/chat/provider-callback"
+        search={{
+          code: callbackSearchParams.get('code') ?? undefined,
+          error: callbackSearchParams.get('error') ?? undefined,
+          error_description:
+            callbackSearchParams.get('error_description') ?? undefined,
+          state: callbackSearchParams.get('state') ?? undefined,
+        }}
+        replace
+      />
+    )
   }
 
   if ((isLoading && !user) || (isAuthenticated && !user)) {
@@ -56,7 +80,7 @@ function ChatRoute() {
         user={user}
         selectedChatId={search.chatId}
         onSelectChat={(chatId, options) => {
-          void navigate({
+          navigate({
             search: chatId ? { chatId } : {},
             replace: options?.replace ?? false,
           })
