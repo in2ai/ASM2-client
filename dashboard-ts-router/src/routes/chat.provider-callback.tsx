@@ -1,18 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
-
-import { useLogto } from '@logto/react'
-import { createFileRoute } from '@tanstack/react-router'
-import { useTranslations } from 'next-intl'
-import { z } from 'zod'
-
 import { LoadingState } from '@/app/_components/metrics/loading-state'
 import { ErrorState } from '@/components/error-state'
-
 import { useAuthorizedChatRequest } from '@/features/chat/api'
 import {
   clearGoogleDriveOAuthRequest,
   readGoogleDriveOAuthRequest,
 } from '@/features/chat/google-drive-auth'
+import { useLogto } from '@logto/react'
+import { createFileRoute } from '@tanstack/react-router'
+import { useTranslations } from 'next-intl'
+import { useEffect, useRef, useState } from 'react'
+import { z } from 'zod'
 
 const callbackSearchSchema = z.object({
   code: z.string().optional(),
@@ -37,6 +34,8 @@ function ProviderCallbackRoute() {
   const didUnmountRef = useRef(false)
 
   useEffect(() => {
+    didUnmountRef.current = false
+
     return () => {
       didUnmountRef.current = true
     }
