@@ -8,6 +8,38 @@ export interface LogtoUser {
   role?: string | null
 }
 
+export const ADMIN_SCOPE = 'metrics:export'
+
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  const payload = token.split('.')[1]
+
+  if (!payload) {
+    return null
+  }
+
+  const normalizedPayload = payload
+    .replaceAll('-', '+')
+    .replaceAll('_', '/')
+    .padEnd(payload.length + ((4 - (payload.length % 4 || 4)) % 4), '=')
+
+  try {
+    return JSON.parse(globalThis.atob(normalizedPayload)) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+export function hasScopeInAccessToken(token: string | null | undefined, scope: string): boolean {
+  if (!token) {
+    return false
+  }
+
+  const payload = parseJwtPayload(token)
+  const rawScope = payload?.scope
+
+  return typeof rawScope === 'string' && rawScope.split(' ').includes(scope)
+}
+
 function extractGlobalRole(claims: IdTokenClaims): string {
   const rawRoles = claims.roles as string[] | string | undefined
 

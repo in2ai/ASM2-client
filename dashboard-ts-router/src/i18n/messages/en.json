@@ -269,11 +269,14 @@
       "title": "Ask your first question",
       "description": "Choose an existing conversation or start a new one to chat with the assistant.",
       "gatedTitle": "Connect and select at least one source",
-      "gatedDescription": "Open the sources panel to connect Google Drive before starting the conversation."
+      "gatedDescription": "Open the sources panel to start the source setup flow before starting the conversation.",
+      "syncTitle": "Finish source setup before chatting",
+      "syncDescription": "Stop the VDB update flow in the sources panel so the backend can finish preparing the RAG before you chat."
     },
     "composer": {
       "placeholder": "Ask a question about your documents, processes, or data...",
-      "disabledHint": "Chat stays disabled until at least one source is connected."
+      "disabledHint": "Chat stays disabled until at least one source is connected.",
+      "finishSetupHint": "Finish the source setup flow in the sources panel before chatting."
     },
     "messages": {
       "assistant": "Assistant",
@@ -296,13 +299,28 @@
       "disconnect": "Disconnect",
       "notConfigured": "This provider is not configured on the backend yet.",
       "googleDriveHelp": "The browser starts Google OAuth, then the returned authorization code is sent to the backend and stored there.",
+      "readyToChatTitle": "Finish source setup before chatting",
+      "readyToChatDescription": "When you are done connecting sources, use the main VDB action above to stop the update flow and let the backend prepare the RAG.",
+      "vdb": {
+        "title": "Source setup flow",
+        "description": "Start the source setup phase before connecting providers, then finish it so the backend can prepare the RAG.",
+        "checking": "Checking status",
+        "active": "Source setup active",
+        "inactive": "Source setup stopped",
+        "activeDescription": "You can now connect and authorize the sources you want. When you are done, finish the setup so the backend can prepare the RAG.",
+        "inactiveDescription": "Start the source setup flow before connecting providers.",
+        "connectPrerequisite": "Start the source setup flow first to enable provider connections.",
+        "startUpdate": "Start source setup",
+        "stopUpdate": "Finish setup and prepare RAG"
+      },
       "selectForChat": "Use this source for chat retrieval",
-      "stepsTitle": "Connection flow",
-      "stepsDescription": "Follow the same pattern each time you connect Google Drive.",
+      "stepsTitle": "Setup flow",
+      "stepsDescription": "Follow this sequence each time you add or refresh connected sources.",
       "steps": {
-        "connect": "Click the Google Drive connect button in this panel.",
-        "authorize": "Sign in to Google and approve the requested Drive access.",
-        "select": "Return here and confirm Google Drive appears as connected."
+        "start": "Start the source setup flow in this panel.",
+        "connect": "Connect the providers you want to include, such as Google Drive.",
+        "authorize": "Sign in to each provider and approve the requested access.",
+        "finish": "Finish the setup flow before returning to the chat so the backend can prepare the RAG."
       },
       "callbackFailedTitle": "Google Drive connection failed",
       "callbackCancelled": "Google Drive authorization was cancelled or failed.",

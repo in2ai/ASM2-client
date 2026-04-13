@@ -269,11 +269,14 @@
       "title": "Fai a túa primeira pregunta",
       "description": "Escolle unha conversa existente ou inicia unha nova para falar co asistente.",
       "gatedTitle": "Conecta e selecciona polo menos unha fonte",
-      "gatedDescription": "Abre o panel de fontes para conectar Google Drive antes de iniciar a conversa."
+      "gatedDescription": "Abre o panel de fontes para iniciar o fluxo de preparación antes de empezar a conversa.",
+      "syncTitle": "Remata a preparación de fontes antes de chatear",
+      "syncDescription": "Detén o fluxo de actualización de VDB no panel de fontes para que o backend remate de preparar o RAG antes de chatear."
     },
     "composer": {
       "placeholder": "Fai unha pregunta sobre os teus documentos, procesos ou datos...",
-      "disabledHint": "O chat permanece deshabilitado ata que polo menos unha fonte conectada estea seleccionada para a recuperación."
+      "disabledHint": "O chat permanece deshabilitado ata que polo menos unha fonte conectada estea seleccionada para a recuperación.",
+      "finishSetupHint": "Remata o fluxo de preparación de fontes no panel antes de chatear."
     },
     "messages": {
       "assistant": "Asistente",
@@ -296,13 +299,28 @@
       "disconnect": "Desconectar",
       "notConfigured": "Este provedor aínda non está configurado no backend.",
       "googleDriveHelp": "O navegador inicia Google OAuth e despois o código de autorización devolto envíase ao backend e gárdase alí.",
+      "readyToChatTitle": "Remata a preparación antes de chatear",
+      "readyToChatDescription": "Cando remates de conectar fontes, usa a acción principal de VDB para deter o fluxo e deixar que o backend prepare o RAG.",
+      "vdb": {
+        "title": "Fluxo de preparación de fontes",
+        "description": "Inicia a fase de preparación antes de conectar provedores e remátaa para que o backend poida preparar o RAG.",
+        "checking": "Comprobando estado",
+        "active": "Preparación activa",
+        "inactive": "Preparación detida",
+        "activeDescription": "Agora podes conectar e autorizar as fontes que queiras. Cando remates, finaliza a preparación para que o backend poida preparar o RAG.",
+        "inactiveDescription": "Inicia o fluxo de preparación de fontes antes de conectar provedores.",
+        "connectPrerequisite": "Inicia primeiro o fluxo de preparación de fontes para habilitar a conexión de provedores.",
+        "startUpdate": "Iniciar preparación",
+        "stopUpdate": "Finalizar e preparar RAG"
+      },
       "selectForChat": "Usar esta fonte para a recuperación do chat",
-      "stepsTitle": "Fluxo de conexión",
-      "stepsDescription": "Sigue este mesmo patrón cada vez que conectes Google Drive.",
+      "stepsTitle": "Fluxo de preparación",
+      "stepsDescription": "Sigue esta secuencia cada vez que engadas ou refresques fontes conectadas.",
       "steps": {
-        "connect": "Preme no botón para conectar Google Drive neste panel.",
-        "authorize": "Inicia sesión en Google e autoriza o acceso solicitado a Drive.",
-        "select": "Volve aquí e confirma que Google Drive aparece como conectado."
+        "start": "Inicia o fluxo de preparación de fontes neste panel.",
+        "connect": "Conecta os provedores que queiras incluír, como Google Drive.",
+        "authorize": "Inicia sesión en cada provedor e autoriza o acceso solicitado.",
+        "finish": "Finaliza o fluxo antes de volver ao chat para que o backend prepare o RAG."
       },
       "callbackFailedTitle": "A conexión con Google Drive fallou",
       "callbackCancelled": "A autorización de Google Drive foi cancelada ou fallou.",

@@ -1,7 +1,7 @@
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
-import { type AppLocale } from '@/i18n/config'
-import { type LogtoUser } from '@/lib/auth'
+import type { AppLocale } from '@/i18n/config'
+import type { LogtoUser } from '@/lib/auth'
 import { Settings2 } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useState } from 'react'
@@ -11,12 +11,13 @@ import {
   useCreateChatMutation,
   useSendMessageMutation,
   useSourcesStatusQuery,
+  useVdbUpdateStatusQuery,
 } from './api'
 import { ChatShell } from './chat-shell'
 import { ChatSidebar } from './chat-sidebar'
 import { ConversationView } from './conversation-view'
 import { SourcesPanel } from './sources-panel'
-import { type ChatMessage } from './types'
+import type { ChatMessage } from './types'
 import { getChatTitle, toErrorMessage } from './utils'
 
 interface ChatPageProps {
@@ -39,6 +40,7 @@ export function ChatPage({
 
   const chatsQuery = useChatsQuery()
   const sourcesQuery = useSourcesStatusQuery()
+  const vdbStatusQuery = useVdbUpdateStatusQuery(user.role === 'admin')
   const effectiveChatId = selectedChatId ?? chatsQuery.data?.[0]?.id
   const chatQuery = useChatQuery(effectiveChatId)
   const createChatMutation = useCreateChatMutation()
@@ -69,6 +71,26 @@ export function ChatPage({
     sourcesQuery.error
   const isBusy = createChatMutation.isPending || sendMessageMutation.isPending
   const chatEnabled = sourcesQuery.data?.can_chat ?? false
+  const sourceSyncActive =
+    user.role === 'admin' && (vdbStatusQuery.data?.active ?? false)
+  const composerDisabled = !chatEnabled || sourceSyncActive
+  const composerHint = !chatEnabled
+    ? t('composer.disabledHint')
+    : sourceSyncActive
+      ? t('composer.finishSetupHint')
+      : undefined
+  const emptyTitle = !chatEnabled
+    ? t('empty.gatedTitle')
+    : sourceSyncActive
+      ? t('empty.syncTitle')
+      : t('empty.title')
+  const emptyDescription = !chatEnabled
+    ? t('empty.gatedDescription')
+    : sourceSyncActive
+      ? t('empty.syncDescription')
+      : t('empty.description')
+  const emptyPrimaryActionLabel =
+    !chatEnabled || sourceSyncActive ? t('sources.openPanel') : undefined
 
   const handleCreateChat = async () => {
     setComposerError(undefined)
@@ -154,6 +176,7 @@ export function ChatPage({
       }
     >
       <SourcesPanel
+        isAdmin={user.role === 'admin'}
         open={sourcesOpen}
         onOpenChange={setSourcesOpen}
         status={sourcesQuery.data}
@@ -170,21 +193,17 @@ export function ChatPage({
       ) : (
         <ConversationView
           chat={activeChat}
-          composerDisabled={!chatEnabled}
-          composerHint={chatEnabled ? undefined : t('composer.disabledHint')}
+          composerDisabled={composerDisabled}
+          composerHint={composerHint}
           title={getChatTitle(
             activeChat?.title,
             t('conversation.newChatTitle'),
           )}
           composerPlaceholder={t('composer.placeholder')}
           composerValue={composerValue}
-          emptyTitle={chatEnabled ? t('empty.title') : t('empty.gatedTitle')}
-          emptyDescription={
-            chatEnabled ? t('empty.description') : t('empty.gatedDescription')
-          }
-          emptyPrimaryActionLabel={
-            !chatEnabled ? t('sources.openPanel') : undefined
-          }
+          emptyTitle={emptyTitle}
+          emptyDescription={emptyDescription}
+          emptyPrimaryActionLabel={emptyPrimaryActionLabel}
           errorMessage={composerError}
           isLoading={Boolean(effectiveChatId) && chatQuery.isLoading}
           isSending={isBusy}
