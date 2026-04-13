@@ -192,7 +192,7 @@ def update_vdb():
 
             build_vectordb_from_sources(sources)
 
-            logging.info("VDB update job finished", len(sources))
+            logging.info("VDB update job finished")
 
     periodic_task(update, 3600)  # Once an hour
 

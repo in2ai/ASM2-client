@@ -31,20 +31,6 @@ TOPIC_MIN_SIZE = get_int_env("TOPIC_MIN_SIZE", 20000)
 CALCULATE_TOPICS = get_bool_env("CALCULATE_TOPICS")
 
 
-def get_config_hash() -> str:
-    """
-    Generate a stable hash of the chunking configuration.
-
-    If chunk_size or chunk_overlap changes, the hash changes and a full rebuild is triggered.
-    """
-    config = (
-        f"chunk_size={DOCUMENT_SPLITTER._chunk_size}"
-        f"_overlap={DOCUMENT_SPLITTER._chunk_overlap}"
-        "_tokenizer=unicode_v1"
-    )
-    return hashlib.md5(config.encode()).hexdigest()[:8]
-
-
 def iterate_qdrant_docs(
     vectorstore: Qdrant,
     batch_size=100,
@@ -99,25 +85,6 @@ def build_vectordb_from_sources(sources: List[DataSource]):
 def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
     # Read status manifest file
     manifest = VDBManifest(QDRANT_PATH)
-    current_config_hash = get_config_hash()
-
-    config_changed = False
-    if hasattr(manifest, "needs_config_rebuild"):
-        try:
-            config_changed = bool(manifest.needs_config_rebuild(current_config_hash))
-        except Exception:
-            config_changed = False
-
-    # Limpiar manifest si config cambió
-    if config_changed:
-        logging.warning(
-            "Chunking config changed; forcing full rebuild for all sources [config=%s]",
-            current_config_hash,
-        )
-        manifest.manifest["processed_ids"] = {}
-        manifest.manifest["total_chunks"] = 0
-        manifest.manifest["completed"] = {}
-        manifest.save()
 
     # Check if the part for this source is already constructed
     vectorstore = get_vectordb()
@@ -282,17 +249,10 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
 
     # Update status manifest
     manifest.add_completed_source(source)
-    if hasattr(manifest, "set_config_hash"):
-        try:
-            manifest.set_config_hash(current_config_hash)
-        except Exception:
-            pass
-    manifest.save()
     logging.info(
-        "Index saved in %s for source %s [config: %s]",
+        "Index saved in %s for source %s",
         QDRANT_PATH,
         source,
-        current_config_hash,
     )
     return vectorstore
 
