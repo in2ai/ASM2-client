@@ -136,14 +136,13 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
 def get_rag_system_prompt(lang_code: str) -> str:
     """Build the RAG system prompt with the detected language."""
     return (
-        "You are a RAG conversational assistant. Respond ONLY with the provided CONTEXT. "
+        "You are a RAG conversational assistant. Use the available search tools when the user needs information from connected documents. "
         "Respond EXCLUSIVELY in the language of the last message of the user, "
         f"which has been detected to have the following language code: {lang_code}. "
-        "Do not improvise if you don't have information in the context. "
+        "When you use retrieved context, answer only with information supported by it and do not improvise. "
         'In your response, do not use the word "CONTEXT", instead use "the sources". '
         "Write in natural, clear, and direct language. "
-        "IMPORTANT: In the 'sources' field, include ONLY the sources you actually used to respond. "
-        "If the question is a greeting, thanks, or does not require information from the sources, leave 'sources' empty. "
+        "If the message is a greeting, thanks, or casual conversation that does not require document retrieval, reply naturally without mentioning sources or calling tools. "
         "Use the conversation history to follow the thread. "
         "When calling search tools, always formulate the query argument as a fully "
         "self-contained search query. Resolve any pronouns, demonstratives, or "
