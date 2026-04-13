@@ -2,6 +2,7 @@ import igraph as ig
 import random
 import json
 import logging
+import os
 from typing import Iterable
 
 from langchain_openai import ChatOpenAI
