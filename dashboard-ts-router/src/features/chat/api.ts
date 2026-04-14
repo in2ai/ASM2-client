@@ -132,7 +132,6 @@ export function useCreateChatMutation() {
 
 export function useSendMessageMutation() {
   const request = useAuthorizedChatRequest()
-  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: ({ chatId, content }: SendMessageInput) =>
@@ -140,13 +139,6 @@ export function useSendMessageMutation() {
         body: JSON.stringify({ content }),
         method: 'POST',
       }),
-    onSuccess: (result, variables) => {
-      queryClient.setQueryData(
-        chatQueryKeys.detail(variables.chatId),
-        result.chat,
-      )
-      queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
-    },
   })
 }
 

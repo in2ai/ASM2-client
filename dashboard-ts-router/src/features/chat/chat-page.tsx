@@ -2,10 +2,12 @@ import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import type { AppLocale } from '@/i18n/config'
 import type { LogtoUser } from '@/lib/auth'
+import { useQueryClient } from '@tanstack/react-query'
 import { Settings2 } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useState } from 'react'
 import {
+  chatQueryKeys,
   useChatQuery,
   useChatsQuery,
   useCreateChatMutation,
@@ -38,6 +40,7 @@ export function ChatPage({
   const [pendingMessage, setPendingMessage] = useState<ChatMessage | null>(null)
   const [sourcesOpen, setSourcesOpen] = useState(false)
 
+  const queryClient = useQueryClient()
   const chatsQuery = useChatsQuery()
   const sourcesQuery = useSourcesStatusQuery()
   const vdbStatusQuery = useVdbUpdateStatusQuery(user.role === 'admin')
@@ -126,8 +129,14 @@ export function ChatPage({
 
       setComposerValue('')
       setPendingMessage(optimisticMessage)
-      await sendMessageMutation.mutateAsync({ chatId: activeChatId, content })
+      const result = await sendMessageMutation.mutateAsync({
+        chatId: activeChatId,
+        content,
+      })
+
       setPendingMessage(null)
+      queryClient.setQueryData(chatQueryKeys.detail(activeChatId), result.chat)
+      await queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
     } catch (error) {
       setPendingMessage(null)
       setComposerValue(content)
