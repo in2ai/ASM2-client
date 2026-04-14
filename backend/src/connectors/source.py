@@ -28,8 +28,7 @@ class DataSource:
         ...
 
 
-    @classmethod
-    def login_info(cls) -> dict[str, Any] | None:
+    def login_info() -> dict[str, Any] | None:
         return None
         
 
