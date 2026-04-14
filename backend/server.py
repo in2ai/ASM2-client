@@ -286,29 +286,17 @@ async def login_source(
     # Check source name
     source = validate_source(source)
 
+    # Get login payload
+    payload = {
+        'auth_token': source_token,
+        'redirect_uri': redirect_uri
+    }
+
+    # Construct source instance
     source_class = SOURCES[source]
-    auth_code_factory = getattr(source_class, "from_authorization_code", None)
+    source_instance = source_class(json.dumps(payload))
 
-    try:
-        if callable(auth_code_factory):
-            if not redirect_uri:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"redirect_uri is required for source {source}",
-                )
-
-            source_instance = auth_code_factory(
-                source_token,
-                redirect_uri,
-            )
-        else:
-            source_instance = source_class(source_token)
-    except HTTPException:
-        raise
-    except Exception:
-        logging.warning("Source authorization code exchange failed", exc_info=True)
-        raise HTTPException(500, detail=f"Authentication failed for source {source}")
-
+    # Login in the source
     if not source_instance.login():
         raise HTTPException(500, detail=f"Authentication failed for source {source}")
 

@@ -108,8 +108,12 @@ class GoogleDriveSource(DataSource):
     name = "drive"
     display_name = "Google Drive"
 
-    @classmethod
-    def login_info(cls) -> dict[str, Any] | None:
+
+    def __init__(self, raw_creds: str):
+        super().__init__(self.name, raw_creds, GDRIVE_ROOT)
+
+    
+    def login_info() -> dict[str, Any] | None:
         oauth_client_id = get_drive_oauth_client_id()
         if not oauth_client_id:
             return None
@@ -119,37 +123,26 @@ class GoogleDriveSource(DataSource):
             "oauth_client_id": oauth_client_id,
         }
 
-    @classmethod
-    def from_authorization_code(
-        cls,
-        authorization_code: str,
-        redirect_uri: str,
-    ) -> "GoogleDriveSource":
-        flow = build_drive_flow(redirect_uri)
-        if flow is None:
-            raise RuntimeError("Google Drive OAuth client configuration is unavailable")
-
-        flow.fetch_token(code=authorization_code)
-        return cls(serialize_drive_credentials(flow.credentials))
-
-
-    def __init__(self, raw_creds: str):
-        super().__init__(self.name, raw_creds, GDRIVE_ROOT)
-
 
     def login(self) -> bool:
         try:
             creds_dict = json.loads(self.raw_creds)
-        except (TypeError, json.JSONDecodeError):
-            creds_dict = None
 
-        try:
-            if not isinstance(creds_dict, dict):
-                return False
+            # First login
+            if creds_dict.get('auth_token') and creds_dict.get('redirect_uri'):
+                flow = build_drive_flow(creds_dict['redirect_uri'])
 
+                if flow is None:
+                    raise RuntimeError("Google Drive OAuth client configuration is unavailable")
+
+                flow.fetch_token(code=creds_dict['auth_token'])
+                
+                self.raw_creds = serialize_drive_credentials(flow.credentials)
+                creds_dict = json.loads(self.raw_creds)
+            
             self.credentials = Credentials.from_authorized_user_info(creds_dict)
             self.service = build("drive", "v3", credentials=self.credentials)
-
+            
             self.update_authenticated_principals()
 
             return True
