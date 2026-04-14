@@ -14,6 +14,8 @@ _MANAGEMENT_ACCESS_TOKEN = ""
 _MANAGEMENT_ACCESS_TOKEN_EXPIRES_AT = 0.0
 _MANAGEMENT_ACCESS_TOKEN_RESOURCE = ""
 _MANAGEMENT_ACCESS_TOKEN_ENDPOINT = ""
+_USER_ROLE_CACHE_TTL_SECONDS = 60
+_USER_ROLE_CACHE: dict[str, tuple[float, list[str]]] = {}
 
 
 def _get_management_config() -> tuple[str, str, str, str, str] | None:
@@ -28,7 +30,7 @@ def _get_management_config() -> tuple[str, str, str, str, str] | None:
     if not logto_endpoint:
         raise RuntimeError("LOGTO_ENDPOINT is required for Logto management access")
 
-    if not management_app_id or not management_app_secret or not default_user_role_id:
+    if not management_app_id or not management_app_secret:
         return None
 
     return (
@@ -41,7 +43,8 @@ def _get_management_config() -> tuple[str, str, str, str, str] | None:
 
 
 def is_default_role_bootstrap_enabled() -> bool:
-    return _get_management_config() is not None
+    config = _get_management_config()
+    return bool(config and config[3])
 
 
 def _get_management_access_token(
@@ -107,9 +110,7 @@ def _management_request(
 ) -> requests.Response:
     config = _get_management_config()
     if config is None:
-        raise RuntimeError(
-            "Logto default global user role bootstrap is not configured"
-        )
+        raise RuntimeError("Logto management API access is not configured")
 
     (
         logto_endpoint,
@@ -160,9 +161,34 @@ def _management_request(
     return response
 
 
+def get_user_role_names(user_id: str) -> list[str]:
+    now = time.time()
+    cached = _USER_ROLE_CACHE.get(user_id)
+
+    if cached and now < cached[0]:
+        return cached[1]
+
+    response = _management_request("GET", f"/api/users/{user_id}/roles")
+    payload = response.json()
+
+    if not isinstance(payload, list):
+        return []
+
+    role_names = [
+        role_name
+        for role in payload
+        if isinstance(role, dict)
+        for role_name in [role.get("name")]
+        if isinstance(role_name, str) and role_name
+    ]
+
+    _USER_ROLE_CACHE[user_id] = (now + _USER_ROLE_CACHE_TTL_SECONDS, role_names)
+    return role_names
+
+
 def ensure_default_role_assigned(user_id: str) -> dict[str, bool]:
     config = _get_management_config()
-    if config is None:
+    if config is None or not config[3]:
         return {
             "enabled": False,
             "assigned": False,

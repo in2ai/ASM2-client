@@ -1,13 +1,17 @@
+import { API_RESOURCE } from '@/lib/api'
+import type { LogtoUser } from '@/lib/auth'
+import { hasRoleInAccessToken, hasRoleInClaim, mapClaimsToUser } from '@/lib/auth'
+import { useLogto } from '@logto/react'
 import { useEffect, useState } from 'react'
 
-import { useLogto } from '@logto/react'
-
-import { API_RESOURCE } from '@/lib/api'
-import { ADMIN_SCOPE, hasScopeInAccessToken, mapClaimsToUser } from '@/lib/auth'
-import type { LogtoUser } from '@/lib/auth'
-
 export function useAuthenticatedUser() {
-  const { isLoading, isAuthenticated, getAccessToken, getIdTokenClaims } = useLogto()
+  const {
+    fetchUserInfo,
+    isLoading,
+    isAuthenticated,
+    getAccessToken,
+    getIdTokenClaims,
+  } = useLogto()
   const [user, setUser] = useState<LogtoUser | null>(null)
 
   useEffect(() => {
@@ -19,9 +23,10 @@ export function useAuthenticatedUser() {
         return
       }
 
-      const [claims, accessToken] = await Promise.all([
+      const [claims, accessToken, userInfo] = await Promise.all([
         getIdTokenClaims(),
         getAccessToken(API_RESOURCE).catch(() => null),
+        fetchUserInfo().catch(() => null),
       ])
 
       if (!claims || cancelled) {
@@ -29,9 +34,14 @@ export function useAuthenticatedUser() {
       }
 
       const nextUser = mapClaimsToUser(claims)
+      const isAdmin =
+        hasRoleInClaim(
+          (userInfo as Record<string, unknown> | null)?.roles,
+          'admin',
+        ) || hasRoleInAccessToken(accessToken, 'admin')
 
       setUser(
-        hasScopeInAccessToken(accessToken, ADMIN_SCOPE)
+        isAdmin
           ? { ...nextUser, role: 'admin' }
           : nextUser,
       )
@@ -42,7 +52,7 @@ export function useAuthenticatedUser() {
     return () => {
       cancelled = true
     }
-  }, [getAccessToken, getIdTokenClaims, isAuthenticated])
+  }, [fetchUserInfo, getAccessToken, getIdTokenClaims, isAuthenticated])
 
   return {
     isAuthenticated,

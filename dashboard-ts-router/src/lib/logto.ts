@@ -18,7 +18,7 @@ export const logtoConfig: LogtoConfig = {
     'email',
     'custom_data',
     'identities',
-    'role',
+    'roles',
     'metrics:read',
     'metrics:export',
   ],

@@ -5,11 +5,8 @@ from fastapi import Depends
 
 from src.config.logto_auth import (
     AuthInfo,
-    METRICS_EXPORT_SCOPE,
-    METRICS_READ_SCOPE,
     require_admin,
     require_auth,
-    require_scopes,
 )
 
 
@@ -153,12 +150,6 @@ class ExportMetricsResponseModel(BaseModel):
     metadata: ExportMetadataModel
 
 
-class AuthBootstrapResponseModel(BaseModel):
-    enabled: bool
-    assigned: bool
-    refresh_required: bool
-
-
 class ChatMessageModel(BaseModel):
     id: str
     chat_id: str
@@ -216,8 +207,9 @@ class SourceSelectionRequestModel(BaseModel):
     selected_sources: list[str]
 
 
-class SourceConnectCompleteRequestModel(BaseModel):
-    code: str | None = None
+class SourceLoginRequestModel(BaseModel):
+    source: str
+    source_token: str
     redirect_uri: str | None = None
 
 
@@ -230,9 +222,7 @@ class SourceOperationResultModel(BaseModel):
     message: str
 
 
-MetricsReadAuth = Annotated[AuthInfo, Depends(require_scopes([METRICS_READ_SCOPE]))]
-MetricsExportAuth = Annotated[
-    AuthInfo, Depends(require_scopes([METRICS_EXPORT_SCOPE]))
-]
+MetricsReadAuth = Annotated[AuthInfo, Depends(require_admin())]
+MetricsExportAuth = Annotated[AuthInfo, Depends(require_admin())]
 AuthenticatedAuth = Annotated[AuthInfo, Depends(require_auth())]
 AdminAuth = Annotated[AuthInfo, Depends(require_admin())]

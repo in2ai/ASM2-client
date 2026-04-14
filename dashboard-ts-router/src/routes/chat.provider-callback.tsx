@@ -79,13 +79,12 @@ function ProviderCallbackRoute() {
 
     void (async () => {
       try {
-        const params = new URLSearchParams([
-          ['redirect_uri', storedRequest.redirectUri],
-          ['source', 'drive'],
-          ['source_token', authCode],
-        ])
-
-        await request<void>(`/login-source?${params.toString()}`, {
+        await request<void>('/login-source', {
+          body: JSON.stringify({
+            redirect_uri: storedRequest.redirectUri,
+            source: 'drive',
+            source_token: authCode,
+          }),
           method: 'POST',
         })
         if (!didUnmountRef.current) {
