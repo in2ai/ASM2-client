@@ -8,8 +8,6 @@ export interface LogtoUser {
   role?: string | null
 }
 
-export const ADMIN_SCOPE = 'metrics:export'
-
 function parseJwtPayload(token: string): Record<string, unknown> | null {
   const payload = token.split('.')[1]
 
@@ -23,43 +21,55 @@ function parseJwtPayload(token: string): Record<string, unknown> | null {
     .padEnd(payload.length + ((4 - (payload.length % 4 || 4)) % 4), '=')
 
   try {
-    return JSON.parse(globalThis.atob(normalizedPayload)) as Record<string, unknown>
+    return JSON.parse(globalThis.atob(normalizedPayload)) as Record<
+      string,
+      unknown
+    >
   } catch {
     return null
   }
 }
 
-export function hasScopeInAccessToken(token: string | null | undefined, scope: string): boolean {
+function normalizeRoles(rawRoles: unknown): string[] {
+  if (Array.isArray(rawRoles)) {
+    return rawRoles.filter(
+      (role): role is string => typeof role === 'string' && role.length > 0,
+    )
+  }
+
+  if (typeof rawRoles === 'string' && rawRoles.length > 0) {
+    return [rawRoles]
+  }
+
+  return []
+}
+
+function extractRole(roles: string[]): string {
+  if (roles.includes('admin')) {
+    return 'admin'
+  }
+
+  return roles[0] ?? 'user'
+}
+
+export function hasRoleInAccessToken(
+  token: string | null | undefined,
+  role: string,
+): boolean {
   if (!token) {
     return false
   }
 
   const payload = parseJwtPayload(token)
-  const rawScope = payload?.scope
+  return normalizeRoles(payload?.roles).includes(role)
+}
 
-  return typeof rawScope === 'string' && rawScope.split(' ').includes(scope)
+export function hasRoleInClaim(rawRoles: unknown, role: string): boolean {
+  return normalizeRoles(rawRoles).includes(role)
 }
 
 function extractGlobalRole(claims: IdTokenClaims): string {
-  const rawRoles = claims.roles as string[] | string | undefined
-
-  if (Array.isArray(rawRoles)) {
-    const roles = rawRoles.filter(
-      (role): role is string => typeof role === 'string' && role.length > 0,
-    )
-
-    if (roles.includes('admin')) {
-      return 'admin'
-    }
-
-    if (roles.length > 0) {
-      return roles[0]
-    }
-  } else if (typeof rawRoles === 'string' && rawRoles.length > 0) {
-    return rawRoles
-  }
-
-  return 'user'
+  return extractRole(normalizeRoles(claims.roles))
 }
 
 export function mapClaimsToUser(claims: IdTokenClaims): LogtoUser {

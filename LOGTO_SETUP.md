@@ -4,7 +4,6 @@ This guide documents the current Logto setup for ASM2 using:
 
 - `dashboard-ts-router` as a browser SPA
 - `backend/server.py` as the protected FastAPI API
-- an optional Logto machine-to-machine client for default global user role bootstrap
 
 The old Next.js-only flow is no longer the primary architecture for the dashboard path.
 
@@ -41,19 +40,6 @@ It is responsible for:
 Relevant backend files:
 
 - `backend/src/config/logto_auth.py`
-- `backend/server.py`
-
-### Optional machine-to-machine application
-
-This is only needed if you want the backend to auto-assign a default global user role after first sign-in.
-
-It is responsible for:
-
-- obtaining a management API token with client credentials
-- assigning the configured default role to a user through the Logto Management API
-
-Relevant backend files:
-
 - `backend/src/config/logto_management.py`
 - `backend/server.py`
 
@@ -165,12 +151,19 @@ Recommended role model:
 - `user` role should include `metrics:read`.
 - `admin` role should include `metrics:read` and `metrics:export`.
 
+In the current backend, all `/metrics/*` endpoints require the `admin` role. The metrics scopes can still exist on the API resource, but role-based backend authorization is the source of truth.
+
+The SPA should request the Logto `roles` scope so role claims can be resolved from Logto user information.
+
 Backend environment values:
 
 ```env
 LOGTO_ENDPOINT=http://localhost:3011
 LOGTO_API_RESOURCE=https://asm2-api.company.internal
 CORS_ALLOW_ORIGINS=http://localhost:3001
+LOGTO_MANAGEMENT_APP_ID=your_m2m_app_id
+LOGTO_MANAGEMENT_APP_SECRET=your_m2m_app_secret
+LOGTO_MANAGEMENT_API_RESOURCE=https://default.logto.app/api
 ```
 
 FastAPI validation behavior:
@@ -178,50 +171,22 @@ FastAPI validation behavior:
 - fetches OpenID configuration from `${LOGTO_ENDPOINT}/oidc/.well-known/openid-configuration`
 - retrieves signing keys from Logto JWKS
 - validates `iss`, `aud`, `sub`, and token expiry
+- resolves user roles server-side from the Logto Management API when management credentials are configured
 - enforces route scopes through FastAPI dependencies
 
 Protected backend routes currently include:
 
-- `GET /metrics/dashboard` requires `metrics:read`
-- `GET /metrics/stats` requires `metrics:read`
-- `GET /metrics/export` requires `metrics:export`
+- `GET /metrics/dashboard` requires `admin` role
+- `GET /metrics/stats` requires `admin` role
+- `GET /metrics/export` requires `admin` role
 
-## 5. Optional Default Global User Role Bootstrap
+## 5. Global Role Assignment
 
-If you want newly signed-in users to automatically receive a default global user role, create a machine-to-machine application in Logto.
+Assign default global roles directly in Logto. The SPA no longer calls a backend bootstrap endpoint after sign-in.
 
-In Logto Admin Console:
+If you want the backend to use Logto roles as the source of truth for endpoint authorization, configure a machine-to-machine application with Logto Management API access and set `LOGTO_MANAGEMENT_APP_ID`, `LOGTO_MANAGEMENT_APP_SECRET`, and optionally `LOGTO_MANAGEMENT_API_RESOURCE`.
 
-1. Go to `Applications`.
-2. Create a `Machine-to-machine` application.
-3. Grant it access to the Logto Management API.
-
-For the backend bootstrap flow, configure:
-
-```env
-LOGTO_MANAGEMENT_APP_ID=your_m2m_app_id
-LOGTO_MANAGEMENT_APP_SECRET=your_m2m_app_secret
-LOGTO_MANAGEMENT_API_RESOURCE=https://default.logto.app/api
-LOGTO_DEFAULT_USER_ROLE_ID=your_default_role_id
-```
-
-Important:
-
-- `LOGTO_MANAGEMENT_API_RESOURCE` is not your backend API resource
-- use the default management API resource for Logto management access: `https://default.logto.app/api`
-- keep `LOGTO_API_RESOURCE` for your own FastAPI audience
-
-Bootstrap flow in this repo:
-
-1. User signs in through the SPA.
-2. Logto redirects to `dashboard-ts-router/src/routes/callback.tsx`.
-3. The SPA requests an API token for `LOGTO_API_RESOURCE`.
-4. The SPA calls `POST /auth/bootstrap` on the backend.
-5. The backend assigns the configured default global user role if missing.
-6. If Logto role assignment changed permissions, the SPA refreshes the API token.
-7. The SPA navigates to the requested page.
-
-If the management env vars are not configured, bootstrap is skipped and the app continues normally.
+If you change a user's roles, force a new Logto authorization flow so newly issued tokens and userinfo reflect the update.
 
 ## 6. Local Development Configuration
 
@@ -295,12 +260,11 @@ If authentication suddenly fails with malformed discovery URLs, check the effect
 7. Confirm the app returns to `/callback` and then back to `/`.
 8. Confirm the backend accepts the bearer token and metrics load.
 
-If default-role bootstrap is enabled:
+If you update a user's roles in Logto:
 
-1. Sign in with a user that does not yet have the target role.
-2. Confirm `POST /auth/bootstrap` succeeds.
-3. Confirm the user receives the configured default role in Logto.
-4. Confirm a refreshed token includes the expected API scopes.
+1. Sign out of the SPA.
+2. Sign in again to force a new Logto authorization flow.
+3. Confirm the refreshed session resolves the expected role in the UI.
 
 ## 9. Enterprise SSO
 

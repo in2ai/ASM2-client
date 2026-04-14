@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-import requests
 
 from contextlib import asynccontextmanager
 from datetime import date, datetime
@@ -21,8 +20,7 @@ from src.config.auth import (
     get_selected_sources,
     set_selected_sources,
 )
-from src.config.logto_management import ensure_default_role_assigned
-from src.config.logto_auth import AuthInfo, METRICS_EXPORT_SCOPE, has_scope
+from src.config.logto_auth import AuthInfo, has_role
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
@@ -226,29 +224,6 @@ def extract_usage_metrics():
 # App endpoints
 # ---------------------------------
 
-@app.post(
-    "/auth/bootstrap",
-    response_model=AuthBootstrapResponseModel,
-    responses={503: {"description": "Unable to assign default Logto global user role"}},
-)
-async def auth_bootstrap(auth: AuthenticatedAuth):
-    try:
-        return ensure_default_role_assigned(auth.sub)
-    except requests.RequestException:
-        logging.exception("Failed to bootstrap default Logto global user role")
-        raise HTTPException(
-            status_code=503,
-            detail="Unable to assign default Logto global user role",
-        )
-    except RuntimeError as exc:
-        logging.warning("Default Logto global user role bootstrap is unavailable: %s", exc)
-        return {
-            "enabled": False,
-            "assigned": False,
-            "refresh_required": False,
-        }
-
-
 @app.post("/start-vdb-update", status_code=200)
 async def start_vdb_update(auth: AdminAuth):
     with open(VDB_LOCK, "w+"):
@@ -279,22 +254,20 @@ async def get_source_login_info(auth: AuthenticatedAuth, source: str):
 @app.post("/login-source", status_code=200)
 async def login_source(
     auth: AuthenticatedAuth,
-    source_token: str,
-    source: str,
-    redirect_uri: str | None = None,
+    payload: SourceLoginRequestModel,
 ):
     # Check source name
-    source = validate_source(source)
+    source = validate_source(payload.source)
 
     # Get login payload
-    payload = {
-        'auth_token': source_token,
-        'redirect_uri': redirect_uri
+    source_payload = {
+        'auth_token': payload.source_token,
+        'redirect_uri': payload.redirect_uri,
     }
 
     # Construct source instance
     source_class = SOURCES[source]
-    source_instance = source_class(json.dumps(payload))
+    source_instance = source_class(json.dumps(source_payload))
 
     # Login in the source
     if not source_instance.login():
@@ -303,7 +276,7 @@ async def login_source(
     # Store credentials in database
     questdb_pool = app.state.questdb_pool
     user_id = auth.sub
-    is_admin = has_scope(auth, METRICS_EXPORT_SCOPE)
+    is_admin = has_role(auth, "admin")
     needs_refresh_at, expires_at = source_instance.expiry()
 
     add_credentials(

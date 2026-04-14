@@ -28,22 +28,16 @@ Make sure backend env also defines:
 LOGTO_ENDPOINT=http://localhost:3011
 LOGTO_API_RESOURCE=http://10.0.0.15:8001
 CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5173
-```
-
-Optional backend env for automatic default global user role assignment via Logto Management API:
-
-```env
 LOGTO_MANAGEMENT_APP_ID=your_m2m_app_id
 LOGTO_MANAGEMENT_APP_SECRET=your_m2m_app_secret
 LOGTO_MANAGEMENT_API_RESOURCE=https://default.logto.app/api
-LOGTO_DEFAULT_USER_ROLE_ID=your_user_role_id
 ```
 
 `LOGTO_API_RESOURCE` is the API audience identifier used in access tokens. It should match the backend API identity (for example the internal URL employees use on VPN/Wi-Fi), not a specific route like `/metrics/dashboard`.
 
-If the optional management env vars are configured, the SPA callback will call `POST /auth/bootstrap` once after sign-in so the backend can auto-assign the default global user role to new users before normal navigation continues.
+The SPA requests the Logto `roles` scope and derives admin UI access from Logto role claims. The backend resolves roles server-side through the Logto Management API when the management credentials above are configured. Default global roles should be assigned directly in Logto.
 
-This dashboard uses Logto global roles only. `LOGTO_DEFAULT_USER_ROLE_ID` should point to the global `user` role, and no Logto organization template is required.
+This dashboard uses Logto global roles only, and no Logto organization template is required.
 
 ## Run
 

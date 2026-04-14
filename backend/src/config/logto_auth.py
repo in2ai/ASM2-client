@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.config.env import get_env
+from src.config.logto_management import get_user_role_names
 
 
 _OPENID_CONFIG_TTL_SECONDS = 3600
@@ -28,6 +29,7 @@ METRICS_EXPORT_SCOPE = "metrics:export"
 class AuthInfo:
     sub: str
     role: str
+    roles: list[str]
     scopes: list[str]
     audience: list[str]
 
@@ -85,23 +87,43 @@ def _get_jwks_client(logto_endpoint: str) -> jwt.PyJWKClient:
     return _JWKS_CLIENT
 
 
-def _extract_role(payload: dict[str, Any]) -> str:
-    raw_roles = payload.get("roles")
-
+def _normalize_role_claim(raw_roles: Any) -> list[str]:
     if isinstance(raw_roles, list):
-        roles = [role for role in raw_roles if isinstance(role, str) and role]
-        if "admin" in roles:
-            return "admin"
-        if roles:
-            return roles[0]
-    elif isinstance(raw_roles, str) and raw_roles:
-        return raw_roles
+        return [role for role in raw_roles if isinstance(role, str) and role]
+    if isinstance(raw_roles, str) and raw_roles:
+        return [raw_roles]
+
+    return []
+
+
+def _extract_roles(payload: dict[str, Any]) -> list[str]:
+    return _normalize_role_claim(payload.get("roles")) or _normalize_role_claim(
+        payload.get("role")
+    )
+
+
+def _extract_role(payload: dict[str, Any]) -> str:
+    roles = _extract_roles(payload)
+
+    return _extract_role_from_names(roles)
+
+
+def _extract_role_from_names(roles: list[str]) -> str:
+
+    if "admin" in roles:
+        return "admin"
+    if roles:
+        return roles[0]
 
     return "user"
 
 
 def has_scope(auth_info: AuthInfo, required_scope: str) -> bool:
     return required_scope in auth_info.scopes
+
+
+def has_role(auth_info: AuthInfo, required_role: str) -> bool:
+    return required_role == auth_info.role or required_role in auth_info.roles
 
 
 def _get_allowed_jwt_algorithms(signing_key: jwt.PyJWK) -> list[str]:
@@ -163,9 +185,22 @@ def validate_token(token: str) -> AuthInfo:
     if not isinstance(sub, str) or not sub:
         raise HTTPException(status_code=401, detail="Token subject is missing")
 
+    roles = _extract_roles(payload)
+
+    if sub:
+        try:
+            management_roles = get_user_role_names(sub)
+            if management_roles:
+                roles = management_roles
+        except RuntimeError:
+            pass
+        except requests.RequestException:
+            pass
+
     return AuthInfo(
         sub=sub,
-        role=_extract_role(payload),
+        role=_extract_role_from_names(roles),
+        roles=roles,
         scopes=scopes,
         audience=audience,
     )
@@ -185,10 +220,10 @@ def require_auth():
 
 def require_admin():
     def _dependency(auth_info: AuthInfo = Depends(require_auth())) -> AuthInfo:
-        if not has_scope(auth_info, METRICS_EXPORT_SCOPE):
+        if not has_role(auth_info, "admin"):
             raise HTTPException(
                 status_code=403,
-                detail=f"Missing required scope: {METRICS_EXPORT_SCOPE}",
+                detail="Missing required role: admin",
             )
 
         return auth_info
