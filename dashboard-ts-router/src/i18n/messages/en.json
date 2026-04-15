@@ -275,7 +275,7 @@
     },
     "composer": {
       "placeholder": "Ask a question about your documents, processes, or data...",
-      "disabledHint": "Chat stays disabled until at least one source is connected.",
+      "disabledHint": "Chat stays disabled until at least one connected source is selected for retrieval.",
       "finishSetupHint": "Finish the source setup flow in the sources panel before chatting."
     },
     "messages": {
@@ -293,7 +293,8 @@
     "sources": {
       "openPanel": "Sources",
       "title": "Sources",
-      "description": "Connect Google Drive while VDB indexing is off, then enable VDB when you want the backend to index it.",
+      "descriptionAdmin": "Connect the sources you want to include in the shared RAG corpus. Once they are ready, start indexing so the backend refreshes the vector store.",
+      "descriptionUser": "Connect your sources and choose which ones should be available in your chats. These connections do not start or modify the shared indexing process.",
       "connected": "Connected",
       "connectDrive": "Connect Google Drive",
       "disconnect": "Disconnect",
@@ -314,13 +315,17 @@
         "stopUpdate": "Stop indexing"
       },
       "selectForChat": "Use this source for chat retrieval",
+      "selectionSaving": "Saving...",
       "stepsTitle": "Connection and indexing flow",
-      "stepsDescription": "Follow this sequence each time you add or refresh connected sources.",
+      "stepsDescriptionAdmin": "Follow this sequence whenever you prepare new sources for the shared corpus.",
+      "stepsDescriptionUser": "Follow this sequence to enable a source in your chat experience.",
       "steps": {
-        "start": "Leave VDB indexing off while you prepare your sources.",
+        "startAdmin": "Leave VDB indexing off while you prepare your sources.",
+        "startUser": "Connect only the sources you want available in your conversations.",
         "connect": "Connect the providers you want to include, such as Google Drive.",
         "authorize": "Sign in to each provider and approve the requested access.",
-        "finish": "When you are done, enable VDB so the backend starts indexing the connected content."
+        "finishAdmin": "When you are done, enable VDB so the backend starts indexing the connected content.",
+        "finishUser": "Select the source so your chat can use it during RAG retrieval."
       },
       "callbackFailedTitle": "Google Drive connection failed",
       "callbackCancelled": "Google Drive authorization was cancelled or failed.",

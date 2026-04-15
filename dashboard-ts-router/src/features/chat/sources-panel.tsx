@@ -16,11 +16,13 @@ import {
 } from '@/components/ui/sheet'
 import { CheckCircle2, CloudCog, Database, Loader2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
+  useDisconnectSourceMutation,
   useSourceLoginInfoQuery,
   useStartVdbUpdateMutation,
   useStopVdbUpdateMutation,
+  useUpdateSourcesSelectionMutation,
   useVdbUpdateStatusQuery,
 } from './api'
 import {
@@ -63,24 +65,24 @@ function StatusMessageText({ message }: Readonly<{ message: StatusMessage }>) {
 
 function getDriveMessage({
   connected,
+  connectionLocked,
   driveConfigured,
   driveLoginError,
   inlineError,
   isLoading,
-  isVdbActive,
   notConfiguredLabel,
   helpLabel,
   prerequisiteLabel,
 }: Readonly<{
   connected: boolean
+  connectionLocked: boolean
   driveConfigured: boolean
   driveLoginError?: string
   inlineError?: string
   isLoading: boolean
-  isVdbActive: boolean
   notConfiguredLabel: string
   helpLabel: string
-  prerequisiteLabel: string
+  prerequisiteLabel?: string
 }>): StatusMessage | null {
   if (driveLoginError) {
     return { text: driveLoginError, tone: 'error' }
@@ -90,7 +92,7 @@ function getDriveMessage({
     return { text: inlineError, tone: 'error' }
   }
 
-  if (!connected && isVdbActive) {
+  if (!connected && connectionLocked && prerequisiteLabel) {
     return { text: prerequisiteLabel, tone: 'muted' }
   }
 
@@ -204,7 +206,9 @@ function VdbActionButtons({
   return (
     <div className="flex flex-wrap gap-2">
       <Button disabled={actionPending} onClick={primaryAction.onClick}>
-        {primaryAction.pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+        {primaryAction.pending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : null}
         {primaryAction.label}
       </Button>
     </div>
@@ -213,20 +217,37 @@ function VdbActionButtons({
 
 function DriveSourceCard({
   connected,
+  isAdmin,
+  selected,
+  selectedSources,
   vdbActive,
 }: Readonly<{
   connected: boolean
+  isAdmin: boolean
+  selected: boolean
+  selectedSources: string[]
   vdbActive: boolean
 }>) {
   const t = useTranslations('ChatPage')
   const [inlineError, setInlineError] = useState<string>()
+  const [optimisticSelected, setOptimisticSelected] = useState(selected)
+  const [selectionPending, setSelectionPending] = useState(false)
   const driveLoginInfoQuery = useSourceLoginInfoQuery('drive')
+  const updateSourcesSelectionMutation = useUpdateSourcesSelectionMutation()
+  const disconnectSourceMutation = useDisconnectSourceMutation('drive')
   const driveOauthClientId = driveLoginInfoQuery.data?.oauth_client_id ?? null
   const driveConfigured = Boolean(driveOauthClientId)
+  const connectionLocked = isAdmin && vdbActive
   const driveLoginError =
     driveLoginInfoQuery.error instanceof Error
       ? driveLoginInfoQuery.error.message
       : undefined
+
+  useEffect(() => {
+    if (!selectionPending) {
+      setOptimisticSelected(selected)
+    }
+  }, [selected, selectionPending])
 
   const startDrive = () => {
     setInlineError(undefined)
@@ -254,16 +275,54 @@ function DriveSourceCard({
     )
   }
 
+  const toggleSelected = async (nextSelected: boolean) => {
+    setInlineError(undefined)
+    setOptimisticSelected(nextSelected)
+    setSelectionPending(true)
+
+    const nextSources = new Set(selectedSources)
+    if (nextSelected) {
+      nextSources.add('drive')
+    } else {
+      nextSources.delete('drive')
+    }
+
+    try {
+      await updateSourcesSelectionMutation.mutateAsync(Array.from(nextSources))
+    } catch (error) {
+      setOptimisticSelected(selected)
+      setInlineError(
+        error instanceof Error ? error.message : t('errors.sendFailed'),
+      )
+    } finally {
+      setSelectionPending(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    setInlineError(undefined)
+
+    try {
+      await disconnectSourceMutation.mutateAsync()
+    } catch (error) {
+      setInlineError(
+        error instanceof Error ? error.message : t('errors.sendFailed'),
+      )
+    }
+  }
+
   const driveMessage = getDriveMessage({
     connected,
+    connectionLocked,
     driveConfigured,
     driveLoginError,
     inlineError,
     isLoading: driveLoginInfoQuery.isLoading,
-    isVdbActive: vdbActive,
     notConfiguredLabel: t('sources.notConfigured'),
     helpLabel: t('sources.googleDriveHelp'),
-    prerequisiteLabel: t('sources.vdb.connectPrerequisite'),
+    prerequisiteLabel: isAdmin
+      ? t('sources.vdb.connectPrerequisite')
+      : undefined,
   })
 
   return (
@@ -275,9 +334,13 @@ function DriveSourceCard({
               <CloudCog className="h-4 w-4" />
               Google Drive
             </CardTitle>
-            <CardDescription>{t('sources.providers.drive.description')}</CardDescription>
+            <CardDescription>
+              {t('sources.providers.drive.description')}
+            </CardDescription>
           </div>
-          {connected ? <ConnectedSourceBadge label={t('sources.connected')} /> : null}
+          {connected ? (
+            <ConnectedSourceBadge label={t('sources.connected')} />
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -287,13 +350,48 @@ function DriveSourceCard({
           {!connected ? (
             <Button
               disabled={
-                vdbActive || !driveConfigured || driveLoginInfoQuery.isLoading
+                connectionLocked ||
+                !driveConfigured ||
+                driveLoginInfoQuery.isLoading
               }
               onClick={startDrive}
             >
               {t('sources.connectDrive')}
             </Button>
-          ) : null}
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                disabled={
+                  connectionLocked || disconnectSourceMutation.isPending
+                }
+                onClick={() => void handleDisconnect()}
+              >
+                {disconnectSourceMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                {t('sources.disconnect')}
+              </Button>
+              <label className="border-border bg-background flex min-h-10 items-center gap-3 rounded-2xl border px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  aria-label={t('sources.selectForChat')}
+                  checked={optimisticSelected}
+                  disabled={selectionPending}
+                  onChange={(event) =>
+                    void toggleSelected(event.target.checked)
+                  }
+                />
+                <span>{t('sources.selectForChat')}</span>
+                {selectionPending ? (
+                  <span className="text-muted-foreground ml-1 inline-flex items-center gap-1 text-xs">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {t('sources.selectionSaving')}
+                  </span>
+                ) : null}
+              </label>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -377,44 +475,71 @@ export function SourcesPanel({
   open,
   status,
 }: Readonly<SourcesPanelProps>) {
-  const driveConnected = status?.connected_sources.includes('drive') ?? false
   const t = useTranslations('ChatPage')
+  const connectedSources = new Set(status?.connected_sources ?? [])
+  const selectedSources = status?.selected_sources ?? []
+  const driveConnected = connectedSources.has('drive')
+  const driveSelected = selectedSources.includes('drive')
   const vdbStatusQuery = useVdbUpdateStatusQuery(isAdmin && open)
   const vdbActive = vdbStatusQuery.data?.active ?? false
+  const panelDescription = isAdmin
+    ? t('sources.descriptionAdmin')
+    : t('sources.descriptionUser')
+  const stepsDescription = isAdmin
+    ? t('sources.stepsDescriptionAdmin')
+    : t('sources.stepsDescriptionUser')
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl">
         <SheetHeader>
           <SheetTitle>{t('sources.title')}</SheetTitle>
-          <SheetDescription>{t('sources.description')}</SheetDescription>
+          <SheetDescription>{panelDescription}</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6">
           <Card className="gap-4 rounded-3xl border-primary/10 bg-linear-to-br from-primary/5 to-transparent">
             <CardHeader className="gap-3">
               <CardTitle>{t('sources.stepsTitle')}</CardTitle>
-              <CardDescription>{t('sources.stepsDescription')}</CardDescription>
+              <CardDescription>{stepsDescription}</CardDescription>
             </CardHeader>
             <CardContent>
               <ol className="text-muted-foreground space-y-2 text-sm">
-                <li>1. {t('sources.steps.start')}</li>
+                <li>
+                  1.{' '}
+                  {isAdmin
+                    ? t('sources.steps.startAdmin')
+                    : t('sources.steps.startUser')}
+                </li>
                 <li>2. {t('sources.steps.connect')}</li>
                 <li>3. {t('sources.steps.authorize')}</li>
-                <li>4. {t('sources.steps.finish')}</li>
+                <li>
+                  4.{' '}
+                  {isAdmin
+                    ? t('sources.steps.finishAdmin')
+                    : t('sources.steps.finishUser')}
+                </li>
               </ol>
             </CardContent>
           </Card>
 
           {isAdmin ? <VdbUpdateCard enabled={open} /> : null}
 
-          <DriveSourceCard connected={driveConnected} vdbActive={vdbActive} />
+          <DriveSourceCard
+            connected={driveConnected}
+            isAdmin={isAdmin}
+            selected={driveSelected}
+            selectedSources={selectedSources}
+            vdbActive={vdbActive}
+          />
 
           {isAdmin && driveConnected && !vdbActive ? (
             <Card className="gap-4 rounded-3xl border-amber-500/20 bg-amber-500/5">
               <CardHeader className="gap-2">
                 <CardTitle>{t('sources.readyToChatTitle')}</CardTitle>
-                <CardDescription>{t('sources.readyToChatDescription')}</CardDescription>
+                <CardDescription>
+                  {t('sources.readyToChatDescription')}
+                </CardDescription>
               </CardHeader>
             </Card>
           ) : null}

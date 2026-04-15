@@ -108,22 +108,31 @@ def set_selected_sources(pool: ThreadedConnectionPool, user_id: str, sources: li
     execute_query(pool, query, (user_id, json.dumps(sorted(set(normalized)))))
 
 
-def get_selected_sources(pool: ThreadedConnectionPool, user_id: str) -> list[str] | None:
+def get_selected_sources(pool: ThreadedConnectionPool, user_id: str) -> list[str]:
     query = """
     SELECT selected_sources
     FROM source_preferences
     WHERE user_id = %s
     LATEST ON updated_at PARTITION BY user_id
     """
-    
+
     try:
         rows = execute_query(pool, query, (user_id,)) or []
-        parsed = json.loads(rows[0][0])
-
-        return [str(source) for source in parsed]
-    
-    except:
+    except Exception:
         return []
+
+    if not rows:
+        return []
+
+    try:
+        parsed = json.loads(rows[0][0])
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    return sorted({str(source) for source in parsed})
 
 
 def get_authenticated_sources(pool: ThreadedConnectionPool, user_id: str):
@@ -145,15 +154,12 @@ def get_authenticated_sources(pool: ThreadedConnectionPool, user_id: str):
 
 def get_selected_authenticated_sources(pool: ThreadedConnectionPool, user_id: str):
     authenticated = get_authenticated_sources(pool, user_id)
-    selected = get_selected_sources(pool, user_id)
-
-    if not selected:
-        return authenticated
+    selected = set(get_selected_sources(pool, user_id))
 
     return {
         source_key: source
         for source_key, source in authenticated.items()
-        if source_key in set(selected)
+        if source_key in selected
     }
 
 

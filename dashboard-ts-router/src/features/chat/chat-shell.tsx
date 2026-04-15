@@ -1,16 +1,15 @@
-import { useState, type ReactNode } from 'react'
-
-import { Link } from '@tanstack/react-router'
-import { BarChart3, Menu, MessageSquareText, X } from 'lucide-react'
-
 import { CompanyDisplay, UserMenu } from '@/app/_components/app-layout'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { type LogtoUser } from '@/lib/auth'
+import { cn } from '@/lib/utils'
+import { Link } from '@tanstack/react-router'
+import { BarChart3, Menu, MessageSquareText, X } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 
 interface ChatShellProps {
+  canAccessDashboard?: boolean
   closeSidebarLabel: string
   children: ReactNode
   dashboardLabel: string
@@ -23,6 +22,7 @@ interface ChatShellProps {
 }
 
 export function ChatShell({
+  canAccessDashboard = false,
   closeSidebarLabel,
   children,
   dashboardLabel,
@@ -68,14 +68,16 @@ export function ChatShell({
           </Button>
         </div>
 
-        <div className="px-3 pb-3">
-          <Button asChild variant="ghost" className="h-11 w-full justify-start gap-2 rounded-2xl">
-            <Link to="/">
-              <BarChart3 className="h-4 w-4" />
-              <span>{dashboardLabel}</span>
-            </Link>
-          </Button>
-        </div>
+        {canAccessDashboard ? (
+          <div className="px-3 pb-3">
+            <Button asChild variant="ghost" className="h-11 w-full justify-start gap-2 rounded-2xl">
+              <Link to="/">
+                <BarChart3 className="h-4 w-4" />
+                <span>{dashboardLabel}</span>
+              </Link>
+            </Button>
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1">{sidebar}</div>
       </aside>

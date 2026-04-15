@@ -58,6 +58,7 @@ export interface SourceLoginInfo {
 
 export interface SourcesStatus {
   connected_sources: SourceProviderKey[]
+  selected_sources: SourceProviderKey[]
   can_chat: boolean
 }
 

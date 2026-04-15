@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
 import { ChatPage } from './chat-page'
 
 type ConversationRenderState = {
@@ -143,8 +148,12 @@ describe('ChatPage', () => {
               : input.url
         const method = init?.method ?? 'GET'
 
-        if (requestUrl.endsWith('/authenticated-sources')) {
-          return jsonResponse({ can_chat: true, connected_sources: [] })
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse({
+            can_chat: true,
+            connected_sources: [],
+            selected_sources: [],
+          })
         }
 
         if (requestUrl.endsWith('/chats') && method === 'GET') {
@@ -277,8 +286,12 @@ describe('ChatPage', () => {
               : input.url
         const method = init?.method ?? 'GET'
 
-        if (requestUrl.endsWith('/authenticated-sources')) {
-          return jsonResponse({ can_chat: true, connected_sources: ['drive'] })
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse({
+            can_chat: true,
+            connected_sources: ['drive'],
+            selected_sources: ['drive'],
+          })
         }
 
         if (requestUrl.endsWith('/vdb-update-status')) {
@@ -310,9 +323,9 @@ describe('ChatPage', () => {
     )
 
     await waitFor(() => {
-      expect((screen.getByLabelText('composer') as HTMLInputElement).disabled).toBe(
-        false,
-      )
+      expect(
+        (screen.getByLabelText('composer') as HTMLInputElement).disabled,
+      ).toBe(false)
     })
   })
 })

@@ -293,7 +293,8 @@
     "sources": {
       "openPanel": "Fuentes",
       "title": "Fuentes",
-      "description": "Conecta Google Drive mientras el indexado VDB esté desactivado y activa VDB cuando quieras que el backend lo indexe.",
+      "descriptionAdmin": "Conecta las fuentes que quieras incorporar al corpus compartido del RAG. Cuando estén listas, inicia el indexado para que el backend actualice la base vectorial.",
+      "descriptionUser": "Conecta tus fuentes y marca cuáles quieres habilitar para tus conversaciones. Estas conexiones no inician ni modifican el indexado compartido.",
       "connected": "Conectado",
       "connectDrive": "Conectar Google Drive",
       "disconnect": "Desconectar",
@@ -314,13 +315,17 @@
         "stopUpdate": "Detener indexado"
       },
       "selectForChat": "Usar esta fuente para la recuperación del chat",
+      "selectionSaving": "Guardando...",
       "stepsTitle": "Flujo de conexión e indexado",
-      "stepsDescription": "Sigue esta secuencia cada vez que añadas o refresques fuentes conectadas.",
+      "stepsDescriptionAdmin": "Sigue esta secuencia cuando prepares nuevas fuentes para el corpus compartido.",
+      "stepsDescriptionUser": "Sigue esta secuencia para habilitar una fuente en tu experiencia de chat.",
       "steps": {
-        "start": "Deja el indexado VDB desactivado mientras preparas tus fuentes.",
+        "startAdmin": "Deja el indexado VDB desactivado mientras preparas tus fuentes.",
+        "startUser": "Conecta solo las fuentes que quieras tener disponibles en tus conversaciones.",
         "connect": "Conecta los proveedores que quieras incluir, como Google Drive.",
         "authorize": "Inicia sesión en cada proveedor y autoriza el acceso solicitado.",
-        "finish": "Cuando acabes, activa VDB para que el backend empiece a indexar el contenido conectado."
+        "finishAdmin": "Cuando acabes, activa VDB para que el backend empiece a indexar el contenido conectado.",
+        "finishUser": "Marca la fuente para que tu chat pueda utilizarla en la recuperación del RAG."
       },
       "callbackFailedTitle": "La conexión con Google Drive falló",
       "callbackCancelled": "La autorización de Google Drive fue cancelada o falló.",
