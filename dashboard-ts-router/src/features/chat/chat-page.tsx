@@ -13,7 +13,6 @@ import {
   useCreateChatMutation,
   useSendMessageMutation,
   useSourcesStatusQuery,
-  useVdbUpdateStatusQuery,
 } from './api'
 import { ChatShell } from './chat-shell'
 import { ChatSidebar } from './chat-sidebar'
@@ -43,7 +42,6 @@ export function ChatPage({
   const queryClient = useQueryClient()
   const chatsQuery = useChatsQuery()
   const sourcesQuery = useSourcesStatusQuery()
-  const vdbStatusQuery = useVdbUpdateStatusQuery(user.role === 'admin')
   const effectiveChatId = selectedChatId ?? chatsQuery.data?.[0]?.id
   const chatQuery = useChatQuery(effectiveChatId)
   const createChatMutation = useCreateChatMutation()
@@ -74,26 +72,17 @@ export function ChatPage({
     sourcesQuery.error
   const isBusy = createChatMutation.isPending || sendMessageMutation.isPending
   const chatEnabled = sourcesQuery.data?.can_chat ?? false
-  const sourceSyncActive =
-    user.role === 'admin' && (vdbStatusQuery.data?.active ?? false)
-  const composerDisabled = !chatEnabled || sourceSyncActive
+  const composerDisabled = !chatEnabled
   const composerHint = !chatEnabled
     ? t('composer.disabledHint')
-    : sourceSyncActive
-      ? t('composer.finishSetupHint')
-      : undefined
+    : undefined
   const emptyTitle = !chatEnabled
     ? t('empty.gatedTitle')
-    : sourceSyncActive
-      ? t('empty.syncTitle')
-      : t('empty.title')
+    : t('empty.title')
   const emptyDescription = !chatEnabled
     ? t('empty.gatedDescription')
-    : sourceSyncActive
-      ? t('empty.syncDescription')
-      : t('empty.description')
-  const emptyPrimaryActionLabel =
-    !chatEnabled || sourceSyncActive ? t('sources.openPanel') : undefined
+    : t('empty.description')
+  const emptyPrimaryActionLabel = !chatEnabled ? t('sources.openPanel') : undefined
 
   const handleCreateChat = async () => {
     setComposerError(undefined)
