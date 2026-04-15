@@ -75,7 +75,7 @@ export function useSourcesStatusQuery() {
 
   return useQuery({
     queryKey: chatQueryKeys.sources,
-    queryFn: () => request<SourcesStatus>('/authenticated-sources'),
+    queryFn: () => request<SourcesStatus>('/sources/status'),
   })
 }
 
@@ -168,6 +168,40 @@ export function useStopVdbUpdateMutation() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: chatQueryKeys.vdbUpdate })
+    },
+  })
+}
+
+export function useUpdateSourcesSelectionMutation() {
+  const request = useAuthorizedChatRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (selectedSources: string[]) =>
+      request<SourcesStatus>('/sources/selection', {
+        body: JSON.stringify({ selected_sources: selectedSources }),
+        method: 'PUT',
+      }),
+    onSuccess: (status) => {
+      queryClient.setQueryData(chatQueryKeys.sources, status)
+    },
+  })
+}
+
+export function useDisconnectSourceMutation(source: string) {
+  const request = useAuthorizedChatRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () =>
+      request<SourcesStatus>(
+        `/sources/${encodeURIComponent(source)}/disconnect`,
+        {
+          method: 'POST',
+        },
+      ),
+    onSuccess: (status) => {
+      queryClient.setQueryData(chatQueryKeys.sources, status)
     },
   })
 }

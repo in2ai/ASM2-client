@@ -73,16 +73,14 @@ export function ChatPage({
   const isBusy = createChatMutation.isPending || sendMessageMutation.isPending
   const chatEnabled = sourcesQuery.data?.can_chat ?? false
   const composerDisabled = !chatEnabled
-  const composerHint = !chatEnabled
-    ? t('composer.disabledHint')
-    : undefined
-  const emptyTitle = !chatEnabled
-    ? t('empty.gatedTitle')
-    : t('empty.title')
+  const composerHint = !chatEnabled ? t('composer.disabledHint') : undefined
+  const emptyTitle = !chatEnabled ? t('empty.gatedTitle') : t('empty.title')
   const emptyDescription = !chatEnabled
     ? t('empty.gatedDescription')
     : t('empty.description')
-  const emptyPrimaryActionLabel = !chatEnabled ? t('sources.openPanel') : undefined
+  const emptyPrimaryActionLabel = !chatEnabled
+    ? t('sources.openPanel')
+    : undefined
 
   const handleCreateChat = async () => {
     setComposerError(undefined)
@@ -142,6 +140,7 @@ export function ChatPage({
 
   return (
     <ChatShell
+      canAccessDashboard={user.role === 'admin'}
       closeSidebarLabel={t('shell.closeSidebar')}
       dashboardLabel={t('shell.dashboard')}
       headerActions={

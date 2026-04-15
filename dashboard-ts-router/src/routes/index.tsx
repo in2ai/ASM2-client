@@ -1,9 +1,7 @@
-import { Suspense, lazy } from 'react'
-
-import { Navigate, createFileRoute } from '@tanstack/react-router'
-
 import { LoadingState } from '@/app/_components/metrics/loading-state'
 import { useAuthenticatedUser } from '@/hooks/use-authenticated-user'
+import { Navigate, createFileRoute } from '@tanstack/react-router'
+import { Suspense, lazy } from 'react'
 
 const MetricsDashboard = lazy(() =>
   import('@/app/_components/metrics-dashboard').then((module) => ({
@@ -26,6 +24,10 @@ function DashboardRoute() {
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/sign-in" search={{ returnTo: '/' }} replace />
+  }
+
+  if (user.role !== 'admin') {
+    return <Navigate to="/chat" replace />
   }
 
   return (

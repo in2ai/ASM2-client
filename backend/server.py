@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
+    disconnect_source,
     get_authenticated_admin_sources,
     get_authenticated_sources,
     get_credentials_to_refresh,
@@ -304,19 +305,79 @@ async def login_source(
         needs_refresh_at=needs_refresh_at,
         expires_at=expires_at,
     )
-    select_source(questdb_pool, user_id, source)
+
+
+def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
+    connected_sources = sorted(get_authenticated_sources(questdb_pool, user_id).keys())
+    selected_sources = get_selected_sources(questdb_pool, user_id)
+    connected_set = set(connected_sources)
+    selected_connected_sources = sorted(
+        source for source in selected_sources if source in connected_set
+    )
+
+    return {
+        "connected_sources": connected_sources,
+        "selected_sources": selected_connected_sources,
+        "can_chat": len(selected_connected_sources) > 0,
+    }
+
+
+@app.get("/sources/status", response_model=SourcesStatusModel, status_code=200)
+async def get_sources_status(auth: AuthenticatedAuth):
+    questdb_pool = app.state.questdb_pool
+    return build_sources_status(questdb_pool, auth.sub)
+
+
+@app.put("/sources/selection", response_model=SourcesStatusModel, status_code=200)
+async def update_sources_selection(
+    auth: AuthenticatedAuth,
+    body: SourceSelectionRequestModel,
+):
+    questdb_pool = app.state.questdb_pool
+    connected_sources = sorted(get_authenticated_sources(questdb_pool, auth.sub).keys())
+    connected_set = set(connected_sources)
+
+    normalized_sources: list[str] = []
+    for raw_source in body.selected_sources:
+        source = validate_source(raw_source)
+        if source not in connected_set:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Connect source before selecting it: {source}",
+            )
+        normalized_sources.append(source)
+
+    set_selected_sources(questdb_pool, auth.sub, normalized_sources)
+    return build_sources_status(questdb_pool, auth.sub)
+
+
+@app.post("/sources/{source}/disconnect", response_model=SourcesStatusModel, status_code=200)
+async def disconnect_sources_provider(auth: AuthenticatedAuth, source: str):
+    source = validate_source(source)
+    questdb_pool = app.state.questdb_pool
+
+    disconnect_source(
+        questdb_pool,
+        auth.sub,
+        source,
+        has_role(auth, "admin"),
+    )
+
+    existing_selection = get_selected_sources(questdb_pool, auth.sub)
+    updated_selection = sorted(
+        current_source
+        for current_source in (existing_selection or [])
+        if current_source != source
+    )
+    set_selected_sources(questdb_pool, auth.sub, updated_selection)
+
+    return build_sources_status(questdb_pool, auth.sub)
 
 
 @app.get("/authenticated-sources", status_code=200)
 async def get_auth_sources(auth: AuthenticatedAuth):
     questdb_pool = app.state.questdb_pool
-    user_id = auth.sub
-
-    connected_sources = sorted(get_authenticated_sources(questdb_pool, user_id).keys())
-    return {
-        "connected_sources": connected_sources,
-        "can_chat": len(connected_sources) > 0,
-    }
+    return build_sources_status(questdb_pool, auth.sub)
 
 
 @app.get("/chats", response_model=list[ChatSummaryModel])
@@ -372,11 +433,11 @@ async def get_chat(auth: AuthenticatedAuth, chat_id: str):
 
 async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
     questdb_pool = app.state.questdb_pool
-    sources = get_authenticated_sources(questdb_pool, auth.sub)
+    sources = get_selected_authenticated_sources(questdb_pool, auth.sub)
     if not sources:
         raise HTTPException(
             status_code=409,
-            detail="Connect at least one source before chatting",
+            detail="Connect and select at least one source before chatting",
         )
 
     register_user_activity(questdb_pool)
@@ -541,18 +602,6 @@ def validate_source(source: str) -> str:
         raise HTTPException(status_code=404, detail=f"Unknown source: {source}")
     
     return source
-
-
-def select_source(questdb_pool, user_id: str, source: str) -> None:
-    existing = get_selected_sources(questdb_pool, user_id)
-    if existing is None:
-        current = set(get_authenticated_sources(questdb_pool, user_id).keys())
-    else:
-        current = set(existing)
-    current.add(source)
-    set_selected_sources(questdb_pool, user_id, sorted(current))
-
-
 @app.get("/metrics/dashboard", response_model=DashboardMetricsResponseModel)
 async def metrics_dashboard(
     auth: MetricsReadAuth,

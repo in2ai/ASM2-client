@@ -195,6 +195,7 @@ class ChatSourceModel(BaseModel):
 
 class SourcesStatusModel(BaseModel):
     connected_sources: list[str]
+    selected_sources: list[str]
     can_chat: bool
 
 

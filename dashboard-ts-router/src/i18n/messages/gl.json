@@ -293,7 +293,8 @@
     "sources": {
       "openPanel": "Fontes",
       "title": "Fontes",
-      "description": "Conecta Google Drive mentres o indexado VDB está desactivado e activa VDB cando queiras que o backend o indexe.",
+      "descriptionAdmin": "Conecta as fontes que queiras incorporar ao corpus compartido do RAG. Cando estean listas, inicia o indexado para que o backend actualice a base vectorial.",
+      "descriptionUser": "Conecta as túas fontes e marca cales queres habilitar nas túas conversas. Estas conexións non inician nin modifican o indexado compartido.",
       "connected": "Conectado",
       "connectDrive": "Conectar Google Drive",
       "disconnect": "Desconectar",
@@ -314,13 +315,17 @@
         "stopUpdate": "Deter indexado"
       },
       "selectForChat": "Usar esta fonte para a recuperación do chat",
+      "selectionSaving": "Gardando...",
       "stepsTitle": "Fluxo de conexión e indexado",
-      "stepsDescription": "Sigue esta secuencia cada vez que engadas ou refresques fontes conectadas.",
+      "stepsDescriptionAdmin": "Segue esta secuencia cando prepares novas fontes para o corpus compartido.",
+      "stepsDescriptionUser": "Segue esta secuencia para habilitar unha fonte na túa experiencia de chat.",
       "steps": {
-        "start": "Deixa o indexado VDB desactivado mentres preparas as túas fontes.",
+        "startAdmin": "Deixa o indexado VDB desactivado mentres preparas as túas fontes.",
+        "startUser": "Conecta só as fontes que queiras ter dispoñibles nas túas conversas.",
         "connect": "Conecta os provedores que queiras incluír, como Google Drive.",
         "authorize": "Inicia sesión en cada provedor e autoriza o acceso solicitado.",
-        "finish": "Cando remates, activa VDB para que o backend empece a indexar o contido conectado."
+        "finishAdmin": "Cando remates, activa VDB para que o backend empece a indexar o contido conectado.",
+        "finishUser": "Marca a fonte para que o teu chat poida utilizala na recuperación do RAG."
       },
       "callbackFailedTitle": "A conexión con Google Drive fallou",
       "callbackCancelled": "A autorización de Google Drive foi cancelada ou fallou.",
