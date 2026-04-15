@@ -11,6 +11,7 @@ import {
   useChatQuery,
   useChatsQuery,
   useCreateChatMutation,
+  useDeleteChatMutation,
   useSendMessageMutation,
   useSourcesStatusQuery,
 } from './api'
@@ -45,6 +46,7 @@ export function ChatPage({
   const effectiveChatId = selectedChatId ?? chatsQuery.data?.[0]?.id
   const chatQuery = useChatQuery(effectiveChatId)
   const createChatMutation = useCreateChatMutation()
+  const deleteChatMutation = useDeleteChatMutation()
   const sendMessageMutation = useSendMessageMutation()
 
   useEffect(() => {
@@ -69,6 +71,7 @@ export function ChatPage({
     chatsQuery.error ??
     chatQuery.error ??
     createChatMutation.error ??
+    deleteChatMutation.error ??
     sourcesQuery.error
   const isBusy = createChatMutation.isPending || sendMessageMutation.isPending
   const chatEnabled = sourcesQuery.data?.can_chat ?? false
@@ -86,6 +89,24 @@ export function ChatPage({
     setComposerError(undefined)
     const chat = await createChatMutation.mutateAsync(undefined)
     onSelectChat(chat.id)
+  }
+
+  const handleDeleteChat = async (chatId: string) => {
+    setComposerError(undefined)
+    const nextChatId =
+      effectiveChatId === chatId
+        ? chatsQuery.data?.find((chat) => chat.id !== chatId)?.id
+        : undefined
+
+    try {
+      await deleteChatMutation.mutateAsync(chatId)
+
+      if (effectiveChatId === chatId) {
+        onSelectChat(nextChatId, { replace: true })
+      }
+    } catch (error) {
+      setComposerError(toErrorMessage(error, t('errors.deleteFailed')))
+    }
   }
 
   const handleSendMessage = async () => {
@@ -161,6 +182,16 @@ export function ChatPage({
         <ChatSidebar
           activeChatId={effectiveChatId}
           chats={chatsQuery.data ?? []}
+          confirmDeleteActionLabel={t('sidebar.confirmDeleteAction')}
+          confirmDeleteCancelLabel={t('sidebar.confirmDeleteCancel')}
+          confirmDeleteDescription={t('sidebar.confirmDeleteDescription')}
+          confirmDeleteTitle={t('sidebar.confirmDeleteTitle')}
+          deleteChatLabel={t('sidebar.deleteChat')}
+          deletingChatId={
+            deleteChatMutation.isPending
+              ? deleteChatMutation.variables
+              : undefined
+          }
           emptyLabel={t('sidebar.emptyTitle')}
           emptyMessage={t('sidebar.emptyDescription')}
           isCreating={createChatMutation.isPending}
@@ -168,7 +199,9 @@ export function ChatPage({
           locale={locale}
           newChatLabel={t('sidebar.newChat')}
           onCreateChat={() => void handleCreateChat()}
+          onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
           onSelectChat={(chatId) => onSelectChat(chatId)}
+          rowActionsLabel={t('sidebar.rowActions')}
         />
       }
     >

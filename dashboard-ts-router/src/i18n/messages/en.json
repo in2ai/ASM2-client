@@ -259,6 +259,12 @@
     },
     "sidebar": {
       "newChat": "New conversation",
+      "rowActions": "Conversation actions",
+      "deleteChat": "Delete conversation",
+      "confirmDeleteTitle": "Delete conversation?",
+      "confirmDeleteDescription": "This permanently removes the conversation and all of its messages.",
+      "confirmDeleteCancel": "Cancel",
+      "confirmDeleteAction": "Delete",
       "emptyTitle": "No conversations yet",
       "emptyDescription": "Start a conversation and your recent chats will appear here."
     },
@@ -288,7 +294,8 @@
     "errors": {
       "title": "Unable to load chat",
       "loadFailed": "The chat workspace could not be loaded. Please try again.",
-      "sendFailed": "Your message could not be sent. Please try again."
+      "sendFailed": "Your message could not be sent. Please try again.",
+      "deleteFailed": "The conversation could not be deleted. Please try again."
     },
     "sources": {
       "openPanel": "Sources",

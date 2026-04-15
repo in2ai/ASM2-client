@@ -130,6 +130,27 @@ export function useCreateChatMutation() {
   })
 }
 
+export function useDeleteChatMutation() {
+  const request = useAuthorizedChatRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (chatId: string) =>
+      request<void>(`/chats/${chatId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: async (_result, chatId) => {
+      queryClient.setQueryData<ChatSummary[] | undefined>(
+        chatQueryKeys.list,
+        (currentChats) =>
+          currentChats?.filter((chat) => chat.id !== chatId) ?? currentChats,
+      )
+      queryClient.removeQueries({ queryKey: chatQueryKeys.detail(chatId) })
+      await queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
+    },
+  })
+}
+
 export function useSendMessageMutation() {
   const request = useAuthorizedChatRequest()
 
