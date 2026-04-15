@@ -67,7 +67,7 @@ function getDriveMessage({
   driveLoginError,
   inlineError,
   isLoading,
-  isWorkflowActive,
+  isVdbActive,
   notConfiguredLabel,
   helpLabel,
   prerequisiteLabel,
@@ -77,7 +77,7 @@ function getDriveMessage({
   driveLoginError?: string
   inlineError?: string
   isLoading: boolean
-  isWorkflowActive: boolean
+  isVdbActive: boolean
   notConfiguredLabel: string
   helpLabel: string
   prerequisiteLabel: string
@@ -90,7 +90,7 @@ function getDriveMessage({
     return { text: inlineError, tone: 'error' }
   }
 
-  if (!connected && !isWorkflowActive) {
+  if (!connected && isVdbActive) {
     return { text: prerequisiteLabel, tone: 'muted' }
   }
 
@@ -213,10 +213,10 @@ function VdbActionButtons({
 
 function DriveSourceCard({
   connected,
-  workflowActive,
+  vdbActive,
 }: Readonly<{
   connected: boolean
-  workflowActive: boolean
+  vdbActive: boolean
 }>) {
   const t = useTranslations('ChatPage')
   const [inlineError, setInlineError] = useState<string>()
@@ -260,7 +260,7 @@ function DriveSourceCard({
     driveLoginError,
     inlineError,
     isLoading: driveLoginInfoQuery.isLoading,
-    isWorkflowActive: workflowActive,
+    isVdbActive: vdbActive,
     notConfiguredLabel: t('sources.notConfigured'),
     helpLabel: t('sources.googleDriveHelp'),
     prerequisiteLabel: t('sources.vdb.connectPrerequisite'),
@@ -287,7 +287,7 @@ function DriveSourceCard({
           {!connected ? (
             <Button
               disabled={
-                !workflowActive || !driveConfigured || driveLoginInfoQuery.isLoading
+                vdbActive || !driveConfigured || driveLoginInfoQuery.isLoading
               }
               onClick={startDrive}
             >
@@ -380,7 +380,7 @@ export function SourcesPanel({
   const driveConnected = status?.connected_sources.includes('drive') ?? false
   const t = useTranslations('ChatPage')
   const vdbStatusQuery = useVdbUpdateStatusQuery(isAdmin && open)
-  const workflowActive = vdbStatusQuery.data?.active ?? false
+  const vdbActive = vdbStatusQuery.data?.active ?? false
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -408,9 +408,9 @@ export function SourcesPanel({
 
           {isAdmin ? <VdbUpdateCard enabled={open} /> : null}
 
-          <DriveSourceCard connected={driveConnected} workflowActive={workflowActive} />
+          <DriveSourceCard connected={driveConnected} vdbActive={vdbActive} />
 
-          {workflowActive ? (
+          {isAdmin && driveConnected && !vdbActive ? (
             <Card className="gap-4 rounded-3xl border-amber-500/20 bg-amber-500/5">
               <CardHeader className="gap-2">
                 <CardTitle>{t('sources.readyToChatTitle')}</CardTitle>

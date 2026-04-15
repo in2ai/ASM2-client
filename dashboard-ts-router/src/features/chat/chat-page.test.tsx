@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ChatPage } from './chat-page'
@@ -66,6 +66,7 @@ vi.mock('./sources-panel', () => ({
 vi.mock('./conversation-view', () => ({
   ConversationView: (props: {
     chat?: { messages?: Array<{ content: string; id: string; role: string }> }
+    composerDisabled?: boolean
     composerValue: string
     onComposerChange: (value: string) => void
     onSendMessage: () => void
@@ -87,6 +88,7 @@ vi.mock('./conversation-view', () => ({
       <div>
         <input
           aria-label="composer"
+          disabled={props.composerDisabled}
           value={props.composerValue}
           onChange={(event) => props.onComposerChange(event.target.value)}
         />
@@ -123,6 +125,7 @@ describe('ChatPage', () => {
   })
 
   afterEach(() => {
+    cleanup()
     vi.restoreAllMocks()
   })
 
@@ -260,5 +263,56 @@ describe('ChatPage', () => {
           state.persistedUserContents.includes('dime como pedir vacaciones'),
       ),
     ).toBe(false)
+  })
+
+  it('keeps chat enabled for admins while VDB indexing is active', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/authenticated-sources')) {
+          return jsonResponse({ can_chat: true, connected_sources: ['drive'] })
+        }
+
+        if (requestUrl.endsWith('/vdb-update-status')) {
+          return jsonResponse({ active: true })
+        }
+
+        if (requestUrl.endsWith('/chats') && method === 'GET') {
+          return jsonResponse([])
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          user={{ role: 'admin', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('composer') as HTMLInputElement).disabled).toBe(
+        false,
+      )
+    })
   })
 })
