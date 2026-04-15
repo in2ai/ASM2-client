@@ -61,7 +61,18 @@ vi.mock('./chat-shell', () => ({
 }))
 
 vi.mock('./chat-sidebar', () => ({
-  ChatSidebar: () => null,
+  ChatSidebar: (props: {
+    chats: Array<{ id: string; title: string }>
+    onDeleteChat: (chatId: string) => void
+  }) => (
+    <div>
+      {props.chats.map((chat) => (
+        <button key={chat.id} onClick={() => props.onDeleteChat(chat.id)}>
+          {`delete-${chat.id}`}
+        </button>
+      ))}
+    </div>
+  ),
 }))
 
 vi.mock('./sources-panel', () => ({
@@ -326,6 +337,91 @@ describe('ChatPage', () => {
       expect(
         (screen.getByLabelText('composer') as HTMLInputElement).disabled,
       ).toBe(false)
+    })
+  })
+
+  it('selects the next chat after deleting the active conversation', async () => {
+    let chats = [
+      {
+        created_at: '2026-04-14T18:30:00.000Z',
+        id: 'chat-1',
+        last_message_preview: 'Mensaje 1',
+        title: 'Chat empresarial',
+        updated_at: '2026-04-14T18:32:00.000Z',
+      },
+      {
+        created_at: '2026-04-14T18:20:00.000Z',
+        id: 'chat-2',
+        last_message_preview: 'Mensaje 2',
+        title: 'Chat de soporte',
+        updated_at: '2026-04-14T18:21:00.000Z',
+      },
+    ]
+
+    const onSelectChat = vi.fn()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse({
+            can_chat: true,
+            connected_sources: [],
+            selected_sources: [],
+          })
+        }
+
+        if (requestUrl.endsWith('/chats') && method === 'GET') {
+          return jsonResponse(chats)
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse({
+            ...chats[0],
+            messages: [],
+          })
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'DELETE') {
+          chats = chats.filter((chat) => chat.id !== 'chat-1')
+          return new Response(null, { status: 204 })
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={onSelectChat}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByText('delete-chat-1')
+
+    fireEvent.click(screen.getByText('delete-chat-1'))
+
+    await waitFor(() => {
+      expect(onSelectChat).toHaveBeenCalledWith('chat-2', { replace: true })
     })
   })
 })

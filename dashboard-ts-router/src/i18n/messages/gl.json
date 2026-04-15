@@ -259,6 +259,12 @@
     },
     "sidebar": {
       "newChat": "Nova conversa",
+      "rowActions": "Accións da conversa",
+      "deleteChat": "Eliminar conversa",
+      "confirmDeleteTitle": "Eliminar conversa?",
+      "confirmDeleteDescription": "Isto elimina de forma permanente a conversa e todas as súas mensaxes.",
+      "confirmDeleteCancel": "Cancelar",
+      "confirmDeleteAction": "Eliminar",
       "emptyTitle": "Aínda non hai conversas",
       "emptyDescription": "Inicia unha conversa e os teus chats recentes aparecerán aquí."
     },
@@ -288,7 +294,8 @@
     "errors": {
       "title": "Non se puido cargar o chat",
       "loadFailed": "Non se puido cargar o espazo de chat. Téntao de novo.",
-      "sendFailed": "Non se puido enviar a túa mensaxe. Téntao de novo."
+      "sendFailed": "Non se puido enviar a túa mensaxe. Téntao de novo.",
+      "deleteFailed": "Non se puido eliminar a conversa. Téntao de novo."
     },
     "sources": {
       "openPanel": "Fontes",

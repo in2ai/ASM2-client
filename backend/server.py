@@ -431,6 +431,16 @@ async def get_chat(auth: AuthenticatedAuth, chat_id: str):
     return _get_chat_or_404(chat_store, auth.sub, chat_id)
 
 
+@app.delete("/chats/{chat_id}", status_code=204)
+async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
+    chat_store: ChatStore = app.state.chat_store
+
+    try:
+        chat_store.delete_chat(auth.sub, chat_id)
+    except ChatNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Chat not found") from exc
+
+
 async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
     questdb_pool = app.state.questdb_pool
     sources = get_selected_authenticated_sources(questdb_pool, auth.sub)

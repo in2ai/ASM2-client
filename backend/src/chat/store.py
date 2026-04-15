@@ -174,6 +174,16 @@ class ChatStore:
         chat["messages"] = [self._row_to_message(row) for row in message_rows]
         return chat
 
+    def delete_chat(self, user_id: str, chat_id: str) -> None:
+        with self._lock, self._connect() as connection:
+            result = connection.execute(
+                "DELETE FROM chats WHERE id = ? AND user_id = ?",
+                (chat_id, user_id),
+            )
+            if result.rowcount == 0:
+                raise ChatNotFoundError(chat_id=chat_id)
+            connection.commit()
+
     def append_message(
         self,
         user_id: str,

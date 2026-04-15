@@ -259,6 +259,12 @@
     },
     "sidebar": {
       "newChat": "Nueva conversación",
+      "rowActions": "Acciones de la conversación",
+      "deleteChat": "Eliminar conversación",
+      "confirmDeleteTitle": "¿Eliminar conversación?",
+      "confirmDeleteDescription": "Esto elimina de forma permanente la conversación y todos sus mensajes.",
+      "confirmDeleteCancel": "Cancelar",
+      "confirmDeleteAction": "Eliminar",
       "emptyTitle": "Todavía no hay conversaciones",
       "emptyDescription": "Inicia una conversación y tus chats recientes aparecerán aquí."
     },
@@ -288,7 +294,8 @@
     "errors": {
       "title": "No se pudo cargar el chat",
       "loadFailed": "No se pudo cargar el espacio de chat. Inténtalo de nuevo.",
-      "sendFailed": "No se pudo enviar tu mensaje. Inténtalo de nuevo."
+      "sendFailed": "No se pudo enviar tu mensaje. Inténtalo de nuevo.",
+      "deleteFailed": "No se pudo eliminar la conversación. Inténtalo de nuevo."
     },
     "sources": {
       "openPanel": "Fuentes",
