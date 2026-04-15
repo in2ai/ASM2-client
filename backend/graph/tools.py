@@ -3,7 +3,7 @@ import logging
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from src.connectors.store import QDRANT_PATH
+from src.connectors.store import QDRANT_META_PATH
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
@@ -53,7 +53,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         topic_indices = {t for c in chunks for t in c.metadata.get("topics", {})}
 
         if topic_indices:
-            topics = resolve_topic_names(topic_indices, lang_code, QDRANT_PATH)
+            topics = resolve_topic_names(topic_indices, lang_code, QDRANT_META_PATH)
             register_topics(pool, topics)
 
     except Exception:

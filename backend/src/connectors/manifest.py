@@ -28,6 +28,7 @@ class VDBManifest:
 
 
     def save(self):
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path, "w", encoding="utf-8") as f:
             json.dump(self.manifest, f, ensure_ascii=False, indent=2)
 

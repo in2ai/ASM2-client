@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import os
 from typing import List
 import uuid
 
@@ -19,6 +20,7 @@ from src.utils.topic import assign_topics, extract_initial_topics
 
 QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
 QDRANT_PATH = "qdrant_index"
+QDRANT_META_PATH = get_env("QDRANT_META_PATH", "/app/data/qdrant_meta")
 BM25_MODEL = "qdrant/bm25"
 VDB_LOCK = 'vdb.lock'
 
@@ -84,7 +86,7 @@ def build_vectordb_from_sources(sources: List[DataSource]):
 
 def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
     # Read status manifest file
-    manifest = VDBManifest(QDRANT_PATH)
+    manifest = VDBManifest(QDRANT_META_PATH)
 
     # Check if the part for this source is already constructed
     vectorstore = get_vectordb()
@@ -250,8 +252,8 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
     # Update status manifest
     manifest.add_completed_source(source)
     logging.info(
-        "Index saved in %s for source %s",
-        QDRANT_PATH,
+        "Index metadata saved in %s for source %s",
+        QDRANT_META_PATH,
         source,
     )
     return vectorstore
@@ -282,12 +284,12 @@ def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
 
 
 def extract_topics(vectorstore: Qdrant, pool=None):
-    manifest = VDBManifest(QDRANT_PATH)
+    manifest = VDBManifest(QDRANT_META_PATH)
 
     # Add topics if needed
     if not manifest.has_topics():
         if manifest.num_chunks() > TOPIC_MIN_SIZE:
-            extract_initial_topics(vectorstore, QDRANT_PATH, pool)
+            extract_initial_topics(vectorstore, QDRANT_META_PATH, pool)
 
             if CALCULATE_TOPICS:
                 manifest.set_topics()
