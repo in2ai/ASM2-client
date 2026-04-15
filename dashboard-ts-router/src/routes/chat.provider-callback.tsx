@@ -81,9 +81,11 @@ function ProviderCallbackRoute() {
       try {
         await request<void>('/login-source', {
           body: JSON.stringify({
-            redirect_uri: storedRequest.redirectUri,
             source: 'drive',
-            source_token: authCode,
+            payload: {
+              auth_token: authCode,
+              redirect_uri: storedRequest.redirectUri,
+            },
           }),
           method: 'POST',
         })

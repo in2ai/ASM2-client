@@ -8,7 +8,7 @@ from sentence_transformers import CrossEncoder
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from src.connectors.source import DataSource
-from src.connectors.store import QDRANT_PATH
+from src.connectors.store import QDRANT_META_PATH
 from src.utils.nlp import detect_language, extract_search_terms
 from src.metrics.metrics import Metrics, TimedMetric, insert_metric, register_topics, register_user_activity, register_words
 from src.connectors.search import hybrid_search
@@ -204,7 +204,7 @@ def prepare_rag_context(query, pool, vectordb, reranker, sources: Dict[str, Data
 
     # Register found chunk topics
     topic_indices = {t for d in allowed_chunks for t, _ in d.metadata.get("topics", {}).items()}
-    topics_for_db = resolve_topic_names(topic_indices, "es", QDRANT_PATH)
+    topics_for_db = resolve_topic_names(topic_indices, "es", QDRANT_META_PATH)
 
     register_topics(pool, topics_for_db)
 

@@ -207,10 +207,13 @@ class SourceSelectionRequestModel(BaseModel):
     selected_sources: list[str]
 
 
+class SourceLoginPayloadModel(BaseModel):
+    auth_token: str | None = None
+    redirect_uri: str | None = None
+
 class SourceLoginRequestModel(BaseModel):
     source: str
-    source_token: str
-    redirect_uri: str | None = None
+    payload: SourceLoginPayloadModel
 
 
 class SourceReindexRequestModel(BaseModel):

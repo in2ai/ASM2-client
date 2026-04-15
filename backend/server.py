@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 
@@ -23,7 +22,11 @@ from src.config.auth import (
 from src.config.logto_auth import AuthInfo, has_role
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
-from src.connectors.store import VDB_LOCK, get_vectordb, build_vectordb_from_sources
+from src.connectors.store import (
+    VDB_LOCK,
+    build_vectordb_from_sources,
+    get_vectordb,
+)
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
@@ -171,26 +174,39 @@ def refresh_tokens():
                 new_creds = source.raw_creds
                 add_credentials(questdb_pool, user_id, source.name, new_creds, is_admin)
 
-            logging.info("Finished token refresh job", len(credentials))
+            logging.info("Finished token refresh job for %s credentials", len(credentials))
 
     periodic_task(refresh, 300)  # Once every five minutes
 
 
+def run_vdb_update_once() -> None:
+    if not os.path.isfile(VDB_LOCK):
+        return
+
+    logging.info("Updating VDB...")
+
+    try:
+        questdb_pool = app.state.questdb_pool
+
+        # Get admin authenticated sources and update DB
+        sources = get_authenticated_admin_sources(questdb_pool)
+
+        logging.info(
+            "Found %s valid admin sources for VDB update: %s",
+            len(sources),
+            [source.name for source in sources],
+        )
+
+        build_vectordb_from_sources(sources)
+
+        logging.info("VDB update job finished")
+    except Exception:
+        logging.exception("VDB update job failed")
+
+
 def update_vdb():
     def update():
-        if os.path.isfile(VDB_LOCK):
-            logging.info("Updating VDB...")
-
-            questdb_pool = app.state.questdb_pool
-
-            # Get admin authenticated sources and update DB
-            sources = get_authenticated_admin_sources(questdb_pool)
-
-            logging.info("Found %s valid sources", len(sources))
-
-            build_vectordb_from_sources(sources)
-
-            logging.info("VDB update job finished")
+        run_vdb_update_once()
 
     periodic_task(update, 3600)  # Once an hour
 
@@ -229,6 +245,12 @@ async def start_vdb_update(auth: AdminAuth):
     with open(VDB_LOCK, "w+"):
         pass
 
+    current_task = getattr(app.state, "vdb_update_task", None)
+    if current_task is not None and not current_task.done():
+        return
+
+    app.state.vdb_update_task = asyncio.create_task(asyncio.to_thread(run_vdb_update_once))
+
 
 @app.post("/stop-vdb-update", status_code=200)
 async def stop_vdb_update(auth: AdminAuth):
@@ -254,20 +276,14 @@ async def get_source_login_info(auth: AuthenticatedAuth, source: str):
 @app.post("/login-source", status_code=200)
 async def login_source(
     auth: AuthenticatedAuth,
-    payload: SourceLoginRequestModel,
+    body: SourceLoginRequestModel,
 ):
     # Check source name
-    source = validate_source(payload.source)
-
-    # Get login payload
-    source_payload = {
-        'auth_token': payload.source_token,
-        'redirect_uri': payload.redirect_uri,
-    }
+    source = validate_source(body.source)
 
     # Construct source instance
     source_class = SOURCES[source]
-    source_instance = source_class(json.dumps(source_payload))
+    source_instance = source_class(body.payload.model_dump_json(exclude_none=True))
 
     # Login in the source
     if not source_instance.login():
