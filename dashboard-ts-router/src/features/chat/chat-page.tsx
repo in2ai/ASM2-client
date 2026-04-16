@@ -67,6 +67,11 @@ export function ChatPage({
     return undefined
   }, [chatQuery.data, createChatMutation.data, effectiveChatId])
 
+  const visibleConversationId =
+    activeChat?.id ?? effectiveChatId ?? createChatMutation.data?.id
+  const visiblePendingMessage =
+    pendingMessage?.chat_id === visibleConversationId ? pendingMessage : null
+
   const pageError =
     chatsQuery.error ??
     chatQuery.error ??
@@ -248,7 +253,7 @@ export function ChatPage({
           onEmptyPrimaryAction={() => setSourcesOpen(true)}
           onComposerChange={setComposerValue}
           onSendMessage={() => void handleSendMessage()}
-          pendingMessage={pendingMessage}
+          pendingMessage={visiblePendingMessage}
         />
       )}
     </ChatShell>
