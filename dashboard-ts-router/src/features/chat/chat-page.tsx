@@ -69,8 +69,16 @@ export function ChatPage({
 
   const visibleConversationId =
     activeChat?.id ?? effectiveChatId ?? createChatMutation.data?.id
+  const lastPersistedMessage = activeChat?.messages.at(-1)
+  const hasPersistedPendingMessage =
+    pendingMessage != null &&
+    lastPersistedMessage?.role === 'user' &&
+    lastPersistedMessage.content === pendingMessage.content
   const visiblePendingMessage =
-    pendingMessage?.chat_id === visibleConversationId ? pendingMessage : null
+    pendingMessage?.chat_id === visibleConversationId &&
+    !hasPersistedPendingMessage
+      ? pendingMessage
+      : null
 
   const pageError =
     chatsQuery.error ??

@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -454,6 +455,164 @@ describe('ChatPage', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('mensaje en curso')).toBeNull()
+    })
+  })
+
+  it('hides the optimistic bubble once the chat query contains the persisted user message', async () => {
+    const sendResponse = createDeferred<Response>()
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse({
+            can_chat: true,
+            connected_sources: [],
+            selected_sources: [],
+          })
+        }
+
+        if (requestUrl.endsWith('/chats') && method === 'GET') {
+          return jsonResponse([])
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse({
+            created_at: '2026-04-14T18:30:00.000Z',
+            id: 'chat-1',
+            last_message_preview: null,
+            messages: [],
+            title: 'Chat empresarial',
+            updated_at: '2026-04-14T18:30:00.000Z',
+          })
+        }
+
+        if (
+          requestUrl.endsWith('/chats/chat-1/messages') &&
+          method === 'POST'
+        ) {
+          return sendResponse.promise
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByLabelText('composer')
+
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'mensaje duplicado' },
+    })
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(() => {
+      expect(screen.getAllByText('mensaje duplicado')).toHaveLength(1)
+    })
+
+    act(() => {
+      queryClient.setQueryData(['chat', 'detail', 'chat-1'], {
+        created_at: '2026-04-14T18:30:00.000Z',
+        id: 'chat-1',
+        last_message_preview: 'mensaje duplicado',
+        messages: [
+          {
+            chat_id: 'chat-1',
+            content: 'mensaje duplicado',
+            created_at: '2026-04-14T18:30:59.000Z',
+            id: 'user-1',
+            metadata: null,
+            role: 'user',
+            status: null,
+          },
+        ],
+        title: 'Chat empresarial',
+        updated_at: '2026-04-14T18:31:01.000Z',
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getAllByText('mensaje duplicado')).toHaveLength(1)
+      expect(screen.getByTestId('message-count').textContent).toBe('1')
+    })
+
+    sendResponse.resolve(
+      jsonResponse({
+        assistant_message: {
+          chat_id: 'chat-1',
+          content: 'respuesta final',
+          created_at: '2026-04-14T18:31:02.000Z',
+          id: 'assistant-1',
+          metadata: null,
+          role: 'assistant',
+          status: null,
+        },
+        chat: {
+          created_at: '2026-04-14T18:30:00.000Z',
+          id: 'chat-1',
+          last_message_preview: 'respuesta final',
+          messages: [
+            {
+              chat_id: 'chat-1',
+              content: 'mensaje duplicado',
+              created_at: '2026-04-14T18:31:01.000Z',
+              id: 'user-1',
+              metadata: null,
+              role: 'user',
+              status: null,
+            },
+            {
+              chat_id: 'chat-1',
+              content: 'respuesta final',
+              created_at: '2026-04-14T18:31:02.000Z',
+              id: 'assistant-1',
+              metadata: null,
+              role: 'assistant',
+              status: null,
+            },
+          ],
+          title: 'Chat empresarial',
+          updated_at: '2026-04-14T18:31:02.000Z',
+        },
+        detected_lang: 'es',
+        user_message: {
+          chat_id: 'chat-1',
+          content: 'mensaje duplicado',
+          created_at: '2026-04-14T18:31:01.000Z',
+          id: 'user-1',
+          metadata: null,
+          role: 'user',
+          status: null,
+        },
+      }),
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('message-count').textContent).toBe('2')
     })
   })
 

@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
@@ -209,9 +208,6 @@ function MessageBubble({
           <span className="text-xs opacity-70">
             {formatMessageTimestamp(message.created_at, locale)}
           </span>
-          {message.status === 'sending' ? (
-            <Badge variant="outline">{labels.sending}</Badge>
-          ) : null}
         </div>
         <p className="whitespace-pre-wrap text-sm leading-6">
           {message.content}
