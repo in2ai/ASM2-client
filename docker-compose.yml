@@ -13,8 +13,8 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./qdrant_index:/app/qdrant_index:rw
       - ./secrets:/app/secrets:ro
+      - backend-data:/app/data
     depends_on:
       qdrant:
         condition: service_started
