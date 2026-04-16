@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatPage } from './chat-page'
 
 type ConversationRenderState = {
+  isSending: boolean
   pendingContent: string | null
   persistedUserContents: string[]
 }
@@ -85,6 +86,7 @@ vi.mock('./conversation-view', () => ({
     chat?: { messages?: Array<{ content: string; id: string; role: string }> }
     composerDisabled?: boolean
     composerValue: string
+    isSending?: boolean
     onComposerChange: (value: string) => void
     onSendMessage: () => void
     pendingMessage?: { content: string; id: string }
@@ -95,6 +97,7 @@ vi.mock('./conversation-view', () => ({
     ]
 
     conversationRenderStates.push({
+      isSending: props.isSending ?? false,
       pendingContent: props.pendingMessage?.content ?? null,
       persistedUserContents: (props.chat?.messages ?? [])
         .filter((message) => message.role === 'user')
@@ -110,6 +113,7 @@ vi.mock('./conversation-view', () => ({
           onChange={(event) => props.onComposerChange(event.target.value)}
         />
         <button onClick={props.onSendMessage}>send</button>
+        {props.isSending ? <div>sending-indicator</div> : null}
         <div data-testid="message-count">{messages.length}</div>
         {messages.map((message) => (
           <div key={message.id}>{message.content}</div>
@@ -387,6 +391,7 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('mensaje en curso')).toHaveLength(1)
     })
+    expect(screen.getByText('sending-indicator')).toBeTruthy()
 
     rerender(
       <QueryClientProvider client={queryClient}>
@@ -401,6 +406,8 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(screen.queryByText('mensaje en curso')).toBeNull()
     })
+    expect(screen.queryByText('sending-indicator')).toBeNull()
+    expect(conversationRenderStates.at(-1)?.isSending).toBe(false)
 
     sendResponse.resolve(
       jsonResponse({
