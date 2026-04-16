@@ -38,6 +38,7 @@ export function ChatPage({
   const [composerValue, setComposerValue] = useState('')
   const [composerError, setComposerError] = useState<string | undefined>()
   const [pendingMessage, setPendingMessage] = useState<ChatMessage | null>(null)
+  const [sendingChatId, setSendingChatId] = useState<string | null>(null)
   const [sourcesOpen, setSourcesOpen] = useState(false)
 
   const queryClient = useQueryClient()
@@ -79,6 +80,8 @@ export function ChatPage({
     !hasPersistedPendingMessage
       ? pendingMessage
       : null
+  const isSendingActiveConversation =
+    sendMessageMutation.isPending && sendingChatId === visibleConversationId
 
   const pageError =
     chatsQuery.error ??
@@ -86,7 +89,6 @@ export function ChatPage({
     createChatMutation.error ??
     deleteChatMutation.error ??
     sourcesQuery.error
-  const isBusy = createChatMutation.isPending || sendMessageMutation.isPending
   const chatEnabled = sourcesQuery.data?.can_chat ?? false
   const composerDisabled = !chatEnabled
   const composerHint = !chatEnabled ? t('composer.disabledHint') : undefined
@@ -138,6 +140,8 @@ export function ChatPage({
         onSelectChat(chat.id)
       }
 
+      setSendingChatId(activeChatId)
+
       const optimisticMessage: ChatMessage = {
         chat_id: activeChatId,
         content,
@@ -162,6 +166,10 @@ export function ChatPage({
       setPendingMessage(null)
       setComposerValue(content)
       setComposerError(toErrorMessage(error, t('errors.sendFailed')))
+    } finally {
+      setSendingChatId((current) =>
+        current === activeChatId ? null : current,
+      )
     }
   }
 
@@ -249,7 +257,7 @@ export function ChatPage({
           emptyPrimaryActionLabel={emptyPrimaryActionLabel}
           errorMessage={composerError}
           isLoading={Boolean(effectiveChatId) && chatQuery.isLoading}
-          isSending={isBusy}
+          isSending={isSendingActiveConversation}
           locale={locale}
           messageLabels={{
             assistant: t('messages.assistant'),
