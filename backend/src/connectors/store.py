@@ -19,7 +19,6 @@ from src.connectors.vdb_file import VDBFile
 from src.utils.topic import assign_topics, extract_initial_topics
 
 QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
-QDRANT_PATH = "qdrant_index"
 QDRANT_META_PATH = get_env("QDRANT_META_PATH", "/app/data/qdrant_meta")
 BM25_MODEL = "qdrant/bm25"
 VDB_LOCK = 'vdb.lock'
