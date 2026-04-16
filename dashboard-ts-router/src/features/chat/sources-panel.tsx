@@ -18,7 +18,6 @@ import { CheckCircle2, CloudCog, Database, Loader2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 import {
-  useDisconnectSourceMutation,
   useSourceLoginInfoQuery,
   useStartVdbUpdateMutation,
   useStopVdbUpdateMutation,
@@ -234,7 +233,6 @@ function DriveSourceCard({
   const [selectionPending, setSelectionPending] = useState(false)
   const driveLoginInfoQuery = useSourceLoginInfoQuery('drive')
   const updateSourcesSelectionMutation = useUpdateSourcesSelectionMutation()
-  const disconnectSourceMutation = useDisconnectSourceMutation('drive')
   const driveOauthClientId = driveLoginInfoQuery.data?.oauth_client_id ?? null
   const driveConfigured = Boolean(driveOauthClientId)
   const connectionLocked = isAdmin && vdbActive
@@ -299,18 +297,6 @@ function DriveSourceCard({
     }
   }
 
-  const handleDisconnect = async () => {
-    setInlineError(undefined)
-
-    try {
-      await disconnectSourceMutation.mutateAsync()
-    } catch (error) {
-      setInlineError(
-        error instanceof Error ? error.message : t('errors.sendFailed'),
-      )
-    }
-  }
-
   const driveMessage = getDriveMessage({
     connected,
     connectionLocked,
@@ -359,38 +345,24 @@ function DriveSourceCard({
               {t('sources.connectDrive')}
             </Button>
           ) : (
-            <>
-              <Button
-                variant="outline"
-                disabled={
-                  connectionLocked || disconnectSourceMutation.isPending
+            <label className="border-border bg-background flex min-h-10 items-center gap-3 rounded-2xl border px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                aria-label={t('sources.selectForChat')}
+                checked={optimisticSelected}
+                disabled={selectionPending}
+                onChange={(event) =>
+                  void toggleSelected(event.target.checked)
                 }
-                onClick={() => void handleDisconnect()}
-              >
-                {disconnectSourceMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : null}
-                {t('sources.disconnect')}
-              </Button>
-              <label className="border-border bg-background flex min-h-10 items-center gap-3 rounded-2xl border px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  aria-label={t('sources.selectForChat')}
-                  checked={optimisticSelected}
-                  disabled={selectionPending}
-                  onChange={(event) =>
-                    void toggleSelected(event.target.checked)
-                  }
-                />
-                <span>{t('sources.selectForChat')}</span>
-                {selectionPending ? (
-                  <span className="text-muted-foreground ml-1 inline-flex items-center gap-1 text-xs">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    {t('sources.selectionSaving')}
-                  </span>
-                ) : null}
-              </label>
-            </>
+              />
+              <span>{t('sources.selectForChat')}</span>
+              {selectionPending ? (
+                <span className="text-muted-foreground ml-1 inline-flex items-center gap-1 text-xs">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {t('sources.selectionSaving')}
+                </span>
+              ) : null}
+            </label>
           )}
         </div>
       </CardContent>

@@ -208,21 +208,3 @@ export function useUpdateSourcesSelectionMutation() {
     },
   })
 }
-
-export function useDisconnectSourceMutation(source: string) {
-  const request = useAuthorizedChatRequest()
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: () =>
-      request<SourcesStatus>(
-        `/sources/${encodeURIComponent(source)}/disconnect`,
-        {
-          method: 'POST',
-        },
-      ),
-    onSuccess: (status) => {
-      queryClient.setQueryData(chatQueryKeys.sources, status)
-    },
-  })
-}
