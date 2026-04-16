@@ -4,7 +4,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SourcesPanel } from './sources-panel'
 
-const useDisconnectSourceMutationMock = vi.fn()
 const useSourceLoginInfoQueryMock = vi.fn()
 const useStartVdbUpdateMutationMock = vi.fn()
 const useStopVdbUpdateMutationMock = vi.fn()
@@ -70,8 +69,6 @@ vi.mock('@/components/ui/sheet', () => ({
 }))
 
 vi.mock('./api', () => ({
-  useDisconnectSourceMutation: (...args: unknown[]) =>
-    useDisconnectSourceMutationMock(...args),
   useSourceLoginInfoQuery: (...args: unknown[]) =>
     useSourceLoginInfoQueryMock(...args),
   useStartVdbUpdateMutation: (...args: unknown[]) =>
@@ -93,10 +90,6 @@ vi.mock('./google-drive-auth', () => ({
 
 describe('SourcesPanel', () => {
   beforeEach(() => {
-    useDisconnectSourceMutationMock.mockReturnValue({
-      isPending: false,
-      mutateAsync: vi.fn(),
-    })
     useSourceLoginInfoQueryMock.mockReturnValue({
       data: { oauth_client_id: 'client-id' },
       error: null,

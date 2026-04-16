@@ -12,7 +12,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
-    disconnect_source,
     get_authenticated_admin_sources,
     get_authenticated_sources,
     get_credentials_to_refresh,
@@ -348,29 +347,6 @@ async def update_sources_selection(
         normalized_sources.append(source)
 
     set_selected_sources(questdb_pool, auth.sub, normalized_sources)
-    return build_sources_status(questdb_pool, auth.sub)
-
-
-@app.post("/sources/{source}/disconnect", response_model=SourcesStatusModel, status_code=200)
-async def disconnect_sources_provider(auth: AuthenticatedAuth, source: str):
-    source = validate_source(source)
-    questdb_pool = app.state.questdb_pool
-
-    disconnect_source(
-        questdb_pool,
-        auth.sub,
-        source,
-        has_role(auth, "admin"),
-    )
-
-    existing_selection = get_selected_sources(questdb_pool, auth.sub)
-    updated_selection = sorted(
-        current_source
-        for current_source in (existing_selection or [])
-        if current_source != source
-    )
-    set_selected_sources(questdb_pool, auth.sub, updated_selection)
-
     return build_sources_status(questdb_pool, auth.sub)
 
 

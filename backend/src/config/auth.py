@@ -47,18 +47,6 @@ def add_credentials(
     )
 
 
-def disconnect_source(
-    pool: ThreadedConnectionPool, user_id: str, source: str, is_admin: bool
-):
-    add_credentials(
-        pool,
-        user_id,
-        source,
-        json.dumps({}),
-        is_admin,
-    )
-
-
 def get_user_credentials(pool: ThreadedConnectionPool, user_id: str):
     query = """
     SELECT source, credentials, issued_at, is_admin
