@@ -13,6 +13,12 @@ Modes:
   --local           Include local QuestDB and Logto services (default)
   --remote          Use external QuestDB and Logto services
 
+Networking:
+  dashboard         Published on localhost:3001
+  logto             Published on localhost:3011 and localhost:3002 in --local mode
+  backend/qdrant    Internal Docker network only
+  questdb           Internal Docker network only in --local mode
+
 Accelerators:
   --gpu             Enable NVIDIA GPU for the backend service
   --qdrant cpu      Use CPU Qdrant (default)
