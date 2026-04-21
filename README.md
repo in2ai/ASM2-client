@@ -112,8 +112,8 @@ Para el desarrollo del frontend fuera de Docker, usa `dashboard-ts-router/.env.l
 
 | Archivo                            | Descripción                                              |
 | ---------------------------------- | -------------------------------------------------------- |
-| `docker-compose.yml`               | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) |
-| `docker-compose.local.yml`         | Override para infraestructura local (`questdb`, `questdb-init`, `logto`) |
+| `docker-compose.yml`               | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) con `backend` y `qdrant` solo en red interna Docker |
+| `docker-compose.local.yml`         | Override para infraestructura local (`questdb`, `questdb-init`, `logto`) con `questdb` solo en red interna Docker |
 | `docker-compose.gpu.yml`           | Override para habilitar soporte GPU en `backend` |
 | `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA                      |
 | `docker-compose.qdrant-amd.yml`    | Override para Qdrant con GPU AMD (ROCm)                  |
@@ -129,9 +129,13 @@ Levanta backend, SPA, Qdrant, QuestDB y Logto local con un solo comando:
 Esto iniciará:
 
 - **Dashboard**: [http://localhost:3001](http://localhost:3001)
-- **Backend API**: [http://localhost:8001](http://localhost:8001)
-- **Consola QuestDB**: [http://localhost:9000](http://localhost:9000)
 - **Logto**: [http://localhost:3011](http://localhost:3011)
+
+Servicios internos en este modo:
+
+- **Backend API**: solo accesible desde la red Docker a través de `dashboard` y otros contenedores
+- **Qdrant**: solo accesible desde la red Docker
+- **QuestDB**: solo accesible desde la red Docker
 
 ### Opción 2: Servicios Remotos
 
@@ -157,7 +161,11 @@ Si QuestDB y Logto ya están desplegados fuera de Docker, ejecuta solo `backend`
 Esto iniciará:
 
 - **Dashboard**: [http://localhost:3001](http://localhost:3001)
-- **Backend API**: [http://localhost:8001](http://localhost:8001)
+
+Servicios internos en este modo:
+
+- **Backend API**: solo accesible desde la red Docker a través de `dashboard`
+- **Qdrant**: solo accesible desde la red Docker
 
 ### Opción 3: Docker con Soporte GPU (Backend)
 
@@ -251,8 +259,8 @@ ASM2-client/
 ├── img/                    # Imágenes y assets
 ├── qdrant_index/           # Estado auxiliar y manifest del índice vectorial
 ├── questdb/               # Datos persistentes de QuestDB (generado)
-├── docker-compose.yml     # Stack base backend + SPA + qdrant
-├── docker-compose.local.yml    # Infraestructura local (QuestDB + Logto)
+├── docker-compose.yml     # Stack base backend + SPA + qdrant con solo dashboard publicado en localhost
+├── docker-compose.local.yml    # Infraestructura local (QuestDB + Logto) con Logto publicado en localhost
 ├── docker-compose.gpu.yml # Override para soporte GPU (backend)
 ├── docker-compose.qdrant-nvidia.yml # Override para Qdrant GPU NVIDIA
 ├── docker-compose.qdrant-amd.yml    # Override para Qdrant GPU AMD

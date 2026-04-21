@@ -11,10 +11,6 @@ services:
   questdb:
     image: questdb/questdb:latest
     restart: unless-stopped
-    ports:
-      - "9000:9000"
-      - "8812:8812"
-      - "9009:9009"
     volumes:
       - ./questdb:/root/.questdb:rw
     env_file:
@@ -41,8 +37,8 @@ services:
         condition: service_healthy
     entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
     ports:
-      - "3011:3001"
-      - "3002:3002"
+      - "127.0.0.1:3011:3001"
+      - "127.0.0.1:3002:3002"
     environment:
       TRUST_PROXY_HEADER: 1
       DB_URL: postgres://logto:${LOGTO_POSTGRES_PASSWORD}@logto-postgres:5432/logto
