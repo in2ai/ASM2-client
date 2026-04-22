@@ -136,7 +136,6 @@ def init_nlp() -> None:
     GLOTLID_MODEL_PATH = hf_hub_download(
         repo_id="cis-lmu/glotlid",
         filename="model.bin",
-        cache_dir=os.environ.get("HF_HOME", None),
     )
     DETECTOR = CustomLID(GLOTLID_MODEL_PATH, languages=SUPPORTED_LABELS, mode="before")
 

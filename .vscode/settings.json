@@ -82,6 +82,7 @@
     "PYTHONUNBUFFERED",
     "qdrant",
     "questdb",
+    "readyz",
     "redirección",
     "reindex",
     "reindexa",

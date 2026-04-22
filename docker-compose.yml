@@ -8,6 +8,8 @@ services:
       - .env
     environment:
       CHAT_DB_PATH: /app/data/chat_history.sqlite3
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -15,7 +17,7 @@ services:
       - backend-data:/app/data
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -24,8 +26,8 @@ services:
         ]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 20s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
   qdrant:
@@ -33,6 +35,18 @@ services:
     restart: unless-stopped
     volumes:
       - ./qdrant_index:/qdrant/storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   dashboard:
     build:
@@ -46,7 +60,7 @@ services:
     image: asm2-dashboard:latest
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
     ports:
         - "127.0.0.1:3001:80"
     healthcheck:
