@@ -61,6 +61,7 @@ cp .env.example .env
 | `FOLDER_ID`             | ID de carpeta para almacenamiento (Google Drive) | `1ABC...`       |
 | `CLIENT_SECRET`         | JSON de credenciales OAuth de Google (principal) | `{"web":{...}}` |
 | `CLIENT_SECRET_WEBSITE` | JSON de credenciales OAuth de Google (website)   | `{"web":{...}}` |
+| `HF_TOKEN`              | Token de Hugging Face opcional usado solo en tiempo de build del backend para acelerar la descarga de modelos (evita el rate limit anónimo). No se usa en runtime. | `hf_...` |
 
 #### QuestDB
 
