@@ -30,6 +30,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /bin/
 COPY pyproject.toml uv.lock ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=secret,id=hf_token,env=HF_TOKEN \
     mkdir -p /app/data /app/models/stanza /app/models/nltk /app/qdrant_index /app/secrets \
     && uv sync --frozen --no-dev \
     && /opt/venv/bin/python -c "import stanza; \

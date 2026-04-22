@@ -3,6 +3,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      secrets:
+        - hf_token
     image: asm2-backend:latest
     env_file:
       - .env
@@ -77,3 +79,7 @@ services:
 
 volumes:
   backend-data:
+
+secrets:
+  hf_token:
+    environment: HF_TOKEN
