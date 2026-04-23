@@ -59,7 +59,7 @@ cp .env.example .env
 | ----------------------- | ------------------------------------------------ | --------------- |
 | `OPENAI_API_KEY`        | Clave de API para los modelos de OpenAI          | `sk-...`        |
 | `FOLDER_ID`             | ID de carpeta para almacenamiento (Google Drive) | `1ABC...`       |
-| `CLIENT_SECRET`         | JSON de credenciales OAuth de Google (principal) | `{"web":{...}}` |
+| `CLIENT_SECRET`         | JSON del cliente OAuth de Google (mismo contenido que `secrets/client_secret.json`; una sola línea en `.env`) | `{"web":{...}}` o `{"installed":{...}}` |
 | `CLIENT_SECRET_WEBSITE` | JSON de credenciales OAuth de Google (website)   | `{"web":{...}}` |
 | `HF_TOKEN`              | Token de Hugging Face opcional usado solo en tiempo de build del backend para acelerar la descarga de modelos (evita el rate limit anónimo). No se usa en runtime. | `hf_...` |
 
@@ -105,7 +105,7 @@ cp .env.example .env
 
 Para el desarrollo del frontend fuera de Docker, usa `dashboard-ts-router/.env.local` con la URL del backend y el endpoint público de Logto.
 
-> **Nota:** El backend en Docker sigue necesitando los archivos de `secrets/` para los flujos OAuth de conectores como Google Drive.
+> **Nota:** Para Google Drive, el backend puede leer el JSON del cliente desde la variable de entorno `CLIENT_SECRET` en `.env`, o usar el archivo `secrets/client_secret.json` montado en el contenedor.
 
 ## Instalación y Uso
 
