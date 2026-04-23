@@ -55,13 +55,13 @@ cp .env.example .env
 
 #### Credenciales y API
 
-| Variable                | Descripción                                      | Ejemplo         |
-| ----------------------- | ------------------------------------------------ | --------------- |
-| `OPENAI_API_KEY`        | Clave de API para los modelos de OpenAI          | `sk-...`        |
-| `FOLDER_ID`             | ID de carpeta para almacenamiento (Google Drive) | `1ABC...`       |
-| `CLIENT_SECRET`         | JSON del cliente OAuth de Google (mismo contenido que `secrets/client_secret.json`; una sola línea en `.env`) | `{"web":{...}}` o `{"installed":{...}}` |
-| `CLIENT_SECRET_WEBSITE` | JSON de credenciales OAuth de Google (website)   | `{"web":{...}}` |
-| `HF_TOKEN`              | Token de Hugging Face opcional usado solo en tiempo de build del backend para acelerar la descarga de modelos (evita el rate limit anónimo). No se usa en runtime. | `hf_...` |
+| Variable | Descripción | Ejemplo |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Clave de API para los modelos de OpenAI | `sk-...` |
+| `FOLDER_ID` | ID de carpeta para almacenamiento (Google Drive) | `1ABC...` |
+| `CLIENT_SECRET` | JSON del cliente OAuth de Google (mismo contenido que `secrets/client_secret.json`; una sola línea en `.env`) | `{"web":{...}}` o `{"installed":{...}}` |
+| `GOOGLE_CLIENT_SECRET_FILE` | Ruta opcional al fichero JSON del cliente OAuth cuando se monta en Docker | `/app/secrets/client_secret.json` |
+| `HF_TOKEN` | Token de Hugging Face opcional usado solo en tiempo de build del backend para acelerar la descarga de modelos (evita el rate limit anónimo). No se usa en runtime. | `hf_...` |
 
 #### QuestDB
 
@@ -75,22 +75,26 @@ cp .env.example .env
 
 #### Logto (Autenticación Dashboard)
 
-| Variable              | Descripción                                                         |
-| --------------------- | ------------------------------------------------------------------- |
-| `VITE_LOGTO_APP_ID`     | ID de la aplicación SPA en Logto                                |
-| `VITE_LOGTO_ENDPOINT`   | Endpoint público de Logto usado por el navegador                |
-| `LOGTO_ENDPOINT`        | Endpoint que usa el backend para discovery/JWKS                 |
-| `VITE_LOGTO_API_RESOURCE` | Audience del API para la SPA                                 |
-| `LOGTO_API_RESOURCE`    | Audience del API para validación estricta en FastAPI            |
+| Variable | Descripción |
+| --- | --- |
+| `VITE_LOGTO_APP_ID` | ID de la aplicación SPA en Logto |
+| `VITE_LOGTO_ENDPOINT` | Endpoint público de Logto usado por el navegador |
+| `LOGTO_ENDPOINT` | Endpoint que usa el backend para discovery/JWKS |
+| `VITE_LOGTO_API_RESOURCE` | Audience del API para la SPA |
+| `LOGTO_API_RESOURCE` | Audience del API para validación estricta en FastAPI |
+| `LOGTO_ADMIN_ENDPOINT` | Endpoint del panel de administración de Logto |
+| `LOGTO_POSTGRES_PASSWORD` | Contraseña de PostgreSQL usada por Logto self-hosted |
+| `LOGTO_MANAGEMENT_APP_ID` | Client ID opcional de la app M2M para la Management API |
+| `LOGTO_MANAGEMENT_APP_SECRET` | Client secret opcional de la app M2M para la Management API |
+| `LOGTO_MANAGEMENT_API_RESOURCE` | Resource opcional de la Management API de Logto |
+| `LOGTO_DEFAULT_USER_ROLE_ID` | Rol global opcional para auto-asignación de usuarios |
 
 #### Aplicación
 
-| Variable              | Descripción                                                                                   | Default                 |
-| --------------------- | --------------------------------------------------------------------------------------------- | ----------------------- |
-| `NODE_ENV`            | Entorno de ejecución (`development`, `production`)                                            | `development`           |
-| `FRONTEND_URL`        | URL pública de la SPA para redirects y callbacks                                                | `http://localhost:3001` |
-| `TZ`                  | Zona horaria                                                                                  | `Europe/Madrid`         |
-| `SKIP_ENV_VALIDATION` | Omitir validación de variables (útil para builds)                                             | `false`                 |
+| Variable | Descripción | Default |
+| --- | --- | --- |
+| `CORS_ALLOW_ORIGINS` | Orígenes CORS permitidos por el backend FastAPI (lista separada por comas) | `http://localhost:3000,http://localhost:3001,http://localhost:5173` |
+| `TZ` | Zona horaria | `Europe/Madrid` |
 
 #### Extracción de Tópicos
 
@@ -105,19 +109,21 @@ cp .env.example .env
 
 Para el desarrollo del frontend fuera de Docker, usa `dashboard-ts-router/.env.local` con la URL del backend y el endpoint público de Logto.
 
-> **Nota:** Para Google Drive, el backend puede leer el JSON del cliente desde la variable de entorno `CLIENT_SECRET` en `.env`, o usar el archivo `secrets/client_secret.json` montado en el contenedor.
+El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el build, pero en este repositorio los archivos Docker Compose usan explícitamente `VITE_LOGTO_*` para el dashboard.
+
+> **Nota:** Variables antiguas como `FRONTEND_URL`, `NODE_ENV`, `SKIP_ENV_VALIDATION`, `CLIENT_SECRET_WEBSITE`, `REDIRECT_URI`, `UID` y `GID` ya no forman parte de la configuración activa del stack actual. Para Google Drive, el backend puede leer el JSON del cliente desde la variable de entorno `CLIENT_SECRET` en `.env`, o usar el archivo `secrets/client_secret.json` montado en el contenedor mediante `GOOGLE_CLIENT_SECRET_FILE`.
 
 ## Instalación y Uso
 
 ### Archivos Docker Compose Disponibles
 
-| Archivo                            | Descripción                                              |
-| ---------------------------------- | -------------------------------------------------------- |
-| `docker-compose.yml`               | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) con `backend` y `qdrant` solo en red interna Docker |
-| `docker-compose.local.yml`         | Override para infraestructura local (`questdb`, `questdb-init`, `logto`) con `questdb` solo en red interna Docker |
-| `docker-compose.gpu.yml`           | Override para habilitar soporte GPU en `backend` |
-| `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA                      |
-| `docker-compose.qdrant-amd.yml`    | Override para Qdrant con GPU AMD (ROCm)                  |
+| Archivo | Descripción |
+| --- | --- |
+| `docker-compose.yml` | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) con `backend` y `qdrant` solo en red interna Docker |
+| `docker-compose.local.yml` | Override para infraestructura local (`questdb`, `questdb-init`, `logto`) con `questdb` solo en red interna Docker |
+| `docker-compose.gpu.yml` | Override para habilitar soporte GPU en `backend` |
+| `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA |
+| `docker-compose.qdrant-amd.yml` | Override para Qdrant con GPU AMD (ROCm) |
 
 ### Opción 1: Stack Local Completo (Recomendada)
 
