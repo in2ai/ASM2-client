@@ -1,0 +1,203 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      secrets:
+        - hf_token
+    image: asm2-backend:latest
+    env_file:
+      - .env
+    environment:
+      CHAT_DB_PATH: /app/data/chat_history.sqlite3
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      QUESTDB_HOST: questdb
+      QDRANT_HOST: qdrant
+      QDRANT_META_PATH: /app/data/qdrant_meta
+      GOOGLE_CLIENT_SECRET_FILE: ${GOOGLE_CLIENT_SECRET_FILE:-/app/secrets/client_secret.json}
+    volumes:
+      - backend-data:/app/data
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      questdb:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8001/healthz || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - asm2-internal
+
+  qdrant:
+    image: qdrant/qdrant:gpu-nvidia-latest
+    environment:
+      QDRANT__GPU__INDEXING: "1"
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - asm2-internal
+
+  dashboard:
+    build:
+      context: ./dashboard-ts-router
+      dockerfile: Dockerfile.caddy
+      args:
+        VITE_BACKEND_URL: /api
+        VITE_LOGTO_ENDPOINT: ${VITE_LOGTO_ENDPOINT}
+        VITE_LOGTO_APP_ID: ${VITE_LOGTO_APP_ID}
+        VITE_LOGTO_API_RESOURCE: ${VITE_LOGTO_API_RESOURCE}
+    image: asm2-dashboard:latest
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "80"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1/ >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - asm2-internal
+      - dokploy-network
+
+  questdb:
+    image: questdb/questdb:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - questdb-data:/root/.questdb
+    networks:
+      - asm2-internal
+
+  questdb-init:
+    image: postgres:15-alpine
+    restart: "no"
+    depends_on:
+      questdb:
+        condition: service_started
+    env_file:
+      - .env
+    volumes:
+      - ./sql/init.sql:/init/init.sql:ro
+      - ./sql/init.sh:/init/init.sh:ro
+    environment:
+      QUESTDB_HOST: questdb
+    working_dir: /init
+    entrypoint: ["sh", "/init/init.sh"]
+    networks:
+      - asm2-internal
+
+  logto:
+    image: ghcr.io/logto-io/logto:1.36.0
+    depends_on:
+      logto-postgres:
+        condition: service_healthy
+    entrypoint:
+      [
+        "sh",
+        "-ec",
+        "export DB_URL=\"postgres://logto:$(cat /run/secrets/logto_postgres_password)@logto-postgres:5432/logto\" && npm run cli db seed -- --swe && npm start",
+      ]
+    ports:
+      - "3001"
+      - "3002"
+    env_file:
+      - .env
+    environment:
+      TRUST_PROXY_HEADER: 1
+      ENDPOINT: ${VITE_LOGTO_ENDPOINT}
+      ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT}
+    volumes:
+      - logto-connectors:/etc/logto/packages/core/connectors
+    secrets:
+      - logto_postgres_password
+    restart: unless-stopped
+    networks:
+      - asm2-internal
+      - dokploy-network
+
+  logto-postgres:
+    image: postgres:18-alpine
+    user: postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: logto
+      POSTGRES_DB: logto
+      POSTGRES_PASSWORD_FILE: /run/secrets/logto_postgres_password
+    volumes:
+      - logto-postgres-data:/var/lib/postgresql/data
+    secrets:
+      - logto_postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U logto -d logto"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - asm2-internal
+
+volumes:
+  backend-data:
+  qdrant-data:
+  questdb-data:
+  logto-connectors:
+  logto-postgres-data:
+
+secrets:
+  hf_token:
+    environment: HF_TOKEN
+  logto_postgres_password:
+    environment: LOGTO_POSTGRES_PASSWORD
+
+networks:
+  asm2-internal:
+  dokploy-network:
+    external: true
