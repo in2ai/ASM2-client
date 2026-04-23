@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REQUIRED_FILES=(
-  "./secrets/client_secret.json"
-)
-
 usage() {
   cat <<'EOF'
 Usage: ./run.sh [up|down|build|config|logs|ps] [options] [-- extra docker compose args]
@@ -39,14 +35,25 @@ Examples:
 EOF
 }
 
-ensure_required_files() {
-  local file
-  for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$file" ]; then
-      echo "ERROR: required file not found: $file" >&2
-      exit 1
-    fi
-  done
+load_root_env() {
+  if [ -f ./.env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . ./.env
+    set +a
+  fi
+}
+
+ensure_gdrive_oauth_client_config() {
+  if [ -f "./secrets/client_secret.json" ]; then
+    return 0
+  fi
+  if [ -n "${CLIENT_SECRET:-}" ]; then
+    return 0
+  fi
+  echo "ERROR: Google Drive OAuth client config missing." >&2
+  echo "Provide ./secrets/client_secret.json or set CLIENT_SECRET (e.g. in .env)." >&2
+  exit 1
 }
 
 action="up"
@@ -117,7 +124,8 @@ case "$qdrant_accelerator" in
 esac
 
 if [ "$action" = "up" ]; then
-  ensure_required_files
+  load_root_env
+  ensure_gdrive_oauth_client_config
 fi
 
 compose_args=(-f docker-compose.yml)

@@ -18,6 +18,8 @@ CLIENT_SECRET_FILE = get_env(
     "GOOGLE_CLIENT_SECRET_FILE",
     get_env("CLIENT_SECRET_FILE", "secrets/client_secret.json"),
 )
+# Google OAuth client JSON from env (same shape as secrets/client_secret.json). Overrides file when set and valid.
+CLIENT_SECRET = get_env("CLIENT_SECRET")
 GDRIVE_ROOT = get_env("GDRIVE_ROOT", get_env("FOLDER_ID", "")).strip()
 
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)

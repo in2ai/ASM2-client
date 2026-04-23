@@ -11,6 +11,7 @@ from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import Flow
 
 from src.config.config import (
+    CLIENT_SECRET,
     CLIENT_SECRET_FILE,
     GDRIVE_ROOT,
     SCOPES,
@@ -62,7 +63,24 @@ def _load_drive_client_config_from_file(path: str | None) -> dict[str, Any] | No
     return _extract_drive_client_config(payload)
 
 
+def _load_drive_client_config_from_json_string(raw: str | None) -> dict[str, Any] | None:
+    if not raw:
+        return None
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+    return _extract_drive_client_config(payload)
+
+
 def get_drive_client_config() -> dict[str, Any] | None:
+    if CLIENT_SECRET:
+        from_env = _load_drive_client_config_from_json_string(CLIENT_SECRET)
+        if from_env:
+            return from_env
+
     return _load_drive_client_config_from_file(CLIENT_SECRET_FILE)
 
 
