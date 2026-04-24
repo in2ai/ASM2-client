@@ -134,7 +134,7 @@ services:
       - asm2-internal
 
   logto:
-    image: ghcr.io/logto-io/logto:1.36.0
+    image: ghcr.io/logto-io/logto:1.38.0
     depends_on:
       logto-postgres:
         condition: service_healthy
