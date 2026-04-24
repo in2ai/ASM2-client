@@ -172,7 +172,7 @@ services:
       POSTGRES_DB: logto
       POSTGRES_PASSWORD_FILE: /run/secrets/logto_postgres_password
     volumes:
-      - logto-postgres-data:/var/lib/postgresql/data
+      - logto-postgres-data:/var/lib/postgresql
     secrets:
       - logto_postgres_password
     healthcheck:
