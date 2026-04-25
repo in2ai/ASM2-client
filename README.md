@@ -65,13 +65,15 @@ cp .env.example .env
 
 #### QuestDB
 
-| Variable           | Descripción                                          | Default   |
-| ------------------ | ---------------------------------------------------- | --------- |
-| `QUESTDB_HOST`     | Host de QuestDB (`questdb` para Docker, IP para VPS) | `questdb` |
-| `QUESTDB_PORT`     | Puerto PostgreSQL wire protocol                      | `8812`    |
-| `QUESTDB_USER`     | Usuario de base de datos                             | `admin`   |
-| `QUESTDB_PASSWORD` | Contraseña de base de datos                          | `quest`   |
-| `QUESTDB_DB`       | Nombre de la base de datos                           | `qdb`     |
+| Variable | Descripción | Default |
+| --- | --- | --- |
+| `QUESTDB_HOST` | Host de QuestDB (`questdb` para Docker, IP para VPS) | `questdb` |
+| `QUESTDB_PORT` | Puerto PostgreSQL wire protocol | `8812` |
+| `QUESTDB_USER` | Usuario de base de datos | `admin` |
+| `QUESTDB_PASSWORD` | Contraseña del acceso PostgreSQL wire protocol usado por backend e init SQL | `change_me_for_local_pgwire` |
+| `QUESTDB_DB` | Nombre de la base de datos | `qdb` |
+| `QUESTDB_HTTP_USER` | Usuario del panel web / API HTTP de QuestDB | `admin` |
+| `QUESTDB_HTTP_PASSWORD` | Contraseña del panel web / API HTTP de QuestDB | `change_me_for_local_http` |
 
 #### Logto (Autenticación Dashboard)
 
@@ -120,7 +122,7 @@ El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el bu
 | Archivo | Descripción |
 | --- | --- |
 | `docker-compose.yml` | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) con `backend` y `qdrant` solo en red interna Docker |
-| `docker-compose.local.yml` | Override para infraestructura local (`questdb`, `questdb-init`, `logto`) con `questdb` solo en red interna Docker |
+| `docker-compose.local.yml` | Override para infraestructura local (`questdb`, `questdb-init`, `logto`) con QuestDB web publicado en `localhost:9000` |
 | `docker-compose.gpu.yml` | Override para habilitar soporte GPU en `backend` |
 | `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA |
 | `docker-compose.qdrant-amd.yml` | Override para Qdrant con GPU AMD (ROCm) |
