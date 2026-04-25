@@ -108,12 +108,22 @@ services:
   questdb:
     image: questdb/questdb:latest
     restart: unless-stopped
+    ports:
+      - "9000"
     env_file:
       - .env
+    environment:
+      - QDB_HTTP_BIND_TO=0.0.0.0:9000
+      - QDB_PG_ENABLED=true
+      - QDB_HTTP_USER=${QUESTDB_HTTP_USER}
+      - QDB_HTTP_PASSWORD=${QUESTDB_HTTP_PASSWORD}
+      - QDB_PG_USER=${QUESTDB_USER}
+      - QDB_PG_PASSWORD=${QUESTDB_PASSWORD}
     volumes:
       - questdb-data:/root/.questdb
     networks:
       - asm2-internal
+      - dokploy-network
 
   questdb-init:
     image: postgres:15-alpine

@@ -7,7 +7,8 @@ Use it when you want to deploy the full stack on a single Dokploy host:
 - `dashboard` public on your main app domain
 - `logto` public on a dedicated auth domain
 - `logto` admin console public on a dedicated admin domain
-- `backend`, `qdrant`, `questdb`, `questdb-init`, and `logto-postgres` internal only
+- `questdb` web console public on a dedicated QuestDB domain
+- `backend`, `qdrant`, QuestDB PostgreSQL wire, `questdb-init`, and `logto-postgres` internal only
 - NVIDIA GPU enabled for `backend` and `qdrant`
 
 ## Important: Use a Docker Compose App
@@ -30,11 +31,12 @@ If the ISP uses CGNAT, direct public ingress will not work. In that case, put Cl
 
 ## 2. Recommended Domains
 
-Use three subdomains:
+Use these subdomains:
 
 - app domain: `app.example.com`
 - Logto public domain: `auth.example.com`
 - Logto admin domain: `admin-auth.example.com`
+- QuestDB web domain: `questdb.example.com`
 
 The admin domain is public in this setup because Logto needs an admin console during configuration. Protect it with a strong password, MFA, and preferably an additional access restriction once setup is complete.
 
@@ -59,7 +61,7 @@ Notes:
 - `VITE_LOGTO_APP_ID` is not known until after Logto is running and you create the SPA application in Logto.
 - For the first deployment, set `VITE_LOGTO_APP_ID=bootstrap-placeholder`.
 - After Logto is up, create the SPA application, replace that value with the real app id, and redeploy.
-- `QUESTDB_USER=admin` and `QUESTDB_PASSWORD=quest` should be kept as-is unless you explicitly reconfigure QuestDB authentication as a separate task.
+- Set strong QuestDB credentials for both PostgreSQL wire access and the HTTP web console.
 - If you use the Google Drive connector, prefer setting `CLIENT_SECRET` as inline JSON in Dokploy instead of mounting a secret file.
 - Only a small set of environment entries remain inline in the compose file. Those are service-local overrides such as internal hostnames, container paths, GPU flags, build-time mappings, translated variable names, or computed values.
 - The dashboard still declares `VITE_LOGTO_ENDPOINT`, `VITE_LOGTO_APP_ID`, and `VITE_LOGTO_API_RESOURCE` explicitly as build args, matching the working pattern already used in the local compose file.
@@ -72,8 +74,9 @@ In Dokploy, add these domain mappings:
 1. Service `dashboard`, port `80` -> `app.example.com`
 2. Service `logto`, port `3001` -> `auth.example.com`
 3. Service `logto`, port `3002` -> `admin-auth.example.com`
+4. Service `questdb`, port `9000` -> `questdb.example.com`
 
-Do not expose `backend`, `qdrant`, `questdb`, or `logto-postgres` publicly.
+Do not expose `backend`, `qdrant`, QuestDB PostgreSQL wire, or `logto-postgres` publicly.
 
 ## 6. First Deployment Order
 
@@ -85,9 +88,9 @@ Use this order:
 4. Open the Logto admin console at `https://admin-auth.example.com`.
 5. Create your first admin user.
 6. Create a Logto SPA application for the dashboard.
-8. Create a Logto API resource for the FastAPI backend.
-9. Replace `VITE_LOGTO_APP_ID` in Dokploy with the real Logto SPA app id.
-10. Redeploy the Dokploy application.
+7. Create a Logto API resource for the FastAPI backend.
+8. Replace `VITE_LOGTO_APP_ID` in Dokploy with the real Logto SPA app id.
+9. Redeploy the Dokploy application.
 
 ## 7. Logto Configuration
 
@@ -171,14 +174,16 @@ Public:
 - `dashboard`
 - `logto` main endpoint
 - `logto` admin console
+- `questdb` web console on port `9000`
 
 Internal only:
 
 - `backend`
 - `qdrant`
-- `questdb`
 - `questdb-init`
 - `logto-postgres`
+
+QuestDB PostgreSQL wire remains internal for backend and init SQL usage. Only the QuestDB HTTP web console is intended to be exposed publicly, and it should be protected with `QUESTDB_HTTP_USER` / `QUESTDB_HTTP_PASSWORD`.
 
 The dashboard proxies `/api/*` to `backend:8001`, so the backend should not get its own public domain.
 
@@ -197,5 +202,5 @@ After the final redeploy, verify:
 
 - Do not use the standard Dokploy build-type app for this repository.
 - Do not expose `backend` directly to the internet.
-- Do not change the QuestDB credentials unless you also rework QuestDB auth intentionally.
+- Do not expose QuestDB PostgreSQL wire publicly; only expose the HTTP web console on port `9000`.
 - Do not leave `VITE_LOGTO_APP_ID=bootstrap-placeholder` after Logto setup.

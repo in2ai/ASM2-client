@@ -11,6 +11,15 @@ services:
   questdb:
     image: questdb/questdb:latest
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      - QDB_HTTP_BIND_TO=0.0.0.0:9000
+      - QDB_PG_ENABLED=true
+      - QDB_HTTP_USER=${QUESTDB_HTTP_USER}
+      - QDB_HTTP_PASSWORD=${QUESTDB_HTTP_PASSWORD}
+      - QDB_PG_USER=${QUESTDB_USER}
+      - QDB_PG_PASSWORD=${QUESTDB_PASSWORD}
     volumes:
       - ./questdb:/root/.questdb:rw
     env_file:
