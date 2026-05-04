@@ -12,7 +12,7 @@ from src.metrics.metrics import (
     register_words,
 )
 from src.utils.nlp import extract_search_terms
-from src.utils.rag import retrieve_and_rerank
+from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources
 from src.utils.topic import resolve_topic_names
 
 
@@ -26,16 +26,22 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     reranker = configurable["reranker"]
     pool = configurable.get("questdb_pool")
 
+    # Perform VDB search
     try:
         with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
-            chunks, available_sources, lang_code = retrieve_and_rerank(
+            chunks, lang_code = retrieve_and_rerank(
                 query, vectorstore, reranker, sources
             )
 
     except Exception:
         logging.exception("vectordb_search failed")
         return "[Search error: the document search is temporarily unavailable.]"
+    
+    # Filter sources with LLM
+    chunks = [c for c in chunks if is_relevant_source(query, c.page_content).is_relevant]
+    available_sources = get_chunk_sources(chunks, sources)
 
+    # Send usage metrics
     try:
         insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
 
@@ -59,7 +65,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     except Exception:
         logging.warning("Failed to record topics", exc_info=True)
 
-    # --- Build response ---
+    # Build response
     fallback_messages = {
         "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
         "en": "I couldn't find relevant information about that topic in the available sources.",
@@ -69,25 +75,17 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     if not chunks:
         return fallback_messages.get(lang_code, fallback_messages["es"])
 
-    result = []
+    formatted_chunks = []
+
     for i, chunk in enumerate(chunks, 1):
-        meta = chunk.metadata
-        result.append(
-            f"[{i}] {meta.get('title', 'Untitled')}\n"
-            f"Source: {meta.get('source', 'Unknown')}\n"
-            f"Link: {meta.get('webViewLink', 'N/A')}\n"
-            f"{chunk.page_content[:1500]}"
+        formatted_chunks.append(
+            f"[{i}] {chunk.metadata.get('title', 'Untitled')}\n"
+            f"Source: {chunk.metadata.get('source', 'Unknown')}\n"
+            f"Link: {chunk.metadata.get('webViewLink', 'N/A')}\n"
+            f"{chunk.page_content}"
         )
 
-    output = "\n---\n".join(result)
-
-    if available_sources:
-        sources_lines = []
-        for source in available_sources:
-            title = source.get("title", "Untitled")
-            source_type = source.get("source_type", "Unknown")
-            link = source.get("link") or "N/A"
-            sources_lines.append(f"- type: {source_type}, title: {title}, link: {link}")
-        output += "\n\nAVAILABLE SOURCES:\n" + "\n".join(sources_lines)
-
-    return output
+    return {
+        "chunks": formatted_chunks,
+        "sources": available_sources
+    }
