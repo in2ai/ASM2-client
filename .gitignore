@@ -223,6 +223,9 @@ backend/graph/graph_diagram.png
 docs
 
 # Skills
-.kiro/
-.augment/
+.agent/skills/
 .agents/skills/
+.augment/skills/
+.claude/skills/
+.kiro/
+skills/
