@@ -7,7 +7,7 @@ import uuid
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import TokenTextSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, Modifier, PayloadSchemaType, PointStruct, SparseVectorParams, VectorParams
 from qdrant_client.http.models import Document as QDocument
@@ -26,7 +26,12 @@ VDB_LOCK = 'vdb.lock'
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 QDRANT_COL = "documents"
 
-DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+CHUNK_SIZE = 512
+CHUNK_OVERLAP = 0.2
+DOCUMENT_SPLITTER = TokenTextSplitter(
+    chunk_size=CHUNK_SIZE, 
+    chunk_overlap=int(CHUNK_SIZE * CHUNK_OVERLAP)
+)
 
 TOPIC_MIN_SIZE = get_int_env("TOPIC_MIN_SIZE", 20000)
 CALCULATE_TOPICS = get_bool_env("CALCULATE_TOPICS")
@@ -83,7 +88,7 @@ def build_vectordb_from_sources(sources: List[DataSource]):
     return vectordb
 
 
-def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
+def build_vectorstore(files: List[VDBFile], source: str, batch_size=50):
     # Read status manifest file
     manifest = VDBManifest(QDRANT_META_PATH)
 
@@ -176,15 +181,17 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
         manifest.save()
 
     # Read file chunks in batches
-    docs_batch, pending_ids = [], []
+    docs_batch, pending_ids, chunk_idxs = [], [], []
 
     def flush(reason="batch"):
-        nonlocal docs_batch, pending_ids, manifest
+        nonlocal docs_batch, chunk_idxs, pending_ids, manifest
+
         if not docs_batch:
             return
 
         for i in range(0, len(docs_batch), batch_size):
             sub_docs = docs_batch[i : i + batch_size]
+            idxs = chunk_idxs[i : i + batch_size]
             new_ids = [str(uuid.uuid4()) for _ in sub_docs]
             embs = EMBEDDINGS.embed_documents([i.page_content for i in sub_docs])
 
@@ -197,10 +204,13 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
                     },
                     payload={
                         "page_content": doc.page_content,
-                        "metadata": doc.metadata,
+                        "metadata": {
+                            **doc.metadata,
+                            'chunk_idx': c_idx
+                        },
                     },
                 )
-                for uuid, emb, doc in zip(new_ids, embs, sub_docs)
+                for uuid, emb, doc, c_idx in zip(new_ids, embs, sub_docs, idxs)
             ]
 
             vectorstore.client.upsert(vectorstore.collection_name, points)
@@ -219,7 +229,7 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
             reason,
         )
 
-        docs_batch, pending_ids = [], []
+        docs_batch, pending_ids, chunk_idxs = [], [], []
 
     for f in files:
         if f.metadata["id"] not in files_to_add:
@@ -240,6 +250,7 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
         base_doc = Document(page_content=txt, metadata=f.metadata)
         chunks = DOCUMENT_SPLITTER.split_documents([base_doc])
         docs_batch.extend(chunks)
+        chunk_idxs.extend(range(len(chunks)))
         pending_ids.append((f.metadata["id"], f.metadata["modifiedTime"]))
 
         if len(docs_batch) >= batch_size:
