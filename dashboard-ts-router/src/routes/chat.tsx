@@ -11,7 +11,7 @@ import {
   useLocation,
   useNavigate,
 } from '@tanstack/react-router'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useCallback } from 'react'
 import { z } from 'zod'
 
 const ChatPage = lazy(() =>
@@ -35,6 +35,16 @@ function ChatRoute() {
   const search = Route.useSearch()
   const { isAuthenticated, isLoading, user } = useAuthenticatedUser()
   const callbackSearchParams = new URLSearchParams(globalThis.location.search)
+
+  const handleSelectChat = useCallback(
+    (chatId?: string, options?: { replace?: boolean }) => {
+      navigate({
+        search: chatId ? { chatId } : {},
+        replace: options?.replace ?? false,
+      })
+    },
+    [navigate],
+  )
 
   if (isGoogleDriveCallbackPath(location.pathname)) {
     return <Outlet />
@@ -79,12 +89,7 @@ function ChatRoute() {
       <ChatPage
         user={user}
         selectedChatId={search.chatId}
-        onSelectChat={(chatId, options) => {
-          navigate({
-            search: chatId ? { chatId } : {},
-            replace: options?.replace ?? false,
-          })
-        }}
+        onSelectChat={handleSelectChat}
       />
     </Suspense>
   )
