@@ -4,6 +4,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from src.connectors.store import QDRANT_META_PATH
+from src.connectors.search import augment_chunks
 from src.metrics.context import MetricsActor
 from src.metrics.metrics import (
     Metrics,
@@ -96,13 +97,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
     formatted_chunks = []
 
-    for i, chunk in enumerate(chunks, 1):
-        formatted_chunks.append(
-            f"[{i}] {chunk.metadata.get('title', 'Untitled')}\n"
-            f"Source: {chunk.metadata.get('source', 'Unknown')}\n"
-            f"Link: {chunk.metadata.get('webViewLink', 'N/A')}\n"
-            f"{chunk.page_content}"
-        )
+    for i, chunk in enumerate(augment_chunks(vectorstore, chunks), 1):
+        formatted_chunks.append(chunk)
 
     return {
         "chunks": formatted_chunks,

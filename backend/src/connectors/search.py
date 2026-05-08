@@ -42,6 +42,68 @@ def build_contiguous_chunk_filter(anchors: list[tuple[str, int]], num_previous: 
     return Filter(should=should_filters)
 
 
+def split_contiguous(nums):
+    res = [[nums[0]]]
+
+    for n in nums[1:]:
+        if n == res[-1][-1] + 1:
+            res[-1].append(n)
+
+        else:
+            res.append([n])
+    
+    return res
+
+
+def augment_chunks(vectorstore: Qdrant, chunks: list[Document]):
+    # Get all chunks from VDB
+    anchors = [(d.metadata['id'], d.metadata['chunk_idx']) for d in chunks]
+
+    contiguous_filter = build_contiguous_chunk_filter(anchors, 1, 2)
+    search_results = iterate_qdrant_docs(vectorstore, scroll_filter=contiguous_filter)
+
+    # Classify chunks by file
+    doc_chunks = {} 
+
+    for _, d in search_results:
+        file_id = d.metadata['id']
+        chunk_id = d.metadata['chunk_idx']
+
+        doc_chunks.setdefault(file_id, {})
+        doc_chunks[file_id][chunk_id] = d
+
+    # Get sorted chunks
+    res = []
+
+    for chunks in doc_chunks.values():
+        idxs = sorted(chunks.keys())
+
+        for group in split_contiguous(idxs):
+            res.append([chunks[i] for i in group])
+
+    # Join chunks
+    res = list(map(join_contiguous_chunks, res))
+
+    return res
+
+
+def join_contiguous_chunks(docs):
+    result = []
+    last_end = 0
+
+    for doc in docs:
+        start = doc.metadata["start_index"]
+        content = doc.page_content
+
+        # compute overlap relative to previous chunk
+        overlap = max(0, last_end - start)
+
+        result.append(content[overlap:])
+        last_end = start + len(content)
+
+    return "".join(result)
+
+
 def hybrid_search(
     vectorstore: Qdrant,
     query: str,
@@ -60,8 +122,8 @@ def hybrid_search(
         collection_name=vectorstore.collection_name,
         query=FusionQuery(fusion=Fusion.RRF),
         prefetch=[
-            Prefetch(query=emb, using="embedding", limit=prefetch_k, filter=pfilter),
-            Prefetch(query=QDocument(text=query, model=BM25_MODEL), using="bm25", limit=prefetch_k, filter=pfilter)
+            Prefetch(query=emb, using="embedding", limit=prefetch_k, params=APPROX_SEARCH_PARAMS, filter=pfilter),
+            Prefetch(query=QDocument(text=query, model=BM25_MODEL), using="bm25", limit=prefetch_k, params=APPROX_SEARCH_PARAMS, filter=pfilter)
         ],
         search_params=APPROX_SEARCH_PARAMS,
         with_payload=True,
