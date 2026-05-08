@@ -30,7 +30,8 @@ CHUNK_SIZE = 512
 CHUNK_OVERLAP = 0.2
 DOCUMENT_SPLITTER = TokenTextSplitter(
     chunk_size=CHUNK_SIZE, 
-    chunk_overlap=int(CHUNK_SIZE * CHUNK_OVERLAP)
+    chunk_overlap=int(CHUNK_SIZE * CHUNK_OVERLAP),
+    add_start_index=True
 )
 
 TOPIC_MIN_SIZE = get_int_env("TOPIC_MIN_SIZE", 20000)
