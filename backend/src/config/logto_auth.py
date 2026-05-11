@@ -21,8 +21,6 @@ _JWKS_ENDPOINT = ""
 security = HTTPBearer(auto_error=False)
 
 _SUPPORTED_JWT_ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"]
-METRICS_READ_SCOPE = "metrics:read"
-METRICS_EXPORT_SCOPE = "metrics:export"
 
 
 @dataclass(frozen=True)
@@ -30,7 +28,6 @@ class AuthInfo:
     sub: str
     role: str
     roles: list[str]
-    scopes: list[str]
     audience: list[str]
 
 
@@ -118,10 +115,6 @@ def _extract_role_from_names(roles: list[str]) -> str:
     return "user"
 
 
-def has_scope(auth_info: AuthInfo, required_scope: str) -> bool:
-    return required_scope in auth_info.scopes
-
-
 def has_role(auth_info: AuthInfo, required_role: str) -> bool:
     return required_role == auth_info.role or required_role in auth_info.roles
 
@@ -167,12 +160,6 @@ def validate_token(token: str) -> AuthInfo:
             detail=f"Token validation failed: {exc}",
         ) from exc
 
-    raw_scopes = payload.get("scope")
-    if isinstance(raw_scopes, str) and raw_scopes.strip():
-        scopes = raw_scopes.split()
-    else:
-        scopes = []
-
     raw_aud = payload.get("aud", [])
     if isinstance(raw_aud, str):
         audience = [raw_aud]
@@ -201,7 +188,6 @@ def validate_token(token: str) -> AuthInfo:
         sub=sub,
         role=_extract_role_from_names(roles),
         roles=roles,
-        scopes=scopes,
         audience=audience,
     )
 
@@ -224,22 +210,6 @@ def require_admin():
             raise HTTPException(
                 status_code=403,
                 detail="Missing required role: admin",
-            )
-
-        return auth_info
-
-    return _dependency
-
-
-def require_scopes(required_scopes: list[str]):
-    def _dependency(auth_info: AuthInfo = Depends(require_auth())) -> AuthInfo:
-        missing_scopes = [
-            scope for scope in required_scopes if not has_scope(auth_info, scope)
-        ]
-        if missing_scopes:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Missing required scopes: {', '.join(missing_scopes)}",
             )
 
         return auth_info
