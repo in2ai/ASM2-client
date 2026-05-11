@@ -26,7 +26,7 @@ VDB_LOCK = 'vdb.lock'
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 QDRANT_COL = "documents"
 
-CHARS_PER_TOKEN = 4 # Approximate
+CHARS_PER_TOKEN = 3 # Approximate
 CHUNK_SIZE = 512 * CHARS_PER_TOKEN
 CHUNK_OVERLAP = 0.2
 DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(
