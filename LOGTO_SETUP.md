@@ -35,7 +35,7 @@ This is the protected audience identifier used by FastAPI.
 It is responsible for:
 
 - audience validation in backend JWT checks
-- carrying API permissions such as `metrics:read` and `metrics:export`
+- ensuring the SPA receives access tokens meant for the backend
 
 Relevant backend files:
 
@@ -139,19 +139,7 @@ Important:
 - it must match exactly in Logto, the SPA token request, and backend validation
 - it is not the same thing as `/api` or a specific metrics route
 
-Create these permissions on the API resource:
-
-- `metrics:read`
-- `metrics:export`
-
-The SPA currently requests both of these scopes in `dashboard-ts-router/src/lib/logto.ts`.
-
-Recommended role model:
-
-- `user` role should include `metrics:read`.
-- `admin` role should include `metrics:read` and `metrics:export`.
-
-In the current backend, all `/metrics/*` endpoints require the `admin` role. The metrics scopes can still exist on the API resource, but role-based backend authorization is the source of truth.
+In the current backend, all `/metrics/*` endpoints require the `admin` role. The backend does not enforce custom API scopes.
 
 The SPA should request the Logto `roles` scope so role claims can be resolved from Logto user information.
 
@@ -172,7 +160,7 @@ FastAPI validation behavior:
 - retrieves signing keys from Logto JWKS
 - validates `iss`, `aud`, `sub`, and token expiry
 - resolves user roles server-side from the Logto Management API when management credentials are configured
-- enforces route scopes through FastAPI dependencies
+- enforces route access through role-based FastAPI dependencies
 
 Protected backend routes currently include:
 
