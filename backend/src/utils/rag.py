@@ -121,19 +121,28 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
 
 
 def get_chunk_sources(chunks, sources):
-    available_sources = []
-    seen_ids = set()
+    available_sources = {}
 
     for d in chunks:
         doc_id = d.metadata.get("id")
-        if doc_id not in seen_ids:
-            seen_ids.add(doc_id)
+
+        if doc_id not in available_sources:
             tag = _resolve_source_label(d.metadata.get("source", "Unknown"), sources)
             title = d.metadata.get("title") or d.metadata.get("name") or "(sin titulo)"
             link = d.metadata.get("webViewLink")
-            available_sources.append({"title": title, "source_type": tag, "link": link})
 
-    return available_sources
+            available_sources[doc_id] = {"title": title, "source_type": tag, "link": link}
+
+        page = d.metadata.get('page')
+
+        if page is not None:
+            available_sources[doc_id].setdefault('pages', set()).add(page)
+
+    for v in available_sources.values():
+        if 'pages' in v:
+            v['pages'] = sorted(v['pages'])
+
+    return list(available_sources.values())
 
 
 def get_rag_system_prompt(lang_code: str) -> str:
@@ -153,6 +162,7 @@ def get_rag_system_prompt(lang_code: str) -> str:
         "'more about that') by replacing them with the specific terms from the "
         "conversation context, so the search query is understandable without "
         "prior conversation."
+        "Do not add any references or links to online resources, just answer using the context."
     )
 
 

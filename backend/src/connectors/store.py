@@ -7,7 +7,7 @@ import uuid
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import TokenTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, Modifier, PayloadSchemaType, PointStruct, SparseVectorParams, VectorParams
 from qdrant_client.http.models import Document as QDocument
@@ -26,12 +26,14 @@ VDB_LOCK = 'vdb.lock'
 EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 QDRANT_COL = "documents"
 
-CHUNK_SIZE = 512
+CHARS_PER_TOKEN = 4 # Approximate
+CHUNK_SIZE = 512 * CHARS_PER_TOKEN
 CHUNK_OVERLAP = 0.2
-DOCUMENT_SPLITTER = TokenTextSplitter(
+DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(
     chunk_size=CHUNK_SIZE, 
     chunk_overlap=int(CHUNK_SIZE * CHUNK_OVERLAP),
-    add_start_index=True
+    add_start_index=True,
+    keep_separator=True
 )
 
 TOPIC_MIN_SIZE = get_int_env("TOPIC_MIN_SIZE", 20000)
@@ -248,8 +250,31 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=50):
             manifest.save()
             continue
 
-        base_doc = Document(page_content=txt, metadata=f.metadata)
+        # Compute page offsets
+        if isinstance(txt, list):
+            joined_txt = '\n'.join(txt)
+            pages = []
+            start = 0
+
+            for page in txt:
+                end = start + len(page) + 1 # + 1 because of the \n
+                pages.append([start, end])
+                start = end
+
+        else:
+            joined_txt = txt
+            pages = None
+
+        base_doc = Document(page_content=joined_txt, metadata=f.metadata)
         chunks = DOCUMENT_SPLITTER.split_documents([base_doc])
+
+        # Compute page metadata
+        if pages is not None:
+            for chunk in chunks:
+                idx = chunk.metadata['start_index']
+                page = next(i for i, p in enumerate(pages, 1) if idx >= p[0] and idx < p[1])
+                chunk.metadata['page'] = page
+
         docs_batch.extend(chunks)
         chunk_idxs.extend(range(len(chunks)))
         pending_ids.append((f.metadata["id"], f.metadata["modifiedTime"]))
