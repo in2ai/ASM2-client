@@ -56,6 +56,7 @@ from src.metrics.dashboard_queries import (
     top_k_topics,
 )
 from src.chat.store import ChatNotFoundError, ChatStore
+from src.tracing import get_langfuse_handler
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker, retrieve_and_rerank
 
@@ -428,7 +429,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
 
     register_user_activity(questdb_pool)
 
-    config = {
+    config: dict[str, Any] = {
         "configurable": {
             "thread_id": chat_id,
             "vectorstore": app.state.vectorstore,
@@ -437,6 +438,17 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "sources": sources,
         }
     }
+
+    langfuse_handler = get_langfuse_handler()
+
+    if langfuse_handler is not None:
+        config["callbacks"] = [langfuse_handler]
+        config["run_name"] = "chat-turn"
+        config["metadata"] = {
+            "langfuse_user_id": auth.sub,
+            "langfuse_session_id": chat_id,
+            "langfuse_tags": ["asm2", "chat"],
+        }
 
     with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
         try:
