@@ -97,7 +97,7 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
     lang_code = detect_language(query)
 
     # Perform hybrid search
-    search_results = hybrid_search(vectordb, query, k, 25, sources)
+    search_results = hybrid_search(vectordb, query, 25, 25, sources)
 
     # Filter by permissions
     allowed_chunks = []
