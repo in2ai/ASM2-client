@@ -88,6 +88,16 @@ cp .env.example .env
 | `LOGTO_MANAGEMENT_APP_SECRET` | Client secret opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_API_RESOURCE` | Resource opcional de la Management API de Logto |
 
+#### Langfuse (Trazabilidad)
+
+Tracing opcional de las llamadas LLM y del grafo de LangGraph. Si las tres variables están vacías, el backend arranca con el tracing desactivado y no envía datos a Langfuse.
+
+| Variable | Descripción | Ejemplo |
+| --- | --- | --- |
+| `LANGFUSE_PUBLIC_KEY` | Clave pública del proyecto (Langfuse UI → Settings → API Keys) | `pk-lf-...` |
+| `LANGFUSE_SECRET_KEY` | Clave secreta del proyecto | `sk-lf-...` |
+| `LANGFUSE_BASE_URL` | Host de Langfuse. |  |
+
 #### Aplicación
 
 | Variable | Descripción | Default |
