@@ -13,10 +13,8 @@ VITE_LOGTO_APP_ID=your_logto_app_id
 VITE_LOGTO_API_RESOURCE=http://10.0.0.15:8001
 ```
 
-You can also use existing root keys without the `VITE_` prefix:
-
 ```env
-BACKEND_URL=/api
+VITE_BACKEND_URL=/api
 LOGTO_ENDPOINT=http://localhost:3011
 LOGTO_APP_ID=your_logto_app_id
 LOGTO_API_RESOURCE=http://10.0.0.15:8001
