@@ -42,11 +42,6 @@ def _get_management_config() -> tuple[str, str, str, str, str] | None:
     )
 
 
-def is_default_role_bootstrap_enabled() -> bool:
-    config = _get_management_config()
-    return bool(config and config[3])
-
-
 def _get_management_access_token(
     logto_endpoint: str,
     management_app_id: str,
