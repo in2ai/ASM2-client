@@ -34,16 +34,20 @@ def extract_docx_text(data: bytes) -> str:
         return None
 
 
-def extract_pptx_text(data: bytes) -> str:
-    """Extraer texto de presentación PowerPoint (.pptx)"""
+def extract_pptx_text(data: bytes) -> list[str]:
+    """Extraer texto de presentación PowerPoint (.pptx), una cadena por diapositiva."""
     try:
         prs = Presentation(io.BytesIO(data))
-        text_runs = []
+        slides_text = []
+
         for slide in prs.slides:
+            slide_parts = []
             for shape in slide.shapes:
                 if hasattr(shape, "text") and shape.text.strip():
-                    text_runs.append(shape.text.strip())
-        return "\n".join(text_runs).strip()
+                    slide_parts.append(shape.text.strip())
+            slides_text.append("\n".join(slide_parts).strip())
+
+        return slides_text
     except Exception as e:
         logging.error(f"Error while extracting PPTX: {e}")
         return None
@@ -103,12 +107,12 @@ def extract_csv_text(data: bytes) -> str:
         return None
 
 
-def extract_pdf_text(data: bytes) -> str:
-    """Extraer texto de documento PDF"""
+def extract_pdf_text(data: bytes) -> list[str]:
+    """Extraer texto de documento PDF, una cadena por página."""
     try:
         fh = io.BytesIO(data)
         reader = PdfReader(fh)
-        return "\n".join([(p.extract_text() or "") for p in reader.pages]).strip()
+        return [(p.extract_text() or "").strip() for p in reader.pages]
     except Exception as e:
         logging.error(f"Error while extracting PDF: {e}")
         return None
@@ -118,7 +122,7 @@ class VDBFile:
     def __init__(self, metadata):
         self.metadata = metadata
 
-    def get_text(self) -> str: ...
+    def get_text(self) -> str | list[str]: ...
 
 
 class GoogleDriveFile(VDBFile):
@@ -126,7 +130,7 @@ class GoogleDriveFile(VDBFile):
         super().__init__(metadata)
         self.service = service
 
-    def get_text(self) -> str:
+    def get_text(self) -> str | list[str]:
         file_id = self.metadata["id"]
         mime_type = self.metadata["mimeType"]
 
@@ -203,7 +207,7 @@ class DropboxFile(VDBFile):
         super().__init__(metadata)
         self.service = service
 
-    def get_text(self) -> str:
+    def get_text(self) -> str | list[str]:
         file_id = self.metadata["id"]
         path_lower = self.metadata["path_lower"]
         mime_type = self.metadata["mimeType"]
@@ -264,7 +268,7 @@ class OnedriveFile(VDBFile):
         super().__init__(metadata)
         self.token = token
 
-    def get_text(self) -> str:
+    def get_text(self) -> str | list[str]:
         item_id = self.metadata["id"]
         mime = self.metadata.get("mimeType", "").lower()
 
