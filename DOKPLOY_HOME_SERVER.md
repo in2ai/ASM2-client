@@ -119,11 +119,6 @@ Then set both of these Dokploy environment variables to exactly that same value:
 - `LOGTO_API_RESOURCE`
 - `VITE_LOGTO_API_RESOURCE`
 
-Create these permissions on the Logto API resource:
-
-- `metrics:read`
-- `metrics:export`
-
 If you want backend-side role resolution, also create a machine-to-machine application in Logto and set:
 
 - `LOGTO_MANAGEMENT_APP_ID`
