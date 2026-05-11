@@ -15,14 +15,15 @@ const config = defineConfig(({ mode }) => {
   const logtoAppId = env.VITE_LOGTO_APP_ID || env.LOGTO_APP_ID || ''
   const logtoApiResource =
     env.VITE_LOGTO_API_RESOURCE || env.LOGTO_API_RESOURCE || ''
-  const backendUrl = env.VITE_BACKEND_URL || env.BACKEND_URL || ''
+  const backendUrl = env.VITE_BACKEND_URL || ''
 
   return {
     envDir: '..',
     define: {
       'import.meta.env.VITE_LOGTO_ENDPOINT': JSON.stringify(logtoEndpoint),
       'import.meta.env.VITE_LOGTO_APP_ID': JSON.stringify(logtoAppId),
-      'import.meta.env.VITE_LOGTO_API_RESOURCE': JSON.stringify(logtoApiResource),
+      'import.meta.env.VITE_LOGTO_API_RESOURCE':
+        JSON.stringify(logtoApiResource),
       'import.meta.env.VITE_BACKEND_URL': JSON.stringify(backendUrl),
     },
     plugins: [
