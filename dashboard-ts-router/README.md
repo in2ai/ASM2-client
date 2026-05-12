@@ -8,17 +8,12 @@ Create `.env` at repository root (or `dashboard-ts-router/.env.local`) with:
 
 ```env
 VITE_BACKEND_URL=/api
-VITE_LOGTO_ENDPOINT=http://localhost:3011
-VITE_LOGTO_APP_ID=your_logto_app_id
-VITE_LOGTO_API_RESOURCE=http://10.0.0.15:8001
-```
-
-```env
-VITE_BACKEND_URL=/api
 LOGTO_ENDPOINT=http://localhost:3011
 LOGTO_APP_ID=your_logto_app_id
 LOGTO_API_RESOURCE=http://10.0.0.15:8001
 ```
+
+The Vite config maps these shared `LOGTO_*` values to the `VITE_*` names consumed by browser code, so you only need to define one set of Logto variables in project env files.
 
 Make sure backend env also defines:
 

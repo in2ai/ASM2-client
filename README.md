@@ -79,11 +79,9 @@ cp .env.example .env
 
 | Variable | Descripción |
 | --- | --- |
-| `VITE_LOGTO_APP_ID` | ID de la aplicación SPA en Logto |
-| `VITE_LOGTO_ENDPOINT` | Endpoint público de Logto usado por el navegador |
-| `LOGTO_ENDPOINT` | Endpoint que usa el backend para discovery/JWKS |
-| `VITE_LOGTO_API_RESOURCE` | Audience del API para la SPA |
-| `LOGTO_API_RESOURCE` | Audience del API para validación estricta en FastAPI |
+| `LOGTO_APP_ID` | ID de la aplicación SPA en Logto |
+| `LOGTO_ENDPOINT` | Endpoint compartido de Logto usado por la SPA y por el backend |
+| `LOGTO_API_RESOURCE` | Audience del API compartido entre la SPA y la validación estricta en FastAPI |
 | `LOGTO_ADMIN_ENDPOINT` | Endpoint del panel de administración de Logto |
 | `LOGTO_POSTGRES_PASSWORD` | Contraseña de PostgreSQL usada por Logto self-hosted |
 | `LOGTO_MANAGEMENT_APP_ID` | Client ID opcional de la app M2M para la Management API |
@@ -167,12 +165,13 @@ Si QuestDB y Logto ya están desplegados fuera de Docker, ejecuta solo `backend`
 1. Actualiza tu archivo `.env` con las URLs y credenciales remotas de QuestDB y Logto.
 
    ```env
-   QUESTDB_HOST=tu-ip-o-hostname-vps
-   QUESTDB_PORT=8812
-   QUESTDB_USER=admin
-   QUESTDB_PASSWORD=tu_contraseña
+    QUESTDB_HOST=tu-ip-o-hostname-vps
+    QUESTDB_PORT=8812
+    QUESTDB_USER=admin
+    QUESTDB_PASSWORD=tu_contraseña
     LOGTO_ENDPOINT=https://tu-logto-remoto
-    VITE_LOGTO_ENDPOINT=https://tu-logto-remoto
+    LOGTO_APP_ID=tu_spa_app_id
+    LOGTO_API_RESOURCE=https://tu-api-resource
    ```
 
 Esto iniciará:

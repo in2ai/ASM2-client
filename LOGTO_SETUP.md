@@ -96,16 +96,6 @@ Example:
 - Post sign-out redirect URI: `https://your-dashboard-host/sign-in`
 - Allowed origin: `https://your-dashboard-host`
 
-For the SPA path, the dashboard uses these frontend environment variables:
-
-```env
-VITE_LOGTO_ENDPOINT=http://localhost:3011
-VITE_LOGTO_APP_ID=your_spa_app_id
-VITE_LOGTO_API_RESOURCE=https://asm2-api.company.internal
-```
-
-Or, if you prefer the shared root env naming used by this repo:
-
 ```env
 LOGTO_ENDPOINT=http://localhost:3011
 LOGTO_APP_ID=your_spa_app_id
@@ -114,7 +104,7 @@ LOGTO_API_RESOURCE=https://asm2-api.company.internal
 
 Notes:
 
-- `dashboard-ts-router/src/lib/logto.ts` reads the normalized `VITE_*` values.
+- `dashboard-ts-router/vite.config.ts` maps the shared `LOGTO_*` values into the `VITE_*` variables used by browser code.
 - `dashboard-ts-router/src/lib/api.ts` uses `/api` in production and `http://localhost:8001` in local dev when no explicit frontend backend URL is provided.
 - Unlike the old Next.js dashboard flow, the SPA does not need `LOGTO_APP_SECRET` or `LOGTO_COOKIE_SECRET` in browser code.
 - No Logto organization template is required for this setup.
@@ -181,9 +171,9 @@ If you change a user's roles, force a new Logto authorization flow so newly issu
 ### SPA running locally against local backend
 
 ```env
-VITE_LOGTO_ENDPOINT=http://localhost:3011
-VITE_LOGTO_APP_ID=your_spa_app_id
-VITE_LOGTO_API_RESOURCE=https://asm2-api.company.internal
+LOGTO_ENDPOINT=http://localhost:3011
+LOGTO_APP_ID=your_spa_app_id
+LOGTO_API_RESOURCE=https://asm2-api.company.internal
 VITE_BACKEND_URL=http://localhost:8001
 ```
 
