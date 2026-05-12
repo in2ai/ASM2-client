@@ -89,7 +89,6 @@ cp .env.example .env
 | `LOGTO_MANAGEMENT_APP_ID` | Client ID opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_APP_SECRET` | Client secret opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_API_RESOURCE` | Resource opcional de la Management API de Logto |
-| `LOGTO_DEFAULT_USER_ROLE_ID` | Rol global opcional para auto-asignación de usuarios |
 
 #### Langfuse (Trazabilidad)
 
