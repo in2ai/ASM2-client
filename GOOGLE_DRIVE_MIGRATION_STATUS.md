@@ -9,7 +9,7 @@ It replaces the earlier split between `GOOGLE_DRIVE_CHANGES_SUMMARY.md` and the 
 The migration goal is to preserve the Google Drive-backed chat experience from the legacy Streamlit app while moving the application to:
 
 - a FastAPI backend in `backend/`
-- a React SPA in `dashboard-ts-router/`
+- a React SPA in `frontend/`
 
 The current scope is intentionally narrow:
 
@@ -44,7 +44,7 @@ The Google Drive migration is now aligned to this model:
 - one shared, admin-managed indexed corpus
 - per-user Google Drive authorization for ACL-aware retrieval and source selection
 - one FastAPI backend as the system of record for source state, credentials, reindex status, and chats
-- one SPA in `dashboard-ts-router/` as the production frontend
+- one SPA in `frontend/` as the production frontend
 
 This means the migration does **not** use a fully per-user indexed vector corpus. Instead:
 
@@ -77,7 +77,7 @@ Before the latest migration pass, the repository already had meaningful migratio
 - `backend/src/chat/store.py` already provided persisted chat storage
 - `backend/graph/*` already contained LangGraph-based chat orchestration
 - `backend/src/utils/rag.py` already handled retrieval/reranking primitives
-- `dashboard-ts-router/src/routes/chat.tsx` and `dashboard-ts-router/src/features/chat/*` already contained a real chat route and UI shell
+- `frontend/src/routes/chat.tsx` and `frontend/src/features/chat/*` already contained a real chat route and UI shell
 
 The migration work described below focused on correcting the Google Drive semantics, finishing the chat/source contract, and closing the most important feature-parity gaps with the Streamlit version.
 
@@ -593,8 +593,8 @@ The frontend changes are important, but they are summarized more lightly here be
 
 Important files:
 
-- `dashboard-ts-router/src/routes/chat.tsx`
-- `dashboard-ts-router/src/routes/chat.provider-callback.tsx`
+- `frontend/src/routes/chat.tsx`
+- `frontend/src/routes/chat.provider-callback.tsx`
 
 Current behavior:
 
@@ -607,7 +607,7 @@ Current behavior:
 
 Important file:
 
-- `dashboard-ts-router/src/features/chat/google-drive-auth.ts`
+- `frontend/src/features/chat/google-drive-auth.ts`
 
 What it now does:
 
@@ -620,9 +620,9 @@ What it now does:
 
 Important files:
 
-- `dashboard-ts-router/src/features/chat/api.ts`
-- `dashboard-ts-router/src/features/chat/sources-panel.tsx`
-- `dashboard-ts-router/src/features/chat/types.ts`
+- `frontend/src/features/chat/api.ts`
+- `frontend/src/features/chat/sources-panel.tsx`
+- `frontend/src/features/chat/types.ts`
 
 What changed:
 
@@ -637,11 +637,11 @@ What changed:
 
 Important files:
 
-- `dashboard-ts-router/src/features/chat/chat-page.tsx`
-- `dashboard-ts-router/src/features/chat/conversation-view.tsx`
-- `dashboard-ts-router/src/i18n/messages/en.json`
-- `dashboard-ts-router/src/i18n/messages/es.json`
-- `dashboard-ts-router/src/i18n/messages/gl.json`
+- `frontend/src/features/chat/chat-page.tsx`
+- `frontend/src/features/chat/conversation-view.tsx`
+- `frontend/src/i18n/messages/en.json`
+- `frontend/src/i18n/messages/es.json`
+- `frontend/src/i18n/messages/gl.json`
 
 What changed:
 
@@ -655,8 +655,8 @@ What changed:
 
 As a later follow-up, the SPA also corrected no-payload mutation calls so they now pass `undefined` to `mutateAsync(...)` where TanStack Query expected a variables argument type. This affects the current state of:
 
-- `dashboard-ts-router/src/features/chat/chat-page.tsx`
-- `dashboard-ts-router/src/features/chat/sources-panel.tsx`
+- `frontend/src/features/chat/chat-page.tsx`
+- `frontend/src/features/chat/sources-panel.tsx`
 
 ## 9. What was validated during this documentation update
 
@@ -664,7 +664,7 @@ The following validations were freshly rerun:
 
 ### Frontend
 
-- `cd dashboard-ts-router && pnpm test && pnpm build`
+- `cd frontend && pnpm test && pnpm build`
 
 Results:
 
