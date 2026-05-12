@@ -81,9 +81,9 @@ services:
       dockerfile: Dockerfile.caddy
       args:
         VITE_BACKEND_URL: /api
-        VITE_LOGTO_ENDPOINT: ${VITE_LOGTO_ENDPOINT}
-        VITE_LOGTO_APP_ID: ${VITE_LOGTO_APP_ID}
-        VITE_LOGTO_API_RESOURCE: ${VITE_LOGTO_API_RESOURCE}
+        LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+        LOGTO_APP_ID: ${LOGTO_APP_ID}
+        LOGTO_API_RESOURCE: ${LOGTO_API_RESOURCE}
     image: asm2-dashboard:latest
     depends_on:
       backend:
@@ -161,7 +161,7 @@ services:
       - .env
     environment:
       TRUST_PROXY_HEADER: 1
-      ENDPOINT: ${VITE_LOGTO_ENDPOINT}
+      ENDPOINT: ${LOGTO_ENDPOINT}
       ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT}
     volumes:
       - logto-connectors:/etc/logto/packages/core/connectors

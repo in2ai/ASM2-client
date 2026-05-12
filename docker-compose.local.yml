@@ -51,7 +51,7 @@ services:
     environment:
       TRUST_PROXY_HEADER: 1
       DB_URL: postgres://logto:${LOGTO_POSTGRES_PASSWORD}@logto-postgres:5432/logto
-      ENDPOINT: ${VITE_LOGTO_ENDPOINT}
+      ENDPOINT: ${LOGTO_ENDPOINT}
       ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT}
     volumes:
       - logto-connectors:/etc/logto/packages/core/connectors
