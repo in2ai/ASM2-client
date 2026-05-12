@@ -18,11 +18,10 @@ _USER_ROLE_CACHE_TTL_SECONDS = 60
 _USER_ROLE_CACHE: dict[str, tuple[float, list[str]]] = {}
 
 
-def _get_management_config() -> tuple[str, str, str, str, str] | None:
+def _get_management_config() -> tuple[str, str, str, str] | None:
     logto_endpoint = str(get_env("LOGTO_ENDPOINT", "")).rstrip("/")
     management_app_id = str(get_env("LOGTO_MANAGEMENT_APP_ID", "")).strip()
     management_app_secret = str(get_env("LOGTO_MANAGEMENT_APP_SECRET", "")).strip()
-    default_user_role_id = str(get_env("LOGTO_DEFAULT_USER_ROLE_ID", "")).strip()
     management_api_resource = str(
         get_env("LOGTO_MANAGEMENT_API_RESOURCE", _DEFAULT_MANAGEMENT_API_RESOURCE)
     ).strip()
@@ -37,7 +36,6 @@ def _get_management_config() -> tuple[str, str, str, str, str] | None:
         logto_endpoint,
         management_app_id,
         management_app_secret,
-        default_user_role_id,
         management_api_resource,
     )
 
@@ -111,7 +109,6 @@ def _management_request(
         logto_endpoint,
         management_app_id,
         management_app_secret,
-        _,
         management_api_resource,
     ) = config
 
