@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import logging
 
 from langchain_core.runnables import RunnableConfig
@@ -39,7 +40,13 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         return "[Search error: the document search is temporarily unavailable.]"
     
     # Filter sources with LLM
-    chunks = [c for c in chunks if is_relevant_source(query, c.page_content).is_relevant]
+    def check_chunk(c):
+        return is_relevant_source(query, c.page_content).is_relevant
+
+    with ThreadPoolExecutor() as executor:
+        relevance = list(executor.map(check_chunk, chunks))
+
+    chunks = [c for c, ok in zip(chunks, relevance) if ok]
     available_sources = get_chunk_sources(chunks, sources)
 
     # Send usage metrics
