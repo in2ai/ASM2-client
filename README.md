@@ -105,7 +105,7 @@ cp .env.example .env
 
 ### Desarrollo Local del Dashboard
 
-Para el desarrollo del frontend fuera de Docker, usa `dashboard-ts-router/.env.local` con la URL del backend y el endpoint público de Logto.
+Para el desarrollo del frontend fuera de Docker, usa `frontend/.env.local` con la URL del backend y el endpoint público de Logto.
 
 El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el build, pero en este repositorio los archivos Docker Compose usan explícitamente `VITE_LOGTO_*` para el dashboard.
 
@@ -236,7 +236,7 @@ uv run uvicorn server:app --host 0.0.0.0 --port 8001
 #### Dashboard (React SPA)
 
 ```bash
-cd dashboard-ts-router
+cd frontend
 
 # Instalar dependencias
 pnpm install
@@ -252,7 +252,7 @@ El dashboard estará disponible en `http://localhost:3001`.
 ```text
 ASM2-client/
 ├── backend/                # Backend FastAPI y conectores
-├── dashboard-ts-router/    # SPA React/TanStack Router
+├── frontend/               # SPA React/TanStack Router
 ├── src/                    # Código fuente legacy del cliente Python
 ├── sql/                    # Scripts de inicialización de base de datos
 ├── secrets/                # Credenciales y ficheros sensibles

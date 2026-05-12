@@ -54,7 +54,7 @@ services:
 
   dashboard:
     build:
-      context: ./dashboard-ts-router
+      context: ./frontend
       dockerfile: Dockerfile.caddy
       args:
         VITE_BACKEND_URL: /api

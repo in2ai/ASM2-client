@@ -2,7 +2,7 @@
 
 This guide documents the current Logto setup for ASM2 using:
 
-- `dashboard-ts-router` as a browser SPA
+- `frontend` as a browser SPA
 - `backend/server.py` as the protected FastAPI API
 
 The old Next.js-only flow is no longer the primary architecture for the dashboard path.
@@ -13,7 +13,7 @@ There are three separate Logto concepts in the current setup.
 
 ### SPA application
 
-This is the browser app used by `dashboard-ts-router`.
+This is the browser app used by `frontend`.
 
 It is responsible for:
 
@@ -23,10 +23,10 @@ It is responsible for:
 
 Relevant frontend files:
 
-- `dashboard-ts-router/src/lib/logto.ts`
-- `dashboard-ts-router/src/routes/sign-in.tsx`
-- `dashboard-ts-router/src/routes/callback.tsx`
-- `dashboard-ts-router/src/lib/api.ts`
+- `frontend/src/lib/logto.ts`
+- `frontend/src/routes/sign-in.tsx`
+- `frontend/src/routes/callback.tsx`
+- `frontend/src/lib/api.ts`
 
 ### Backend API resource
 
@@ -80,7 +80,7 @@ In Logto Admin Console:
 2. Create a new application.
 3. Choose `Single page app`.
 
-Use the SPA app for `dashboard-ts-router`.
+Use the SPA app for `frontend`.
 
 Recommended local settings:
 
@@ -104,8 +104,8 @@ LOGTO_API_RESOURCE=https://asm2-api.company.internal
 
 Notes:
 
-- `dashboard-ts-router/vite.config.ts` maps the shared `LOGTO_*` values into the `VITE_*` variables used by browser code.
-- `dashboard-ts-router/src/lib/api.ts` uses `/api` in production and `http://localhost:8001` in local dev when no explicit frontend backend URL is provided.
+- `frontend/vite.config.ts` maps the shared `LOGTO_*` values into the `VITE_*` variables used by browser code.
+- `frontend/src/lib/api.ts` uses `/api` in production and `http://localhost:8001` in local dev when no explicit frontend backend URL is provided.
 - Unlike the old Next.js dashboard flow, the SPA does not need `LOGTO_APP_SECRET` or `LOGTO_COOKIE_SECRET` in browser code.
 - No Logto organization template is required for this setup.
 
@@ -231,7 +231,7 @@ If authentication suddenly fails with malformed discovery URLs, check the effect
 
 1. Start Logto and its PostgreSQL database.
 2. Start the backend.
-3. Start `dashboard-ts-router` or the SPA deployment stack.
+3. Start `frontend` or the SPA deployment stack.
 4. Open `http://localhost:3001`.
 5. Click `Sign In`.
 6. Complete authentication in Logto.
@@ -261,10 +261,10 @@ Once enabled, those sign-in methods appear automatically in the hosted Logto exp
 | :--- | :--- |
 | Admin Console | `http://localhost:3002` |
 | Self-hosted Logto endpoint | `http://localhost:3011` |
-| SPA sign-in route | `dashboard-ts-router/src/routes/sign-in.tsx` |
-| SPA callback route | `dashboard-ts-router/src/routes/callback.tsx` |
-| SPA Logto config | `dashboard-ts-router/src/lib/logto.ts` |
-| SPA backend URL config | `dashboard-ts-router/src/lib/api.ts` |
+| SPA sign-in route | `frontend/src/routes/sign-in.tsx` |
+| SPA callback route | `frontend/src/routes/callback.tsx` |
+| SPA Logto config | `frontend/src/lib/logto.ts` |
+| SPA backend URL config | `frontend/src/lib/api.ts` |
 | Backend JWT validation | `backend/src/config/logto_auth.py` |
 | Backend bootstrap endpoint | `backend/server.py` |
 | Backend management API client | `backend/src/config/logto_management.py` |
