@@ -106,7 +106,6 @@ Tracing opcional de las llamadas LLM y del grafo de LangGraph. Si las tres varia
 | Variable | Descripción | Default |
 | --- | --- | --- |
 | `CORS_ALLOW_ORIGINS` | Orígenes CORS permitidos por el backend FastAPI (lista separada por comas) | `http://localhost:3000,http://localhost:3001,http://localhost:5173` |
-| `TZ` | Zona horaria | `Europe/Madrid` |
 
 #### Extracción de Tópicos
 
@@ -123,7 +122,7 @@ Para el desarrollo del frontend fuera de Docker, usa `dashboard-ts-router/.env.l
 
 El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el build, pero en este repositorio los archivos Docker Compose usan explícitamente `VITE_LOGTO_*` para el dashboard.
 
-> **Nota:** Variables antiguas como `FRONTEND_URL`, `NODE_ENV`, `SKIP_ENV_VALIDATION`, `CLIENT_SECRET_WEBSITE`, `REDIRECT_URI`, `UID` y `GID` ya no forman parte de la configuración activa del stack actual. Para Google Drive, el backend puede leer el JSON del cliente desde la variable de entorno `CLIENT_SECRET` en `.env`, o usar el archivo `secrets/client_secret.json` montado en el contenedor mediante `GOOGLE_CLIENT_SECRET_FILE`.
+> **Nota:** Para Google Drive, el backend puede leer el JSON del cliente desde la variable de entorno `CLIENT_SECRET` en `.env`, o usar el archivo `secrets/client_secret.json` montado en el contenedor mediante `GOOGLE_CLIENT_SECRET_FILE`.
 
 ## Instalación y Uso
 
@@ -201,12 +200,6 @@ El servicio `backend` puede utilizar GPU para acelerar el procesamiento. Para ha
 
 - Drivers NVIDIA instalados
 - [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-
-> [!IMPORTANT]
-> **Nota sobre el separador de `COMPOSE_FILE`**:
->
-> - En **Linux/macOS** se utiliza el signo de dos puntos (`:`) como separador.
-> - En **Windows** se debe utilizar el punto y coma (`;`) como separador.
 
 ### Opción 4: Qdrant con Aceleración GPU
 
