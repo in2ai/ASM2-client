@@ -76,7 +76,7 @@ const markdownComponents: Components = {
   code: ({ children, className, node: _node, ...props }) => (
     <code
       className={cn(
-        'bg-muted rounded border px-1 py-0.5 font-mono text-[0.85em] break-words',
+        'bg-muted rounded border px-1 py-0.5 font-mono text-[0.85em] wrap-break-word',
         className,
       )}
       {...props}
@@ -224,7 +224,7 @@ const markdownComponents: Components = {
 
 export function MessageMarkdown({ content }: Readonly<MessageMarkdownProps>) {
   return (
-    <div className="min-w-0 break-words">
+    <div className="min-w-0 wrap-break-word">
       <Markdown
         disallowedElements={['img']}
         remarkPlugins={[remarkGfm]}
