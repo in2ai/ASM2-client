@@ -1,11 +1,12 @@
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
-import { type AppLocale } from '@/i18n/config'
+import type { AppLocale } from '@/i18n/config'
 import { cn } from '@/lib/utils'
 import { ArrowUp, Bot, ExternalLink, Loader2, User2 } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { ChatConversationLoadingState } from './chat-loading-state'
+import { MessageMarkdown } from './message-markdown'
 import type { ChatDetail, ChatMessage, ChatSource } from './types'
 import { formatMessageTimestamp } from './utils'
 
@@ -195,7 +196,7 @@ function MessageBubble({
       {!isUser ? <BubbleAvatar isUser={false} /> : null}
       <div
         className={cn(
-          'max-w-[85%] rounded-3xl border px-4 py-3 shadow-sm',
+          'min-w-0 max-w-[85%] rounded-3xl border px-4 py-3 shadow-sm',
           isUser
             ? 'bg-primary text-primary-foreground border-primary/20'
             : 'bg-card',
@@ -209,9 +210,13 @@ function MessageBubble({
             {formatMessageTimestamp(message.created_at, locale)}
           </span>
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-6">
-          {message.content}
-        </p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6">
+            {message.content}
+          </p>
+        ) : (
+          <MessageMarkdown content={message.content} />
+        )}
         {!isUser && sources.length > 0 ? (
           <div className="mt-4 border-t pt-3">
             <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-[0.18em]">
@@ -267,13 +272,20 @@ function getMessageSources(message: ChatMessage): ChatSource[] {
     return []
   }
 
-  return message.metadata.sources.filter((source): source is ChatSource =>
-    Boolean(
-      source &&
-      typeof source.title === 'string' &&
-      typeof source.source_type === 'string' &&
-      (typeof source.link === 'string' || source.link === null),
-    ),
+  return (message.metadata.sources as unknown[]).filter(
+    (source): source is ChatSource => {
+      if (!source || typeof source !== 'object') {
+        return false
+      }
+
+      const candidate = source as Partial<ChatSource>
+
+      return (
+        typeof candidate.title === 'string' &&
+        typeof candidate.source_type === 'string' &&
+        (typeof candidate.link === 'string' || candidate.link === null)
+      )
+    },
   )
 }
 
