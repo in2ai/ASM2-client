@@ -276,12 +276,17 @@
       "description": "Elige una conversación existente o inicia una nueva para hablar con el asistente.",
       "gatedTitle": "Conecta y selecciona al menos una fuente",
       "gatedDescription": "Abre el panel de fuentes para iniciar el flujo de preparación antes de empezar la conversación.",
+      "indexingInactiveTitle": "El indexado aún no está activo",
+      "indexingInactiveDescriptionAdmin": "Abre el panel de fuentes e inicia el indexado VDB cuando las fuentes conectadas estén seleccionadas para la recuperación.",
+      "indexingInactiveDescriptionUser": "Abre el panel de fuentes y pide a un administrador que inicie el indexado VDB cuando las fuentes conectadas estén listas.",
       "syncTitle": "Termina la preparación de fuentes antes de chatear",
       "syncDescription": "Detén el flujo de actualización de VDB en el panel de fuentes para que el backend termine de preparar el RAG antes de chatear."
     },
     "composer": {
       "placeholder": "Haz una pregunta sobre tus documentos, procesos o datos...",
       "disabledHint": "El chat permanece deshabilitado hasta que al menos una fuente conectada esté seleccionada para recuperación.",
+      "disabledHintIndexingInactiveAdmin": "El chat permanece deshabilitado hasta que se inicie el indexado VDB. Abre el panel de fuentes e inicia el indexado cuando tengas fuentes seleccionadas.",
+      "disabledHintIndexingInactiveUser": "El chat permanece deshabilitado hasta que el indexado VDB esté en marcha. Abre el panel de fuentes y pide a un administrador que inicie el indexado cuando las fuentes estén listas.",
       "finishSetupHint": "Termina el flujo de preparación de fuentes en el panel antes de chatear."
     },
     "messages": {
@@ -318,6 +323,7 @@
         "activeDescription": "El backend está indexando las fuentes conectadas. Detén VDB antes de conectar o refrescar proveedores.",
         "inactiveDescription": "El indexado está desactivado. Ahora puedes conectar o refrescar fuentes.",
         "connectPrerequisite": "Detén el indexado VDB antes de conectar o refrescar proveedores.",
+        "startRequiresSelection": "Selecciona al menos una fuente conectada para la recuperación del chat antes de iniciar el indexado.",
         "startUpdate": "Iniciar indexado",
         "stopUpdate": "Detener indexado"
       },

@@ -276,12 +276,17 @@
       "description": "Escolle unha conversa existente ou inicia unha nova para falar co asistente.",
       "gatedTitle": "Conecta e selecciona polo menos unha fonte",
       "gatedDescription": "Abre o panel de fontes para iniciar o fluxo de preparación antes de empezar a conversa.",
+      "indexingInactiveTitle": "O indexado aínda non está activo",
+      "indexingInactiveDescriptionAdmin": "Abre o panel de fontes e inicia o indexado VDB cando as fontes conectadas estean seleccionadas para a recuperación.",
+      "indexingInactiveDescriptionUser": "Abre o panel de fontes e pídelle a un administrador que inicie o indexado VDB cando as fontes conectadas estean listas.",
       "syncTitle": "Remata a preparación de fontes antes de chatear",
       "syncDescription": "Detén o fluxo de actualización de VDB no panel de fontes para que o backend remate de preparar o RAG antes de chatear."
     },
     "composer": {
       "placeholder": "Fai unha pregunta sobre os teus documentos, procesos ou datos...",
       "disabledHint": "O chat permanece deshabilitado ata que polo menos unha fonte conectada estea seleccionada para a recuperación.",
+      "disabledHintIndexingInactiveAdmin": "O chat permanece deshabilitado ata que se inicie o indexado VDB. Abre o panel de fontes e inicia o indexado cando teñas fontes seleccionadas.",
+      "disabledHintIndexingInactiveUser": "O chat permanece deshabilitado ata que o indexado VDB estea en marcha. Abre o panel de fontes e pídelle a un administrador que inicie o indexado cando as fontes estean listas.",
       "finishSetupHint": "Remata o fluxo de preparación de fontes no panel antes de chatear."
     },
     "messages": {
@@ -318,6 +323,7 @@
         "activeDescription": "O backend está indexando as fontes conectadas. Detén VDB antes de conectar ou refrescar provedores.",
         "inactiveDescription": "O indexado está desactivado. Agora podes conectar ou refrescar fontes.",
         "connectPrerequisite": "Detén o indexado VDB antes de conectar ou refrescar provedores.",
+        "startRequiresSelection": "Selecciona polo menos unha fonte conectada para a recuperación do chat antes de iniciar o indexado.",
         "startUpdate": "Iniciar indexado",
         "stopUpdate": "Deter indexado"
       },

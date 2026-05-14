@@ -329,11 +329,13 @@ def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
     selected_connected_sources = sorted(
         source for source in selected_sources if source in connected_set
     )
+    vdb_indexing_active = os.path.isfile(VDB_LOCK)
 
     return {
         "connected_sources": connected_sources,
         "selected_sources": selected_connected_sources,
-        "can_chat": len(selected_connected_sources) > 0,
+        "vdb_indexing_active": vdb_indexing_active,
+        "can_chat": len(selected_connected_sources) > 0 and vdb_indexing_active,
     }
 
 
@@ -452,6 +454,12 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
         raise HTTPException(
             status_code=409,
             detail="Connect and select at least one source before chatting",
+        )
+
+    if not os.path.isfile(VDB_LOCK):
+        raise HTTPException(
+            status_code=409,
+            detail="VDB indexing is not enabled. Chat is unavailable until an administrator starts indexing.",
         )
 
     register_user_activity(questdb_pool)
