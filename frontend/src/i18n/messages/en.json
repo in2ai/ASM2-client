@@ -276,12 +276,17 @@
       "description": "Choose an existing conversation or start a new one to chat with the assistant.",
       "gatedTitle": "Connect and select at least one source",
       "gatedDescription": "Open the sources panel to start the source setup flow before starting the conversation.",
+      "indexingInactiveTitle": "Indexing is not enabled yet",
+      "indexingInactiveDescriptionAdmin": "Open the sources panel and start VDB indexing when your connected sources are selected for retrieval.",
+      "indexingInactiveDescriptionUser": "Open the sources panel and ask an administrator to start VDB indexing when your connected sources are ready.",
       "syncTitle": "Finish source setup before chatting",
       "syncDescription": "Stop the VDB update flow in the sources panel so the backend can finish preparing the RAG before you chat."
     },
     "composer": {
       "placeholder": "Ask a question about your documents, processes, or data...",
       "disabledHint": "Chat stays disabled until at least one connected source is selected for retrieval.",
+      "disabledHintIndexingInactiveAdmin": "Chat stays disabled until VDB indexing is started. Open the sources panel and start indexing when your sources are selected.",
+      "disabledHintIndexingInactiveUser": "Chat stays disabled until VDB indexing is started. Open the sources panel and ask an administrator to start indexing when your sources are ready.",
       "finishSetupHint": "Finish the source setup flow in the sources panel before chatting."
     },
     "messages": {
@@ -318,6 +323,7 @@
         "activeDescription": "The backend is indexing connected sources. Stop VDB before connecting or refreshing providers.",
         "inactiveDescription": "Indexing is off. You can connect or refresh sources now.",
         "connectPrerequisite": "Stop VDB indexing before connecting or refreshing providers.",
+        "startRequiresSelection": "Select at least one connected source for chat retrieval before starting indexing.",
         "startUpdate": "Start indexing",
         "stopUpdate": "Stop indexing"
       },

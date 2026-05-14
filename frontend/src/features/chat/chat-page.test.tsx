@@ -140,6 +140,14 @@ function jsonResponse(payload: unknown) {
   })
 }
 
+/** Sources + VDB state that allows sending chat messages (matches backend contract). */
+const sourcesStatusChatReady = {
+  can_chat: true,
+  vdb_indexing_active: true,
+  connected_sources: ['drive'],
+  selected_sources: ['drive'],
+}
+
 describe('ChatPage', () => {
   beforeEach(() => {
     conversationRenderStates = []
@@ -165,11 +173,7 @@ describe('ChatPage', () => {
         const method = init?.method ?? 'GET'
 
         if (requestUrl.endsWith('/sources/status')) {
-          return jsonResponse({
-            can_chat: true,
-            connected_sources: [],
-            selected_sources: [],
-          })
+          return jsonResponse(sourcesStatusChatReady)
         }
 
         if (requestUrl.endsWith('/chats') && method === 'GET') {
@@ -305,11 +309,7 @@ describe('ChatPage', () => {
         const method = init?.method ?? 'GET'
 
         if (requestUrl.endsWith('/sources/status')) {
-          return jsonResponse({
-            can_chat: true,
-            connected_sources: [],
-            selected_sources: [],
-          })
+          return jsonResponse(sourcesStatusChatReady)
         }
 
         if (requestUrl.endsWith('/chats') && method === 'GET') {
@@ -480,11 +480,7 @@ describe('ChatPage', () => {
         const method = init?.method ?? 'GET'
 
         if (requestUrl.endsWith('/sources/status')) {
-          return jsonResponse({
-            can_chat: true,
-            connected_sources: [],
-            selected_sources: [],
-          })
+          return jsonResponse(sourcesStatusChatReady)
         }
 
         if (requestUrl.endsWith('/chats') && method === 'GET') {
@@ -636,11 +632,7 @@ describe('ChatPage', () => {
         const method = init?.method ?? 'GET'
 
         if (requestUrl.endsWith('/sources/status')) {
-          return jsonResponse({
-            can_chat: true,
-            connected_sources: ['drive'],
-            selected_sources: ['drive'],
-          })
+          return jsonResponse(sourcesStatusChatReady)
         }
 
         if (requestUrl.endsWith('/vdb-update-status')) {
@@ -710,11 +702,7 @@ describe('ChatPage', () => {
         const method = init?.method ?? 'GET'
 
         if (requestUrl.endsWith('/sources/status')) {
-          return jsonResponse({
-            can_chat: true,
-            connected_sources: [],
-            selected_sources: [],
-          })
+          return jsonResponse(sourcesStatusChatReady)
         }
 
         if (requestUrl.endsWith('/chats') && method === 'GET') {

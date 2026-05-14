@@ -89,16 +89,45 @@ export function ChatPage({
     createChatMutation.error ??
     deleteChatMutation.error ??
     sourcesQuery.error
-  const chatEnabled = sourcesQuery.data?.can_chat ?? false
+  const sourcesStatus = sourcesQuery.data
+  const hasSelectedSource = (sourcesStatus?.selected_sources?.length ?? 0) > 0
+  const vdbIndexingActive = sourcesStatus?.vdb_indexing_active ?? false
+  const chatEnabled = sourcesStatus?.can_chat ?? false
   const composerDisabled = !chatEnabled
-  const composerHint = !chatEnabled ? t('composer.disabledHint') : undefined
-  const emptyTitle = !chatEnabled ? t('empty.gatedTitle') : t('empty.title')
-  const emptyDescription = !chatEnabled
-    ? t('empty.gatedDescription')
-    : t('empty.description')
-  const emptyPrimaryActionLabel = !chatEnabled
-    ? t('sources.openPanel')
-    : undefined
+
+  let composerHint: string | undefined
+  if (!chatEnabled && sourcesStatus) {
+    if (!hasSelectedSource) {
+      composerHint = t('composer.disabledHint')
+    } else if (!vdbIndexingActive) {
+      composerHint =
+        user.role === 'admin'
+          ? t('composer.disabledHintIndexingInactiveAdmin')
+          : t('composer.disabledHintIndexingInactiveUser')
+    }
+  }
+
+  let emptyTitle: string
+  let emptyDescription: string
+  let emptyPrimaryActionLabel: string | undefined
+
+  if (!chatEnabled) {
+    emptyPrimaryActionLabel = t('sources.openPanel')
+    if (sourcesStatus && !vdbIndexingActive) {
+      emptyTitle = t('empty.indexingInactiveTitle')
+      emptyDescription =
+        user.role === 'admin'
+          ? t('empty.indexingInactiveDescriptionAdmin')
+          : t('empty.indexingInactiveDescriptionUser')
+    } else {
+      emptyTitle = t('empty.gatedTitle')
+      emptyDescription = t('empty.gatedDescription')
+    }
+  } else {
+    emptyTitle = t('empty.title')
+    emptyDescription = t('empty.description')
+    emptyPrimaryActionLabel = undefined
+  }
 
   const handleCreateChat = async () => {
     setComposerError(undefined)
@@ -167,9 +196,7 @@ export function ChatPage({
       setComposerValue(content)
       setComposerError(toErrorMessage(error, t('errors.sendFailed')))
     } finally {
-      setSendingChatId((current) =>
-        current === activeChatId ? null : current,
-      )
+      setSendingChatId((current) => (current === activeChatId ? null : current))
     }
   }
 
