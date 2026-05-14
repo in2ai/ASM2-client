@@ -174,6 +174,7 @@ export function useStartVdbUpdateMutation() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: chatQueryKeys.vdbUpdate })
+      await queryClient.invalidateQueries({ queryKey: chatQueryKeys.sources })
     },
   })
 }
@@ -189,6 +190,7 @@ export function useStopVdbUpdateMutation() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: chatQueryKeys.vdbUpdate })
+      await queryClient.invalidateQueries({ queryKey: chatQueryKeys.sources })
     },
   })
 }

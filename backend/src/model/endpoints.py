@@ -196,6 +196,7 @@ class ChatSourceModel(BaseModel):
 class SourcesStatusModel(BaseModel):
     connected_sources: list[str]
     selected_sources: list[str]
+    vdb_indexing_active: bool
     can_chat: bool
 
 
