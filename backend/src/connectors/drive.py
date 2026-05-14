@@ -332,17 +332,18 @@ class GoogleDriveSource(DataSource):
 
     def list_files(self):
         # Discover all files via BFS
-        queue = [self.root]
+        queue = [(self.root, "")]
         files = []
 
         while queue:
-            current = queue.pop(0)
+            current, current_path = queue.pop(0)
             page_token = None
+
             while True:
                 resp = safe_execute(
                     self.service.files().list(
                         q=f"'{current}' in parents and trashed=false",
-                        fields="nextPageToken, files(id,name,mimeType,modifiedTime,webViewLink)",
+                        fields="nextPageToken, files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName))",
                         pageSize=1000,
                         pageToken=page_token,
                         includeItemsFromAllDrives=True,
@@ -352,8 +353,12 @@ class GoogleDriveSource(DataSource):
 
                 for f in resp.get("files", []):
                     if f["mimeType"] == "application/vnd.google-apps.folder":
-                        queue.append(f["id"])
+                        folder_path = f"{current_path}/{f['name']}" if current_path else f["name"]
+                        queue.append((f["id"], folder_path))
+
                     else:
+                        file_path = f"{current_path}/{f['name']}" if current_path else f["name"]
+                        f["path"] = file_path
                         files.append(f)
 
                 page_token = resp.get("nextPageToken")
@@ -373,6 +378,12 @@ class GoogleDriveSource(DataSource):
             {
                 "id": f["id"],
                 "name": f["name"],
+                "path": f["path"],
+                "authors": [
+                    owner.get("displayName")
+                    for owner in f.get("owners", [])
+                    if owner.get("displayName")
+                ],
                 "mimeType": f["mimeType"],
                 "modifiedTime": f["modifiedTime"],
                 "webViewLink": f.get("webViewLink"),

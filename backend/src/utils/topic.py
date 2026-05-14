@@ -93,7 +93,7 @@ def get_doc_by_id(vdb: Qdrant, id):
     )
 
 
-def extract_initial_topics(vdb: Qdrant, vdb_path: str, pool=None):
+def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
     if not CALCULATE_TOPICS:
         return
     
@@ -186,7 +186,7 @@ def extract_initial_topics(vdb: Qdrant, vdb_path: str, pool=None):
             doc = get_doc_by_id(vdb, sample)
             texts.append(doc.page_content)
 
-        topic_json = get_topic(texts)
+        topic_json = get_topic(llm, texts)
 
         if topic_json is None:
             continue
@@ -338,7 +338,7 @@ def assign_topics(vdb: Qdrant, ids):
         )
 
 
-def get_topic(texts):
+def get_topic(llm, texts):
     system = """
     Eres un asistente que dados una serie de fragmentos de textos tiene que decidir un tema general para los mismos en un contexto de empresa.
     Los textos pueden estar en múltiples idiomas. Devuelve el nombre del tema en español, inglés y gallego, y debe hacer alusión al contenido, no a la forma.
@@ -365,7 +365,6 @@ def get_topic(texts):
     while res is None and tries < 5:
         try:
             tries += 1
-            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
             ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
             res = json.loads(ans)
 

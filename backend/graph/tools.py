@@ -24,6 +24,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     """Searches for documents relevant to the user's query through hybrid-search in a database."""
 
     configurable = config.get("configurable", {})
+    llm = configurable["llm"]
     vectorstore = configurable["vectorstore"]
     sources = configurable["sources"]
     reranker = configurable["reranker"]
@@ -52,7 +53,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     
     # Filter sources with LLM
     def check_chunk(c):
-        return is_relevant_source(query, c.page_content).is_relevant
+        return is_relevant_source(llm, query, c.page_content).is_relevant
 
     with ThreadPoolExecutor() as executor:
         relevance = list(executor.map(check_chunk, chunks))
@@ -104,8 +105,18 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
     formatted_chunks = []
 
-    for i, chunk in enumerate(augment_chunks(vectorstore, chunks), 1):
-        formatted_chunks.append(chunk)
+    for chunk in augment_chunks(vectorstore, chunks):
+        meta = chunk.metadata
+        header = (
+            '['
+            f'file: {meta["path"]}; '
+            f'authors: {", ".join(meta["authors"])}; '
+            f'date: {meta["modifiedTime"]}; '
+            f'page {meta["page"]}'
+            ']'
+        )
+
+        formatted_chunks.append(f'{header}\n\n{chunk.page_content}')
 
     return {
         "chunks": formatted_chunks,

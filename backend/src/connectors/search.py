@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from qdrant_client.http.models import Filter
 from qdrant_client.http.models import Fusion, FusionQuery, Prefetch, FieldCondition, MatchValue, Range, Document as QDocument
 
-from src.config.search_config import APPROX_SEARCH_PARAMS
+from src.config.search_config import APPROX_SEARCH_PARAMS, PREV_CHUNKS, NEXT_CHUNKS
 from src.connectors.source import DataSource
 from src.connectors.store import BM25_MODEL, iterate_qdrant_docs
 
@@ -59,7 +59,7 @@ def augment_chunks(vectorstore: Qdrant, chunks: list[Document]):
     # Get all chunks from VDB
     anchors = [(d.metadata['id'], d.metadata['chunk_idx']) for d in chunks]
 
-    contiguous_filter = build_contiguous_chunk_filter(anchors, 1, 2)
+    contiguous_filter = build_contiguous_chunk_filter(anchors, PREV_CHUNKS, NEXT_CHUNKS)
     search_results = iterate_qdrant_docs(vectorstore, scroll_filter=contiguous_filter)
 
     # Classify chunks by file
@@ -82,7 +82,7 @@ def augment_chunks(vectorstore: Qdrant, chunks: list[Document]):
             res.append([chunks[i] for i in group])
 
     # Join chunks
-    res = list(map(join_contiguous_chunks, res))
+    res = [join_contiguous_chunks(i) for i in res]
 
     return res
 
@@ -101,7 +101,10 @@ def join_contiguous_chunks(docs):
         result.append(content[overlap:])
         last_end = start + len(content)
 
-    return "".join(result)
+    return Document(
+        page_content="".join(result),
+        metadata=docs[0].metadata
+    )
 
 
 def hybrid_search(

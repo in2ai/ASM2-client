@@ -6,7 +6,6 @@ import uuid
 
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, Modifier, PayloadSchemaType, PointStruct, SparseVectorParams, VectorParams
@@ -23,7 +22,6 @@ QDRANT_META_PATH = get_env("QDRANT_META_PATH", "/app/data/qdrant_meta")
 BM25_MODEL = "qdrant/bm25"
 VDB_LOCK = 'vdb.lock'
 
-EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 QDRANT_COL = "documents"
 
 CHARS_PER_TOKEN = 3 # Approximate
@@ -71,32 +69,32 @@ def iterate_qdrant_docs(
             break
 
 
-def get_vectordb() -> Qdrant:
+def get_vectordb(embeddings) -> Qdrant:
     client = QdrantClient(
         url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
         prefer_grpc=True,
     )
 
-    vectorstore = Qdrant(client, QDRANT_COL, EMBEDDINGS)
+    vectorstore = Qdrant(client, QDRANT_COL, embeddings)
     return vectorstore
 
 
-def build_vectordb_from_sources(sources: List[DataSource]):
+def build_vectordb_from_sources(llm, embeddings, sources: List[DataSource]):
     vectordb = None
     for src in sources:
-        vectordb = build_vectorstore(src.list_files(), src.name)
+        vectordb = build_vectorstore(embeddings, src.list_files(), src.name)
 
-    extract_topics(vectordb)
+    extract_topics(llm, vectordb)
     return vectordb
 
 
-def build_vectorstore(files: List[VDBFile], source: str, batch_size=50):
+def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=200):
     # Read status manifest file
     manifest = VDBManifest(QDRANT_META_PATH)
 
     # Check if the part for this source is already constructed
-    vectorstore = get_vectordb()
+    vectorstore = get_vectordb(embeddings)
 
     if not vectorstore.client.collection_exists(QDRANT_COL):
         logging.info('Creating Qdrant collection...')
@@ -105,7 +103,7 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=50):
         vectorstore.client.create_collection(
             collection_name=QDRANT_COL,
             vectors_config={
-                "embedding": VectorParams(size=1536, distance=Distance.COSINE),
+                "embedding": VectorParams(size=vectorstore.embeddings.dims(), distance=Distance.COSINE),
             },
             sparse_vectors_config={
                 "bm25": SparseVectorParams(modifier=Modifier.IDF),
@@ -196,7 +194,7 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=50):
             sub_docs = docs_batch[i : i + batch_size]
             idxs = chunk_idxs[i : i + batch_size]
             new_ids = [str(uuid.uuid4()) for _ in sub_docs]
-            embs = EMBEDDINGS.embed_documents([i.page_content for i in sub_docs])
+            embs = vectorstore.embeddings.embed_documents([i.page_content for i in sub_docs])
 
             points = [
                 PointStruct(
@@ -319,13 +317,13 @@ def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
     )
 
 
-def extract_topics(vectorstore: Qdrant, pool=None):
+def extract_topics(llm, vectorstore: Qdrant, pool=None):
     manifest = VDBManifest(QDRANT_META_PATH)
 
     # Add topics if needed
     if not manifest.has_topics():
         if manifest.num_chunks() > TOPIC_MIN_SIZE:
-            extract_initial_topics(vectorstore, QDRANT_META_PATH, pool)
+            extract_initial_topics(llm, vectorstore, QDRANT_META_PATH, pool)
 
             if CALCULATE_TOPICS:
                 manifest.set_topics()
