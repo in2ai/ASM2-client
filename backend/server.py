@@ -10,6 +10,8 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from graph.model import get_llm_with_tools
+from src.connectors.embeddings import LocalEmbedder
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
@@ -59,6 +61,7 @@ from src.metrics.dashboard_queries import (
 from src.chat.store import ChatNotFoundError, ChatStore
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
+from src.connectors.llms import get_openai_llm, get_llamacpp_llm
 
 from graph.agent import build_graph
 from graph import get_checkpointer
@@ -73,7 +76,9 @@ async def lifespan(app: FastAPI):
     init_nlp()
     
     # Global shared data
-    app.state.vectorstore = get_vectordb()
+    app.state.llm = get_openai_llm()
+    app.state.llm_with_tools = get_llm_with_tools(app.state.llm)
+    app.state.vectorstore = get_vectordb(LocalEmbedder())
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
     chat_db_path = os.getenv(
@@ -192,6 +197,8 @@ def run_vdb_update_once() -> None:
         start_time = time.time()
 
         questdb_pool = app.state.questdb_pool
+        embeddings = app.state.vectorstore.embeddings
+        llm = app.state.llm
 
         # Get admin authenticated sources and update DB
         sources = get_authenticated_admin_sources(questdb_pool)
@@ -202,7 +209,7 @@ def run_vdb_update_once() -> None:
             [source.name for source in sources],
         )
 
-        build_vectordb_from_sources(sources)
+        build_vectordb_from_sources(llm, embeddings, sources)
 
         elapsed = time.time() - start_time
 
@@ -216,7 +223,7 @@ def update_vdb():
     def update():
         run_vdb_update_once()
 
-    periodic_task(update, 3600)  # Once an hour
+    periodic_task(update, 7000)  # Once an hour
 
 
 def extract_usage_metrics():
@@ -451,6 +458,8 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     config = {
         "configurable": {
             "thread_id": chat_id,
+            "llm": app.state.llm,
+            "llm_with_tools": app.state.llm_with_tools,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
             "questdb_pool": questdb_pool,

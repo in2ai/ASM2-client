@@ -42,6 +42,10 @@ stanza.download('gl', package='ctg', processors='tokenize,mwt,pos,lemma')" \
 hf_hub_download(repo_id='cis-lmu/glotlid', filename='model.bin')" \
     && /opt/venv/bin/python -c "from sentence_transformers import CrossEncoder; \
 CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')" \
+    && /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('sentence-transformers/all-MiniLM-L12-v2')" \
+    && /opt/venv/bin/python -c "from huggingface_hub import hf_hub_download; \
+hf_hub_download(repo_id='Qwen/Qwen2.5-3B-Instruct-GGUF', filename='qwen2.5-3b-instruct-q5_k_m.gguf', local_dir='/app/models', local_dir_use_symlinks=False)" \
     && chmod -R 755 /app/models
 
 COPY server.py server.py

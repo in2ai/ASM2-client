@@ -171,9 +171,8 @@ class SourceValidity(BaseModel):
     reason: str
 
 
-def is_relevant_source(query, chunk):
+def is_relevant_source(llm, query, chunk):
     # LLM with function call
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
     llm_judge = llm.with_structured_output(SourceValidity)
 
     # Prompt
