@@ -58,13 +58,13 @@ The compose file uses `env_file: .env` for shared runtime configuration. That ma
 
 Notes:
 
-- `VITE_LOGTO_APP_ID` is not known until after Logto is running and you create the SPA application in Logto.
-- For the first deployment, set `VITE_LOGTO_APP_ID=bootstrap-placeholder`.
+- `LOGTO_APP_ID` is not known until after Logto is running and you create the SPA application in Logto.
+- For the first deployment, set `LOGTO_APP_ID=bootstrap-placeholder`.
 - After Logto is up, create the SPA application, replace that value with the real app id, and redeploy.
 - Set strong QuestDB credentials for both PostgreSQL wire access and the HTTP web console.
 - If you use the Google Drive connector, prefer setting `CLIENT_SECRET` as inline JSON in Dokploy instead of mounting a secret file.
 - Only a small set of environment entries remain inline in the compose file. Those are service-local overrides such as internal hostnames, container paths, GPU flags, build-time mappings, translated variable names, or computed values.
-- The dashboard still declares `VITE_LOGTO_ENDPOINT`, `VITE_LOGTO_APP_ID`, and `VITE_LOGTO_API_RESOURCE` explicitly as build args, matching the working pattern already used in the local compose file.
+- The dashboard build reads the shared `LOGTO_ENDPOINT`, `LOGTO_APP_ID`, and `LOGTO_API_RESOURCE` values, and Vite exposes them as `VITE_*` values for browser code.
 - `LOGTO_POSTGRES_PASSWORD` is still defined in Dokploy's `Environment` tab, but the compose file now turns it into the runtime Docker secret `logto_postgres_password` for `logto-postgres` and `logto`.
 
 ## 5. Domains in Dokploy
@@ -82,14 +82,14 @@ Do not expose `backend`, `qdrant`, QuestDB PostgreSQL wire, or `logto-postgres` 
 
 Use this order:
 
-1. Set `VITE_LOGTO_APP_ID=bootstrap-placeholder`.
+1. Set `LOGTO_APP_ID=bootstrap-placeholder`.
 2. Deploy the Dokploy compose application.
 3. Wait until `logto` and `logto-postgres` are healthy.
 4. Open the Logto admin console at `https://admin-auth.example.com`.
 5. Create your first admin user.
 6. Create a Logto SPA application for the dashboard.
 7. Create a Logto API resource for the FastAPI backend.
-8. Replace `VITE_LOGTO_APP_ID` in Dokploy with the real Logto SPA app id.
+8. Replace `LOGTO_APP_ID` in Dokploy with the real Logto SPA app id.
 9. Redeploy the Dokploy application.
 
 ## 7. Logto Configuration
@@ -114,15 +114,7 @@ Use one stable audience string, for example:
 
 - `urn:asm2:backend`
 
-Then set both of these Dokploy environment variables to exactly that same value:
-
-- `LOGTO_API_RESOURCE`
-- `VITE_LOGTO_API_RESOURCE`
-
-Create these permissions on the Logto API resource:
-
-- `metrics:read`
-- `metrics:export`
+Then set `LOGTO_API_RESOURCE` in Dokploy to exactly that same value.
 
 If you want backend-side role resolution, also create a machine-to-machine application in Logto and set:
 
@@ -203,4 +195,4 @@ After the final redeploy, verify:
 - Do not use the standard Dokploy build-type app for this repository.
 - Do not expose `backend` directly to the internet.
 - Do not expose QuestDB PostgreSQL wire publicly; only expose the HTTP web console on port `9000`.
-- Do not leave `VITE_LOGTO_APP_ID=bootstrap-placeholder` after Logto setup.
+- Do not leave `LOGTO_APP_ID=bootstrap-placeholder` after Logto setup.

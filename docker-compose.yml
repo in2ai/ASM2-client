@@ -20,6 +20,8 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+    ports:
+      - "127.0.0.1:8001:8001"
     healthcheck:
       test:
         [
@@ -52,13 +54,13 @@ services:
 
   dashboard:
     build:
-      context: ./dashboard-ts-router
+      context: ./frontend
       dockerfile: Dockerfile.caddy
       args:
         VITE_BACKEND_URL: /api
-        VITE_LOGTO_ENDPOINT: ${VITE_LOGTO_ENDPOINT}
-        VITE_LOGTO_APP_ID: ${VITE_LOGTO_APP_ID}
-        VITE_LOGTO_API_RESOURCE: ${VITE_LOGTO_API_RESOURCE}
+        LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+        LOGTO_APP_ID: ${LOGTO_APP_ID}
+        LOGTO_API_RESOURCE: ${LOGTO_API_RESOURCE}
     image: asm2-dashboard:latest
     depends_on:
       backend:

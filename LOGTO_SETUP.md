@@ -2,7 +2,7 @@
 
 This guide documents the current Logto setup for ASM2 using:
 
-- `dashboard-ts-router` as a browser SPA
+- `frontend` as a browser SPA
 - `backend/server.py` as the protected FastAPI API
 
 The old Next.js-only flow is no longer the primary architecture for the dashboard path.
@@ -13,7 +13,7 @@ There are three separate Logto concepts in the current setup.
 
 ### SPA application
 
-This is the browser app used by `dashboard-ts-router`.
+This is the browser app used by `frontend`.
 
 It is responsible for:
 
@@ -23,10 +23,10 @@ It is responsible for:
 
 Relevant frontend files:
 
-- `dashboard-ts-router/src/lib/logto.ts`
-- `dashboard-ts-router/src/routes/sign-in.tsx`
-- `dashboard-ts-router/src/routes/callback.tsx`
-- `dashboard-ts-router/src/lib/api.ts`
+- `frontend/src/lib/logto.ts`
+- `frontend/src/routes/sign-in.tsx`
+- `frontend/src/routes/callback.tsx`
+- `frontend/src/lib/api.ts`
 
 ### Backend API resource
 
@@ -35,7 +35,7 @@ This is the protected audience identifier used by FastAPI.
 It is responsible for:
 
 - audience validation in backend JWT checks
-- carrying API permissions such as `metrics:read` and `metrics:export`
+- ensuring the SPA receives access tokens meant for the backend
 
 Relevant backend files:
 
@@ -80,7 +80,7 @@ In Logto Admin Console:
 2. Create a new application.
 3. Choose `Single page app`.
 
-Use the SPA app for `dashboard-ts-router`.
+Use the SPA app for `frontend`.
 
 Recommended local settings:
 
@@ -96,16 +96,6 @@ Example:
 - Post sign-out redirect URI: `https://your-dashboard-host/sign-in`
 - Allowed origin: `https://your-dashboard-host`
 
-For the SPA path, the dashboard uses these frontend environment variables:
-
-```env
-VITE_LOGTO_ENDPOINT=http://localhost:3011
-VITE_LOGTO_APP_ID=your_spa_app_id
-VITE_LOGTO_API_RESOURCE=https://asm2-api.company.internal
-```
-
-Or, if you prefer the shared root env naming used by this repo:
-
 ```env
 LOGTO_ENDPOINT=http://localhost:3011
 LOGTO_APP_ID=your_spa_app_id
@@ -114,8 +104,8 @@ LOGTO_API_RESOURCE=https://asm2-api.company.internal
 
 Notes:
 
-- `dashboard-ts-router/src/lib/logto.ts` reads the normalized `VITE_*` values.
-- `dashboard-ts-router/src/lib/api.ts` uses `/api` in production and `http://localhost:8001` in local dev when no explicit frontend backend URL is provided.
+- `frontend/vite.config.ts` maps the shared `LOGTO_*` values into the `VITE_*` variables used by browser code.
+- `frontend/src/lib/api.ts` uses `/api` in production and `http://localhost:8001` in local dev when no explicit frontend backend URL is provided.
 - Unlike the old Next.js dashboard flow, the SPA does not need `LOGTO_APP_SECRET` or `LOGTO_COOKIE_SECRET` in browser code.
 - No Logto organization template is required for this setup.
 
@@ -139,19 +129,7 @@ Important:
 - it must match exactly in Logto, the SPA token request, and backend validation
 - it is not the same thing as `/api` or a specific metrics route
 
-Create these permissions on the API resource:
-
-- `metrics:read`
-- `metrics:export`
-
-The SPA currently requests both of these scopes in `dashboard-ts-router/src/lib/logto.ts`.
-
-Recommended role model:
-
-- `user` role should include `metrics:read`.
-- `admin` role should include `metrics:read` and `metrics:export`.
-
-In the current backend, all `/metrics/*` endpoints require the `admin` role. The metrics scopes can still exist on the API resource, but role-based backend authorization is the source of truth.
+In the current backend, all `/metrics/*` endpoints require the `admin` role. The backend does not enforce custom API scopes.
 
 The SPA should request the Logto `roles` scope so role claims can be resolved from Logto user information.
 
@@ -172,7 +150,7 @@ FastAPI validation behavior:
 - retrieves signing keys from Logto JWKS
 - validates `iss`, `aud`, `sub`, and token expiry
 - resolves user roles server-side from the Logto Management API when management credentials are configured
-- enforces route scopes through FastAPI dependencies
+- enforces route access through role-based FastAPI dependencies
 
 Protected backend routes currently include:
 
@@ -193,9 +171,9 @@ If you change a user's roles, force a new Logto authorization flow so newly issu
 ### SPA running locally against local backend
 
 ```env
-VITE_LOGTO_ENDPOINT=http://localhost:3011
-VITE_LOGTO_APP_ID=your_spa_app_id
-VITE_LOGTO_API_RESOURCE=https://asm2-api.company.internal
+LOGTO_ENDPOINT=http://localhost:3011
+LOGTO_APP_ID=your_spa_app_id
+LOGTO_API_RESOURCE=https://asm2-api.company.internal
 VITE_BACKEND_URL=http://localhost:8001
 ```
 
@@ -253,7 +231,7 @@ If authentication suddenly fails with malformed discovery URLs, check the effect
 
 1. Start Logto and its PostgreSQL database.
 2. Start the backend.
-3. Start `dashboard-ts-router` or the SPA deployment stack.
+3. Start `frontend` or the SPA deployment stack.
 4. Open `http://localhost:3001`.
 5. Click `Sign In`.
 6. Complete authentication in Logto.
@@ -283,10 +261,10 @@ Once enabled, those sign-in methods appear automatically in the hosted Logto exp
 | :--- | :--- |
 | Admin Console | `http://localhost:3002` |
 | Self-hosted Logto endpoint | `http://localhost:3011` |
-| SPA sign-in route | `dashboard-ts-router/src/routes/sign-in.tsx` |
-| SPA callback route | `dashboard-ts-router/src/routes/callback.tsx` |
-| SPA Logto config | `dashboard-ts-router/src/lib/logto.ts` |
-| SPA backend URL config | `dashboard-ts-router/src/lib/api.ts` |
+| SPA sign-in route | `frontend/src/routes/sign-in.tsx` |
+| SPA callback route | `frontend/src/routes/callback.tsx` |
+| SPA Logto config | `frontend/src/lib/logto.ts` |
+| SPA backend URL config | `frontend/src/lib/api.ts` |
 | Backend JWT validation | `backend/src/config/logto_auth.py` |
 | Backend bootstrap endpoint | `backend/server.py` |
 | Backend management API client | `backend/src/config/logto_management.py` |

@@ -79,24 +79,40 @@ cp .env.example .env
 
 | Variable | Descripción |
 | --- | --- |
-| `VITE_LOGTO_APP_ID` | ID de la aplicación SPA en Logto |
-| `VITE_LOGTO_ENDPOINT` | Endpoint público de Logto usado por el navegador |
-| `LOGTO_ENDPOINT` | Endpoint que usa el backend para discovery/JWKS |
-| `VITE_LOGTO_API_RESOURCE` | Audience del API para la SPA |
-| `LOGTO_API_RESOURCE` | Audience del API para validación estricta en FastAPI |
+| `LOGTO_APP_ID` | ID de la aplicación SPA en Logto |
+| `LOGTO_ENDPOINT` | Endpoint compartido de Logto usado por la SPA y por el backend |
+| `LOGTO_API_RESOURCE` | Audience del API compartido entre la SPA y la validación estricta en FastAPI |
 | `LOGTO_ADMIN_ENDPOINT` | Endpoint del panel de administración de Logto |
 | `LOGTO_POSTGRES_PASSWORD` | Contraseña de PostgreSQL usada por Logto self-hosted |
 | `LOGTO_MANAGEMENT_APP_ID` | Client ID opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_APP_SECRET` | Client secret opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_API_RESOURCE` | Resource opcional de la Management API de Logto |
-| `LOGTO_DEFAULT_USER_ROLE_ID` | Rol global opcional para auto-asignación de usuarios |
+
+#### Langfuse (Trazabilidad)
+
+Tracing opcional de las llamadas LLM y del grafo de LangGraph. Si las tres variables están vacías, el backend arranca con el tracing desactivado y no envía datos a Langfuse.
+
+| Variable | Descripción | Ejemplo |
+| --- | --- | --- |
+| `LANGFUSE_PUBLIC_KEY` | Clave pública del proyecto (Langfuse UI → Settings → API Keys) | `pk-lf-...` |
+| `LANGFUSE_SECRET_KEY` | Clave secreta del proyecto | `sk-lf-...` |
+| `LANGFUSE_BASE_URL` | Host de Langfuse. |  |
+
+#### Langfuse (Trazabilidad)
+
+Tracing opcional de las llamadas LLM y del grafo de LangGraph. Si las tres variables están vacías, el backend arranca con el tracing desactivado y no envía datos a Langfuse.
+
+| Variable | Descripción | Ejemplo |
+| --- | --- | --- |
+| `LANGFUSE_PUBLIC_KEY` | Clave pública del proyecto (Langfuse UI → Settings → API Keys) | `pk-lf-...` |
+| `LANGFUSE_SECRET_KEY` | Clave secreta del proyecto | `sk-lf-...` |
+| `LANGFUSE_BASE_URL` | Host de Langfuse. |  |
 
 #### Aplicación
 
 | Variable | Descripción | Default |
 | --- | --- | --- |
 | `CORS_ALLOW_ORIGINS` | Orígenes CORS permitidos por el backend FastAPI (lista separada por comas) | `http://localhost:3000,http://localhost:3001,http://localhost:5173` |
-| `TZ` | Zona horaria | `Europe/Madrid` |
 
 #### Extracción de Tópicos
 
@@ -109,11 +125,11 @@ cp .env.example .env
 
 ### Desarrollo Local del Dashboard
 
-Para el desarrollo del frontend fuera de Docker, usa `dashboard-ts-router/.env.local` con la URL del backend y el endpoint público de Logto.
+Para el desarrollo del frontend fuera de Docker, usa `frontend/.env.local` con la URL del backend y el endpoint público de Logto.
 
 El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el build, pero en este repositorio los archivos Docker Compose usan explícitamente `VITE_LOGTO_*` para el dashboard.
 
-> **Nota:** Variables antiguas como `FRONTEND_URL`, `NODE_ENV`, `SKIP_ENV_VALIDATION`, `CLIENT_SECRET_WEBSITE`, `REDIRECT_URI`, `UID` y `GID` ya no forman parte de la configuración activa del stack actual. Para Google Drive, el backend puede leer el JSON del cliente desde la variable de entorno `CLIENT_SECRET` en `.env`, o usar el archivo `secrets/client_secret.json` montado en el contenedor mediante `GOOGLE_CLIENT_SECRET_FILE`.
+> **Nota:** Para Google Drive, el backend puede leer el JSON del cliente desde la variable de entorno `CLIENT_SECRET` en `.env`, o usar el archivo `secrets/client_secret.json` montado en el contenedor mediante `GOOGLE_CLIENT_SECRET_FILE`.
 
 ## Instalación y Uso
 
@@ -159,12 +175,13 @@ Si QuestDB y Logto ya están desplegados fuera de Docker, ejecuta solo `backend`
 1. Actualiza tu archivo `.env` con las URLs y credenciales remotas de QuestDB y Logto.
 
    ```env
-   QUESTDB_HOST=tu-ip-o-hostname-vps
-   QUESTDB_PORT=8812
-   QUESTDB_USER=admin
-   QUESTDB_PASSWORD=tu_contraseña
+    QUESTDB_HOST=tu-ip-o-hostname-vps
+    QUESTDB_PORT=8812
+    QUESTDB_USER=admin
+    QUESTDB_PASSWORD=tu_contraseña
     LOGTO_ENDPOINT=https://tu-logto-remoto
-    VITE_LOGTO_ENDPOINT=https://tu-logto-remoto
+    LOGTO_APP_ID=tu_spa_app_id
+    LOGTO_API_RESOURCE=https://tu-api-resource
    ```
 
 Esto iniciará:
@@ -191,12 +208,6 @@ El servicio `backend` puede utilizar GPU para acelerar el procesamiento. Para ha
 
 - Drivers NVIDIA instalados
 - [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-
-> [!IMPORTANT]
-> **Nota sobre el separador de `COMPOSE_FILE`**:
->
-> - En **Linux/macOS** se utiliza el signo de dos puntos (`:`) como separador.
-> - En **Windows** se debe utilizar el punto y coma (`;`) como separador.
 
 ### Opción 4: Qdrant con Aceleración GPU
 
@@ -245,7 +256,7 @@ uv run uvicorn server:app --host 0.0.0.0 --port 8001
 #### Dashboard (React SPA)
 
 ```bash
-cd dashboard-ts-router
+cd frontend
 
 # Instalar dependencias
 pnpm install
@@ -261,7 +272,7 @@ El dashboard estará disponible en `http://localhost:3001`.
 ```text
 ASM2-client/
 ├── backend/                # Backend FastAPI y conectores
-├── dashboard-ts-router/    # SPA React/TanStack Router
+├── frontend/               # SPA React/TanStack Router
 ├── src/                    # Código fuente legacy del cliente Python
 ├── sql/                    # Scripts de inicialización de base de datos
 ├── secrets/                # Credenciales y ficheros sensibles

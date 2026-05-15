@@ -18,11 +18,10 @@ _USER_ROLE_CACHE_TTL_SECONDS = 60
 _USER_ROLE_CACHE: dict[str, tuple[float, list[str]]] = {}
 
 
-def _get_management_config() -> tuple[str, str, str, str, str] | None:
+def _get_management_config() -> tuple[str, str, str, str] | None:
     logto_endpoint = str(get_env("LOGTO_ENDPOINT", "")).rstrip("/")
     management_app_id = str(get_env("LOGTO_MANAGEMENT_APP_ID", "")).strip()
     management_app_secret = str(get_env("LOGTO_MANAGEMENT_APP_SECRET", "")).strip()
-    default_user_role_id = str(get_env("LOGTO_DEFAULT_USER_ROLE_ID", "")).strip()
     management_api_resource = str(
         get_env("LOGTO_MANAGEMENT_API_RESOURCE", _DEFAULT_MANAGEMENT_API_RESOURCE)
     ).strip()
@@ -37,14 +36,8 @@ def _get_management_config() -> tuple[str, str, str, str, str] | None:
         logto_endpoint,
         management_app_id,
         management_app_secret,
-        default_user_role_id,
         management_api_resource,
     )
-
-
-def is_default_role_bootstrap_enabled() -> bool:
-    config = _get_management_config()
-    return bool(config and config[3])
 
 
 def _get_management_access_token(
@@ -116,7 +109,6 @@ def _management_request(
         logto_endpoint,
         management_app_id,
         management_app_secret,
-        _,
         management_api_resource,
     ) = config
 
@@ -184,41 +176,3 @@ def get_user_role_names(user_id: str) -> list[str]:
 
     _USER_ROLE_CACHE[user_id] = (now + _USER_ROLE_CACHE_TTL_SECONDS, role_names)
     return role_names
-
-
-def ensure_default_role_assigned(user_id: str) -> dict[str, bool]:
-    config = _get_management_config()
-    if config is None or not config[3]:
-        return {
-            "enabled": False,
-            "assigned": False,
-            "refresh_required": False,
-        }
-
-    (_, _, _, default_user_role_id, _) = config
-
-    response = _management_request("GET", f"/api/users/{user_id}/roles")
-    roles = response.json()
-
-    if any(role.get("id") == default_user_role_id for role in roles if isinstance(role, dict)):
-        return {
-            "enabled": True,
-            "assigned": False,
-            "refresh_required": False,
-        }
-
-    logger.info(
-        "Assigning default Logto global user role %s to user %s",
-        default_user_role_id,
-        user_id,
-    )
-    _management_request(
-        "POST",
-        f"/api/users/{user_id}/roles",
-        json={"roleIds": [default_user_role_id]},
-    )
-    return {
-        "enabled": True,
-        "assigned": True,
-        "refresh_required": True,
-    }
