@@ -103,7 +103,7 @@ def join_contiguous_chunks(docs):
 
     return Document(
         page_content="".join(result),
-        metadata=docs[0].metadata
+        metadata=docs[PREV_CHUNKS].metadata # Take central chunk
     )
 
 
