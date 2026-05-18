@@ -140,7 +140,7 @@ def hybrid_search(
         for d in search_results.points
     ]
 
-    contiguous_filter = build_contiguous_chunk_filter(anchors, 1, 2)
+    contiguous_filter = build_contiguous_chunk_filter(anchors, PREV_CHUNKS, NEXT_CHUNKS)
     search_results = iterate_qdrant_docs(vectorstore, scroll_filter=contiguous_filter)
     res = [d for _, d in search_results]
 
