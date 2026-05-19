@@ -3,6 +3,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        USE_LOCAL_MODEL: ${USE_LOCAL_MODEL:-false}
+        LOCAL_MODEL_REPO: ${LOCAL_MODEL_REPO}
+        LOCAL_MODEL_FILE: ${LOCAL_MODEL_FILE}
+        USE_LOCAL_EMB: ${USE_LOCAL_EMB:-false}
+        LOCAL_EMB_REPO: ${LOCAL_EMB_REPO}
       secrets:
         - hf_token
     image: asm2-backend:latest

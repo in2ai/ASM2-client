@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from graph.model import get_llm_with_tools
-from src.connectors.embeddings import LocalEmbedder
+from src.connectors.embeddings import get_configured_embeddings
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
@@ -62,7 +62,7 @@ from src.chat.store import ChatNotFoundError, ChatStore
 from src.tracing import get_langfuse_handler
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
-from src.connectors.llms import get_openai_llm, get_llamacpp_llm
+from src.connectors.llms import get_configured_llm
 
 from graph.agent import build_graph
 from graph import get_checkpointer
@@ -77,9 +77,9 @@ async def lifespan(app: FastAPI):
     init_nlp()
     
     # Global shared data
-    app.state.llm = get_openai_llm()
+    app.state.llm = get_configured_llm()
     app.state.llm_with_tools = get_llm_with_tools(app.state.llm)
-    app.state.vectorstore = get_vectordb(LocalEmbedder())
+    app.state.vectorstore = get_vectordb(get_configured_embeddings())
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
     chat_db_path = os.getenv(

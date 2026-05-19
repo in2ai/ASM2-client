@@ -2,6 +2,8 @@ from langchain_core.embeddings import Embeddings
 from langchain_openai import OpenAIEmbeddings
 from sentence_transformers import SentenceTransformer
 
+from src.config.env import get_env, get_bool_env
+
 
 class Embedder(Embeddings):
     def __init__(self, query_prefix: str):
@@ -64,3 +66,11 @@ class LocalEmbedder(Embedder):
             normalize_embeddings=True,
             show_progress_bar=False,
         ).tolist()
+    
+
+def get_configured_embeddings():
+    if get_bool_env('USE_LOCAL_EMB', False):
+        return LocalEmbedder(get_env('LOCAL_EMB_REPO'))
+    
+    else:
+        return OpenAIEmbedder("text-embedding-3-small")
