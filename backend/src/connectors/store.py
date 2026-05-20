@@ -131,6 +131,21 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
             field_schema=PayloadSchemaType.KEYWORD,
         )
 
+    else:
+        info = vectorstore.client.get_collection(QDRANT_COL)
+        qdrant_dim = info.config.params.vectors["embedding"].size
+        embedding_dim = vectorstore.embeddings.dims()
+
+        if embedding_dim != qdrant_dim:
+            logging.error(
+                "Embedding dimension mismatch: got %s, expected %s. The embedding model may have changed.",
+                embedding_dim,
+                qdrant_dim,
+            )
+
+            return vectorstore
+
+
     # Update file permissions
     logging.info("Updating file permissions for source %s...", source)
 
