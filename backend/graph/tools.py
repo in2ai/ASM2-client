@@ -112,7 +112,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
             f'file: {meta["path"]}; '
             f'authors: {", ".join(meta["authors"])}; '
             f'date: {meta["modifiedTime"]}; '
-            f'page {meta["page"]}'
+            f'page {meta.get("page", "None")}'
             ']'
         )
 
