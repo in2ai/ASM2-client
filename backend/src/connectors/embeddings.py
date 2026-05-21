@@ -21,8 +21,13 @@ class OpenAIEmbedder(Embedder):
 
 
     def dims(self):
-        return self.model.dimensions
+        res = self.model.dimensions
 
+        if res is None:
+            res = len(self.embed_query("Test"))
+    
+        return res
+    
 
     def embed_documents(self, texts: list[str]):
         return self.model.embed_documents(texts)
