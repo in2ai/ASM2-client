@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import json
 
 from contextlib import asynccontextmanager
 from datetime import date, datetime
@@ -9,6 +10,8 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from graph.model import get_llm_with_tools
+from src.connectors.embeddings import get_configured_embeddings
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
@@ -58,11 +61,12 @@ from src.metrics.dashboard_queries import (
 from src.chat.store import ChatNotFoundError, ChatStore
 from src.tracing import get_langfuse_handler
 from src.utils.nlp import init_nlp
-from src.utils.rag import get_reranker, retrieve_and_rerank
+from src.utils.rag import get_reranker
+from src.connectors.llms import get_configured_llm
 
 from graph.agent import build_graph
 from graph import get_checkpointer
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 # ---------------------------------
 # App configuration
@@ -73,7 +77,9 @@ async def lifespan(app: FastAPI):
     init_nlp()
     
     # Global shared data
-    app.state.vectorstore = get_vectordb()
+    app.state.llm = get_configured_llm()
+    app.state.llm_with_tools = get_llm_with_tools(app.state.llm)
+    app.state.vectorstore = get_vectordb(get_configured_embeddings())
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
     chat_db_path = os.getenv(
@@ -181,13 +187,19 @@ def refresh_tokens():
 
 
 def run_vdb_update_once() -> None:
+    import time
+
     if not os.path.isfile(VDB_LOCK):
         return
 
     logging.info("Updating VDB...")
 
     try:
+        start_time = time.time()
+
         questdb_pool = app.state.questdb_pool
+        embeddings = app.state.vectorstore.embeddings
+        llm = app.state.llm
 
         # Get admin authenticated sources and update DB
         sources = get_authenticated_admin_sources(questdb_pool)
@@ -198,9 +210,12 @@ def run_vdb_update_once() -> None:
             [source.name for source in sources],
         )
 
-        build_vectordb_from_sources(sources)
+        build_vectordb_from_sources(llm, embeddings, sources)
 
-        logging.info("VDB update job finished")
+        elapsed = time.time() - start_time
+
+        logging.info(f"VDB update job finished in {elapsed} seconds")
+
     except Exception:
         logging.exception("VDB update job failed")
 
@@ -209,7 +224,7 @@ def update_vdb():
     def update():
         run_vdb_update_once()
 
-    periodic_task(update, 3600)  # Once an hour
+    periodic_task(update, 7000)  # Once an hour
 
 
 def extract_usage_metrics():
@@ -378,28 +393,40 @@ def _get_chat_or_404(
     return chat
 
 
-def _used_vectordb_search_in_latest_turn(messages: list[Any]) -> bool:
+def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None:
     last_human_index = next(
         (
-            index
-            for index in range(len(messages) - 1, -1, -1)
-            if isinstance(messages[index], HumanMessage)
+            i
+            for i in range(len(messages) - 1, -1, -1)
+            if isinstance(messages[i], HumanMessage)
         ),
         -1,
     )
 
     if last_human_index == -1:
-        return False
+        return None
 
-    for message in messages[last_human_index + 1 :]:
+    for i in range(last_human_index + 1, len(messages)):
+        message = messages[i]
+
         if not isinstance(message, AIMessage):
             continue
 
         for tool_call in message.tool_calls or []:
-            if tool_call.get("name") == "vectordb_search":
-                return True
+            if tool_call.get("name") != "vectordb_search":
+                continue
 
-    return False
+            call_id = tool_call.get("id")
+
+            for followup in messages[i + 1 :]:
+                if isinstance(followup, ToolMessage) and followup.tool_call_id == call_id:
+                    try:
+                        return json.loads(followup.content)
+                    
+                    except:
+                        return None
+
+    return None
 
 
 @app.get("/chats/{chat_id}", response_model=ChatDetailModel)
@@ -432,6 +459,8 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     config: dict[str, Any] = {
         "configurable": {
             "thread_id": chat_id,
+            "llm": app.state.llm,
+            "llm_with_tools": app.state.llm_with_tools,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
             "questdb_pool": questdb_pool,
@@ -466,16 +495,11 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
         raise HTTPException(status_code=500, detail="No response generated")
 
     available_sources: list[dict[str, Any]] = []
-    if _used_vectordb_search_in_latest_turn(messages):
-        try:
-            _chunks, available_sources, _lang_code = retrieve_and_rerank(
-                query,
-                app.state.vectorstore,
-                app.state.reranker,
-                sources,
-            )
-        except Exception:
-            logging.warning("Failed to collect chat source metadata", exc_info=True)
+
+    search_results = get_vectordb_search_output_in_latest_turn(messages)
+
+    if search_results is not None:
+        available_sources = search_results['sources']
 
     record_token_usage_metrics(questdb_pool, messages)
     return {

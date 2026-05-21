@@ -1,9 +1,11 @@
+from concurrent.futures import ThreadPoolExecutor
 import logging
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from src.connectors.store import QDRANT_META_PATH
+from src.connectors.search import augment_chunks
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
@@ -12,7 +14,7 @@ from src.metrics.metrics import (
     register_words,
 )
 from src.utils.nlp import extract_search_terms
-from src.utils.rag import retrieve_and_rerank
+from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources
 from src.utils.topic import resolve_topic_names
 
 
@@ -21,21 +23,34 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     """Searches for documents relevant to the user's query through hybrid-search in a database."""
 
     configurable = config.get("configurable", {})
+    llm = configurable["llm"]
     vectorstore = configurable["vectorstore"]
     sources = configurable["sources"]
     reranker = configurable["reranker"]
     pool = configurable.get("questdb_pool")
 
+    # Perform VDB search
     try:
         with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
-            chunks, available_sources, lang_code = retrieve_and_rerank(
+            chunks, lang_code = retrieve_and_rerank(
                 query, vectorstore, reranker, sources
             )
 
     except Exception:
         logging.exception("vectordb_search failed")
         return "[Search error: the document search is temporarily unavailable.]"
+    
+    # Filter sources with LLM
+    def check_chunk(c):
+        return is_relevant_source(llm, query, c.page_content).is_relevant
 
+    with ThreadPoolExecutor() as executor:
+        relevance = list(executor.map(check_chunk, chunks))
+
+    chunks = [c for c, ok in zip(chunks, relevance) if ok]
+    available_sources = get_chunk_sources(chunks, sources)
+
+    # Send usage metrics
     try:
         insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
 
@@ -59,7 +74,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     except Exception:
         logging.warning("Failed to record topics", exc_info=True)
 
-    # --- Build response ---
+    # Build response
     fallback_messages = {
         "es": "No encontré información relevante sobre ese tema en las fuentes disponibles.",
         "en": "I couldn't find relevant information about that topic in the available sources.",
@@ -69,25 +84,22 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     if not chunks:
         return fallback_messages.get(lang_code, fallback_messages["es"])
 
-    result = []
-    for i, chunk in enumerate(chunks, 1):
+    formatted_chunks = []
+
+    for chunk in augment_chunks(vectorstore, chunks):
         meta = chunk.metadata
-        result.append(
-            f"[{i}] {meta.get('title', 'Untitled')}\n"
-            f"Source: {meta.get('source', 'Unknown')}\n"
-            f"Link: {meta.get('webViewLink', 'N/A')}\n"
-            f"{chunk.page_content[:1500]}"
+        header = (
+            '['
+            f'file: {meta["path"]}; '
+            f'authors: {", ".join(meta["authors"])}; '
+            f'date: {meta["modifiedTime"]}; '
+            f'page {meta["page"]}'
+            ']'
         )
 
-    output = "\n---\n".join(result)
+        formatted_chunks.append(f'{header}\n\n{chunk.page_content}')
 
-    if available_sources:
-        sources_lines = []
-        for source in available_sources:
-            title = source.get("title", "Untitled")
-            source_type = source.get("source_type", "Unknown")
-            link = source.get("link") or "N/A"
-            sources_lines.append(f"- type: {source_type}, title: {title}, link: {link}")
-        output += "\n\nAVAILABLE SOURCES:\n" + "\n".join(sources_lines)
-
-    return output
+    return {
+        "chunks": formatted_chunks,
+        "sources": available_sources
+    }

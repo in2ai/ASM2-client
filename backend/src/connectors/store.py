@@ -6,7 +6,6 @@ import uuid
 
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, Modifier, PayloadSchemaType, PointStruct, SparseVectorParams, VectorParams
@@ -23,10 +22,17 @@ QDRANT_META_PATH = get_env("QDRANT_META_PATH", "/app/data/qdrant_meta")
 BM25_MODEL = "qdrant/bm25"
 VDB_LOCK = 'vdb.lock'
 
-EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
 QDRANT_COL = "documents"
 
-DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+CHARS_PER_TOKEN = 3 # Approximate
+CHUNK_SIZE = 512 * CHARS_PER_TOKEN
+CHUNK_OVERLAP = 0.2
+DOCUMENT_SPLITTER = RecursiveCharacterTextSplitter(
+    chunk_size=CHUNK_SIZE, 
+    chunk_overlap=int(CHUNK_SIZE * CHUNK_OVERLAP),
+    add_start_index=True,
+    keep_separator=True
+)
 
 TOPIC_MIN_SIZE = get_int_env("TOPIC_MIN_SIZE", 20000)
 CALCULATE_TOPICS = get_bool_env("CALCULATE_TOPICS")
@@ -63,32 +69,32 @@ def iterate_qdrant_docs(
             break
 
 
-def get_vectordb() -> Qdrant:
+def get_vectordb(embeddings) -> Qdrant:
     client = QdrantClient(
         url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
         prefer_grpc=True,
     )
 
-    vectorstore = Qdrant(client, QDRANT_COL, EMBEDDINGS)
+    vectorstore = Qdrant(client, QDRANT_COL, embeddings)
     return vectorstore
 
 
-def build_vectordb_from_sources(sources: List[DataSource]):
+def build_vectordb_from_sources(llm, embeddings, sources: List[DataSource]):
     vectordb = None
     for src in sources:
-        vectordb = build_vectorstore(src.list_files(), src.name)
+        vectordb = build_vectorstore(embeddings, src.list_files(), src.name)
 
-    extract_topics(vectordb)
+    extract_topics(llm, vectordb)
     return vectordb
 
 
-def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
+def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=200):
     # Read status manifest file
     manifest = VDBManifest(QDRANT_META_PATH)
 
     # Check if the part for this source is already constructed
-    vectorstore = get_vectordb()
+    vectorstore = get_vectordb(embeddings)
 
     if not vectorstore.client.collection_exists(QDRANT_COL):
         logging.info('Creating Qdrant collection...')
@@ -97,7 +103,7 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
         vectorstore.client.create_collection(
             collection_name=QDRANT_COL,
             vectors_config={
-                "embedding": VectorParams(size=1536, distance=Distance.COSINE),
+                "embedding": VectorParams(size=vectorstore.embeddings.dims(), distance=Distance.COSINE),
             },
             sparse_vectors_config={
                 "bm25": SparseVectorParams(modifier=Modifier.IDF),
@@ -124,6 +130,21 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
             field_name="metadata.permissions.allowed",
             field_schema=PayloadSchemaType.KEYWORD,
         )
+
+    else:
+        info = vectorstore.client.get_collection(QDRANT_COL)
+        qdrant_dim = info.config.params.vectors["embedding"].size
+        embedding_dim = vectorstore.embeddings.dims()
+
+        if embedding_dim != qdrant_dim:
+            logging.error(
+                "Embedding dimension mismatch: got %s, expected %s. The embedding model may have changed.",
+                embedding_dim,
+                qdrant_dim,
+            )
+
+            return vectorstore
+
 
     # Update file permissions
     logging.info("Updating file permissions for source %s...", source)
@@ -176,17 +197,19 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
         manifest.save()
 
     # Read file chunks in batches
-    docs_batch, pending_ids = [], []
+    docs_batch, pending_ids, chunk_idxs = [], [], []
 
     def flush(reason="batch"):
-        nonlocal docs_batch, pending_ids, manifest
+        nonlocal docs_batch, chunk_idxs, pending_ids, manifest
+
         if not docs_batch:
             return
 
         for i in range(0, len(docs_batch), batch_size):
             sub_docs = docs_batch[i : i + batch_size]
+            idxs = chunk_idxs[i : i + batch_size]
             new_ids = [str(uuid.uuid4()) for _ in sub_docs]
-            embs = EMBEDDINGS.embed_documents([i.page_content for i in sub_docs])
+            embs = vectorstore.embeddings.embed_documents([i.page_content for i in sub_docs])
 
             points = [
                 PointStruct(
@@ -197,10 +220,13 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
                     },
                     payload={
                         "page_content": doc.page_content,
-                        "metadata": doc.metadata,
+                        "metadata": {
+                            **doc.metadata,
+                            'chunk_idx': c_idx
+                        },
                     },
                 )
-                for uuid, emb, doc in zip(new_ids, embs, sub_docs)
+                for uuid, emb, doc, c_idx in zip(new_ids, embs, sub_docs, idxs)
             ]
 
             vectorstore.client.upsert(vectorstore.collection_name, points)
@@ -219,7 +245,7 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
             reason,
         )
 
-        docs_batch, pending_ids = [], []
+        docs_batch, pending_ids, chunk_idxs = [], [], []
 
     for f in files:
         if f.metadata["id"] not in files_to_add:
@@ -237,9 +263,33 @@ def build_vectorstore(files: List[VDBFile], source: str, batch_size=200):
             manifest.save()
             continue
 
-        base_doc = Document(page_content=txt, metadata=f.metadata)
+        # Compute page offsets
+        if isinstance(txt, list):
+            joined_txt = '\n'.join(txt)
+            pages = []
+            start = 0
+
+            for page in txt:
+                end = start + len(page) + 1 # + 1 because of the \n
+                pages.append([start, end])
+                start = end
+
+        else:
+            joined_txt = txt
+            pages = None
+
+        base_doc = Document(page_content=joined_txt, metadata=f.metadata)
         chunks = DOCUMENT_SPLITTER.split_documents([base_doc])
+
+        # Compute page metadata
+        if pages is not None:
+            for chunk in chunks:
+                idx = chunk.metadata['start_index']
+                page = next(i for i, p in enumerate(pages, 1) if idx >= p[0] and idx < p[1])
+                chunk.metadata['page'] = page
+
         docs_batch.extend(chunks)
+        chunk_idxs.extend(range(len(chunks)))
         pending_ids.append((f.metadata["id"], f.metadata["modifiedTime"]))
 
         if len(docs_batch) >= batch_size:
@@ -282,13 +332,13 @@ def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
     )
 
 
-def extract_topics(vectorstore: Qdrant, pool=None):
+def extract_topics(llm, vectorstore: Qdrant, pool=None):
     manifest = VDBManifest(QDRANT_META_PATH)
 
     # Add topics if needed
     if not manifest.has_topics():
         if manifest.num_chunks() > TOPIC_MIN_SIZE:
-            extract_initial_topics(vectorstore, QDRANT_META_PATH, pool)
+            extract_initial_topics(llm, vectorstore, QDRANT_META_PATH, pool)
 
             if CALCULATE_TOPICS:
                 manifest.set_topics()

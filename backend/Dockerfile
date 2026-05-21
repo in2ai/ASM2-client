@@ -2,6 +2,13 @@
 
 FROM python:3.10-slim AS builder
 
+ARG USE_LOCAL_EMB=false
+ARG LOCAL_EMB_REPO=""
+
+ARG USE_LOCAL_MODEL=false
+ARG LOCAL_MODEL_REPO=""
+ARG LOCAL_MODEL_FILE=""
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
@@ -41,8 +48,18 @@ stanza.download('gl', package='ctg', processors='tokenize,mwt,pos,lemma')" \
     && /opt/venv/bin/python -c "from huggingface_hub import hf_hub_download; \
 hf_hub_download(repo_id='cis-lmu/glotlid', filename='model.bin')" \
     && /opt/venv/bin/python -c "from sentence_transformers import CrossEncoder; \
-CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')" \
-    && chmod -R 755 /app/models
+CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')"
+
+RUN if [ "$USE_LOCAL_EMB" = "true" ]; then \
+      /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('$LOCAL_EMB_REPO')"; \
+    fi
+
+RUN if [ "$USE_LOCAL_MODEL" = "true" ]; then \
+      /opt/venv/bin/python -c "from huggingface_hub import hf_hub_download; \
+hf_hub_download(repo_id='$LOCAL_MODEL_REPO', filename='$LOCAL_MODEL_FILE', local_dir='/app/models', local_dir_use_symlinks=False)" \
+      && chmod -R 755 /app/models; \
+    fi
 
 COPY server.py server.py
 COPY src src

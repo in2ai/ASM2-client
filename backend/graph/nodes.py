@@ -3,7 +3,6 @@ from langchain_core.runnables import RunnableConfig
 
 from src.utils.nlp import detect_language
 from src.utils.rag import get_rag_system_prompt
-from .model import llm, llm_with_tools
 from .state import State
 
 
@@ -21,6 +20,8 @@ def detect_language_node(state: State):
 
 
 def call_model(state: State, config: RunnableConfig):
+    configurable = config.get("configurable", {})
+    llm_with_tools = configurable.get('llm_with_tools')
     system_prompt = get_rag_system_prompt(state.detected_lang)
 
     if state.summary:
@@ -43,6 +44,8 @@ def summarize_conversation(state: State, config: RunnableConfig):
     else:
         summary_message = "Create a summary of the conversation above:"
 
+    configurable = config.get("configurable", {})
+    llm = configurable.get('llm')
     messages = state.messages + [HumanMessage(content=summary_message)]
     response = llm.invoke(messages, config)
 

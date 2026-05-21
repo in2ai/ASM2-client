@@ -97,7 +97,7 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
     lang_code = detect_language(query)
 
     # Perform hybrid search
-    search_results = hybrid_search(vectordb, query, k, 25, sources)
+    search_results = hybrid_search(vectordb, query, 25, 25, sources)
 
     # Filter by permissions
     allowed_chunks = []
@@ -117,20 +117,32 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
     if allowed_chunks:
         allowed_chunks = rerank_documents(reranker, query, allowed_chunks, top_k=k)
 
-    # Build available_sources list
-    available_sources = []
-    seen_ids = set()
+    return allowed_chunks, lang_code
 
-    for d in allowed_chunks:
+
+def get_chunk_sources(chunks, sources):
+    available_sources = {}
+
+    for d in chunks:
         doc_id = d.metadata.get("id")
-        if doc_id not in seen_ids:
-            seen_ids.add(doc_id)
+
+        if doc_id not in available_sources:
             tag = _resolve_source_label(d.metadata.get("source", "Unknown"), sources)
             title = d.metadata.get("title") or d.metadata.get("name") or "(sin titulo)"
             link = d.metadata.get("webViewLink")
-            available_sources.append({"title": title, "source_type": tag, "link": link})
 
-    return allowed_chunks, available_sources, lang_code
+            available_sources[doc_id] = {"title": title, "source_type": tag, "link": link}
+
+        page = d.metadata.get('page')
+
+        if page is not None:
+            available_sources[doc_id].setdefault('pages', set()).add(page)
+
+    for v in available_sources.values():
+        if 'pages' in v:
+            v['pages'] = sorted(v['pages'])
+
+    return list(available_sources.values())
 
 
 def get_rag_system_prompt(lang_code: str) -> str:
@@ -150,117 +162,49 @@ def get_rag_system_prompt(lang_code: str) -> str:
         "'more about that') by replacing them with the specific terms from the "
         "conversation context, so the search query is understandable without "
         "prior conversation."
+        "Do not add any references or links to online resources, just answer using the context."
     )
 
 
-# ---------------------------------
-# Legacy function (kept for Streamlit app compatibility)
-# ---------------------------------
+class SourceValidity(BaseModel):
+    is_relevant: bool
+    reason: str
 
-def prepare_rag_context(query, pool, vectordb, reranker, sources: Dict[str, DataSource], k=6, chunk_chars=1600):
+
+def is_relevant_source(llm, query, chunk):
+    # LLM with function call
+    llm_judge = llm.with_structured_output(SourceValidity)
+
+    # Prompt
+    system = """
+    You are a answer-presence classifier for RAG.
+
+    Given:
+    1) a user question
+    2) a retrieved text chunk
+
+    Decide whether the chunk contains the answer or a necessary part of the answer.
+
+    Mark is_relevant = true ONLY if:
+    - the chunk directly answers the question, OR
+    - it contains a specific fact, detail, or evidence that clearly contributes to the answer
+
+    Mark is_relevant = false if:
+    - the chunk is only generally related but does not contain the answer
+    - it is vague, background information, or tangential
+    - the connection to the answer requires significant inference
+
+    Be strict. If the answer (or part of it) is not explicitly present, return false.
     """
-    Prepares the RAG context: retrieves documents, filters by permissions, and reorders them.
-    Returns (messages, available_sources, allowed_chunks, lang_code) or None if there are no results.
+
+    user = f"""
+    Query:
+    {query}
+
+    Chunk:
+    {chunk}
     """
-    # Register that the user is still active
-    register_user_activity(pool)
 
-    # Detect language
-    lang_code = detect_language(query)
+    ans = llm_judge.invoke([SystemMessage(content=system), HumanMessage(content=user)])
 
-    # Register search terms
-    search_terms = extract_search_terms(query, lang_code)
-    register_words(pool, search_terms, lang_code)
-
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
-
-    allowed_chunks = []
-
-    # Perform hybrid search in order to get relevant documents
-    insert_metric(pool, Metrics.NUM_RAG_TOKENS_IN.value, llm.get_num_tokens(query))
-
-    with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
-        search_results = hybrid_search(vectordb, query, k, 25, sources)
-
-        for f in search_results:
-            file_id = f.metadata["id"]
-            source = f.metadata["source"]
-
-            if source not in sources:
-                continue
-
-            # Check permissions
-            if not sources[source].has_access(file_id):
-                continue
-
-            allowed_chunks.append(f)
-
-        # Rerank documents
-        if allowed_chunks:
-            allowed_chunks = rerank_documents(reranker, query, allowed_chunks, top_k=k)
-
-    if not allowed_chunks:
-        return RAGResponse('', []), None, None, lang_code
-
-    # Register found chunk topics
-    topic_indices = {t for d in allowed_chunks for t, _ in d.metadata.get("topics", {}).items()}
-    topics_for_db = resolve_topic_names(topic_indices, "es", QDRANT_META_PATH)
-
-    register_topics(pool, topics_for_db)
-
-    insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(allowed_chunks))
-
-    # Prepare context
-    def get_doc_info(d):
-        tag = d.metadata.get("source", "Unknown")
-        title = d.metadata.get("title") or d.metadata.get("name") or "(sin titulo)"
-        link = d.metadata.get("webViewLink")
-        return tag, title, link
-
-    def cite(d):
-        tag, title, link = get_doc_info(d)
-        link_info = f" (Link: {link})" if link else ""
-        return f"[{tag}:{title}{link_info}] {(d.page_content or '')[:chunk_chars]}"
-
-    available_sources = []
-    seen_ids = set()
-
-    for d in allowed_chunks:
-        doc_id = d.metadata.get("id")
-
-        if doc_id not in seen_ids:
-            seen_ids.add(doc_id)
-            tag, title, link = get_doc_info(d)
-            available_sources.append({"title": title, "source_type": tag, "link": link})
-
-    contexto = "\n\n".join(cite(d) for d in allowed_chunks)
-
-    insert_metric(pool, Metrics.NUM_RAG_TOKENS_OUT.value, llm.get_num_tokens(contexto))
-
-    # Prepare system prompt for the LLM
-    system = get_rag_system_prompt(lang_code)
-
-    # Include links in the sources list so the LLM can return them
-    sources_info = "\n".join(
-        [
-            f"- title: {s['title']}, type: {s['source_type']}, link: {s.get('link') or 'N/A'}"
-            for s in available_sources
-        ]
-    )
-
-    messages = [SystemMessage(content=system)]
-
-    user_message = f"""CONTEXT:
-{contexto}
-
-AVAILABLE SOURCES:
-{sources_info}
-
-QUESTION:
-{query}"""
-
-    messages.append(HumanMessage(content=user_message))
-
-    insert_metric(pool, Metrics.NUM_LLM_TOKENS_IN.value, llm.get_num_tokens(user_message))
-
-    return messages, available_sources, allowed_chunks, lang_code
+    return ans
