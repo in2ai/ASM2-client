@@ -374,25 +374,31 @@ class GoogleDriveSource(DataSource):
         ]
 
         # Get metadata for each file
-        files = [
-            {
-                "id": f["id"],
-                "name": f["name"],
-                "path": f["path"],
-                "authors": [
-                    owner.get("displayName")
-                    for owner in f.get("owners", [])
-                    if owner.get("displayName")
-                ],
-                "mimeType": f["mimeType"],
-                "modifiedTime": f["modifiedTime"],
-                "webViewLink": f.get("webViewLink"),
-                "permissions": self.get_file_principals(f["id"]),
-            }
-            for f in files
-        ]
+        res = []
+
+        for f in files:
+            try:
+                res.append(
+                    {
+                        "id": f["id"],
+                        "name": f["name"],
+                        "path": f["path"],
+                        "authors": [
+                            owner.get("displayName")
+                            for owner in f.get("owners", [])
+                            if owner.get("displayName")
+                        ],
+                        "mimeType": f["mimeType"],
+                        "modifiedTime": f["modifiedTime"],
+                        "webViewLink": f.get("webViewLink"),
+                        "permissions": self.get_file_principals(f["id"]),
+                    }
+                )
+
+            except:
+                pass
 
         # Transform to file model
-        files = [GoogleDriveFile(f, self.service) for f in files]
+        res = [GoogleDriveFile(f, self.service) for f in res]
 
-        return files
+        return res
