@@ -7,6 +7,7 @@ from langchain_core.tools import tool
 from src.connectors.store import QDRANT_META_PATH
 from src.connectors.search import augment_chunks
 from src.metrics.context import MetricsActor
+from src.metrics.context import MetricsActor
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
@@ -39,11 +40,11 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
             with TimedMetric(
                 pool, Metrics.DOC_RESPONSE_TIME.value, actor=metrics_actor
             ):
-                chunks, available_sources, lang_code = retrieve_and_rerank(
+                chunks, lang_code = retrieve_and_rerank(
                     query, vectorstore, reranker, sources
                 )
         else:
-            chunks, available_sources, lang_code = retrieve_and_rerank(
+            chunks, lang_code = retrieve_and_rerank(
                 query, vectorstore, reranker, sources
             )
 
