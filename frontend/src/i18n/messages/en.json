@@ -292,6 +292,8 @@
     "messages": {
       "assistant": "Assistant",
       "openSource": "Open source",
+      "page": "Page",
+      "pages": "Pages",
       "sources": "Sources",
       "sending": "Generating response...",
       "user": "You"

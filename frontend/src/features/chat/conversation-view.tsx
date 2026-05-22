@@ -26,6 +26,8 @@ interface ConversationViewProps {
   messageLabels: {
     assistant: string
     openSource: string
+    page: string
+    pages: string
     sources: string
     sending: string
     user: string
@@ -226,6 +228,7 @@ function MessageBubble({
               {sources.map((source) => (
                 <SourceCitation
                   key={`${source.source_type}-${source.title}-${source.link ?? 'nolink'}`}
+                  labels={labels}
                   source={source}
                   openLabel={labels.openSource}
                 />
@@ -240,17 +243,22 @@ function MessageBubble({
 }
 
 function SourceCitation({
+  labels,
   openLabel,
   source,
 }: Readonly<{
+  labels: Pick<ConversationViewProps['messageLabels'], 'page' | 'pages'>
   openLabel: string
   source: ChatSource
 }>) {
+  const pagesLabel = formatSourcePages(source.pages, labels)
+
   return (
     <div className="bg-muted/40 rounded-2xl border px-3 py-2">
       <p className="text-sm font-medium">{source.title}</p>
       <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
         <span>{source.source_type}</span>
+        {pagesLabel ? <span>{pagesLabel}</span> : null}
         {source.link ? (
           <a
             href={source.link}
@@ -283,10 +291,32 @@ function getMessageSources(message: ChatMessage): ChatSource[] {
       return (
         typeof candidate.title === 'string' &&
         typeof candidate.source_type === 'string' &&
-        (typeof candidate.link === 'string' || candidate.link === null)
+        (typeof candidate.link === 'string' || candidate.link === null) &&
+        isValidSourcePages(candidate.pages)
       )
     },
   )
+}
+
+function isValidSourcePages(pages: unknown): pages is number[] | undefined {
+  return (
+    pages === undefined ||
+    (Array.isArray(pages) &&
+      pages.every((page) => typeof page === 'number' && Number.isInteger(page)))
+  )
+}
+
+function formatSourcePages(
+  pages: number[] | undefined,
+  labels: Pick<ConversationViewProps['messageLabels'], 'page' | 'pages'>,
+): string | null {
+  if (!pages?.length) {
+    return null
+  }
+
+  return pages.length === 1
+    ? `${labels.page} ${pages[0]}`
+    : `${labels.pages} ${pages.join(', ')}`
 }
 
 function BubbleAvatar({ isUser }: Readonly<{ isUser: boolean }>) {
