@@ -34,10 +34,12 @@ from src.connectors.store import (
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
 from src.metrics.connection import get_questdb_pool
+from src.metrics.context import metrics_actor_from_auth
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
     insert_metric,
+    insert_system_metric,
     register_user_activity,
 )
 from src.metrics.dashboard_queries import (
@@ -238,17 +240,19 @@ def extract_usage_metrics():
 
         # CPU
         cpu_usage = psutil.cpu_percent(interval=1)
-        insert_metric(questdb_pool, Metrics.CPU_USAGE.value, cpu_usage)
+        insert_system_metric(questdb_pool, Metrics.CPU_USAGE.value, cpu_usage)
 
         # RAM
         mem = psutil.virtual_memory()
-        insert_metric(questdb_pool, Metrics.RAM_USAGE.value, mem.percent)
+        insert_system_metric(questdb_pool, Metrics.RAM_USAGE.value, mem.percent)
 
         # GPU (if available)
         gpus = GPUtil.getGPUs()
 
         if len(gpus) > 0:
-            insert_metric(questdb_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100)
+            insert_system_metric(
+                questdb_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100
+            )
 
     periodic_task(calc, 30)
 
@@ -462,7 +466,8 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             detail="VDB indexing is not enabled. Chat is unavailable until an administrator starts indexing.",
         )
 
-    register_user_activity(questdb_pool)
+    metrics_actor = metrics_actor_from_auth(auth.sub, auth.role)
+    register_user_activity(questdb_pool, actor=metrics_actor)
 
     config: dict[str, Any] = {
         "configurable": {
@@ -473,6 +478,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "reranker": app.state.reranker,
             "questdb_pool": questdb_pool,
             "sources": sources,
+            "metrics_actor": metrics_actor,
         }
     }
 
@@ -487,7 +493,9 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "langfuse_tags": ["asm2", "chat"],
         }
 
-    with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
+    with TimedMetric(
+        questdb_pool, Metrics.LLM_RESPONSE_TIME.value, actor=metrics_actor
+    ):
         try:
             result = await app.state.graph.ainvoke(
                 {"messages": [HumanMessage(content=query)]}, config
@@ -509,7 +517,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     if search_results is not None:
         available_sources = search_results['sources']
 
-    record_token_usage_metrics(questdb_pool, messages)
+    record_token_usage_metrics(questdb_pool, messages, metrics_actor)
     return {
         "answer": str(messages[-1].content),
         "detected_lang": str(result.get("detected_lang", "es")),
@@ -608,7 +616,7 @@ def _fetch_shared_metrics_data(
     }
 
 
-def record_token_usage_metrics(questdb_pool, messages: list[Any]) -> None:
+def record_token_usage_metrics(questdb_pool, messages: list[Any], actor) -> None:
     try:
         for msg in messages:
             if isinstance(msg, AIMessage) and msg.usage_metadata:
@@ -617,11 +625,13 @@ def record_token_usage_metrics(questdb_pool, messages: list[Any]) -> None:
                     questdb_pool,
                     Metrics.NUM_LLM_TOKENS_IN.value,
                     usage.get("input_tokens", 0),
+                    actor=actor,
                 )
                 insert_metric(
                     questdb_pool,
                     Metrics.NUM_LLM_TOKENS_OUT.value,
                     usage.get("output_tokens", 0),
+                    actor=actor,
                 )
     except Exception:
         logging.warning("Failed to record token usage metrics", exc_info=True)
