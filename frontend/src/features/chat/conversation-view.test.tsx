@@ -43,6 +43,8 @@ vi.mock('lucide-react', () => ({
 const defaultLabels = {
   assistant: 'Assistant',
   openSource: 'Open source',
+  page: 'Page',
+  pages: 'Pages',
   sending: 'Sending',
   sources: 'Sources',
   user: 'User',
@@ -188,6 +190,7 @@ describe('ConversationView markdown rendering', () => {
           sources: [
             {
               link: 'https://docs.example.test/source',
+              pages: [2, 4],
               source_type: 'drive',
               title: 'Source document',
             },
@@ -200,10 +203,34 @@ describe('ConversationView markdown rendering', () => {
     expect(screen.getByText('formatting').tagName).toBe('STRONG')
     expect(screen.getByText('Sources')).toBeTruthy()
     expect(screen.getByText('Source document')).toBeTruthy()
+    expect(screen.getByText('Pages 2, 4')).toBeTruthy()
     expect(screen.getByRole('link', { name: /Open source/ })).toHaveProperty(
       'href',
       'https://docs.example.test/source',
     )
+  })
+
+  it('ignores invalid source page metadata', () => {
+    const invalidMetadata = {
+      sources: [
+        {
+          link: 'https://docs.example.test/source',
+          pages: ['2'],
+          source_type: 'drive',
+          title: 'Invalid source document',
+        },
+      ],
+    } as unknown as ChatMessage['metadata']
+
+    renderConversation([
+      createMessage({
+        content: 'Assistant response.',
+        metadata: invalidMetadata,
+        role: 'assistant',
+      }),
+    ])
+
+    expect(screen.queryByText('Invalid source document')).toBeNull()
   })
 
   it('uses scrollable containers for long code blocks and tables', () => {

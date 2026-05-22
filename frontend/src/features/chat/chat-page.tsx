@@ -289,6 +289,8 @@ export function ChatPage({
           messageLabels={{
             assistant: t('messages.assistant'),
             openSource: t('messages.openSource'),
+            page: t('messages.page'),
+            pages: t('messages.pages'),
             sources: t('messages.sources'),
             sending: t('messages.sending'),
             user: t('messages.user'),

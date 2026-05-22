@@ -292,6 +292,8 @@
     "messages": {
       "assistant": "Asistente",
       "openSource": "Abrir fonte",
+      "page": "Páxina",
+      "pages": "Páxinas",
       "sources": "Fontes",
       "sending": "Xerando resposta...",
       "user": "Ti"
