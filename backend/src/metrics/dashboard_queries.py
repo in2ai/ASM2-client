@@ -206,6 +206,7 @@ def mean_session_length(
 def get_unique_users(pool: ThreadedConnectionPool, params: MetricsQueryParams) -> int:
     conditions, query_params = _build_filter_conditions(
         params,
+        include_user_id=True,
         include_user_role=True,
     )
     query = _append_and_conditions(
@@ -235,7 +236,11 @@ def get_total_activity_events(
 def get_user_role_distribution(
     pool: ThreadedConnectionPool, params: MetricsQueryParams
 ) -> dict[str, int]:
-    conditions, query_params = _build_filter_conditions(params)
+    conditions, query_params = _build_filter_conditions(
+        params,
+        include_user_id=True,
+        include_user_role=True,
+    )
     query = _append_and_conditions(
         """
         SELECT user_role, COUNT(DISTINCT user_id) as cnt

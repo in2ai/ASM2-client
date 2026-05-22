@@ -17,6 +17,15 @@ interface RoleDistributionChartItem {
   fill: string
 }
 
+function formatRoleLabel(role: string): string {
+  const trimmed = role.trim()
+  if (!trimmed) {
+    return 'Unknown'
+  }
+
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
+
 function getRoleChartKey(role: string): string {
   const normalizedKey = role
     .toLowerCase()
@@ -49,7 +58,7 @@ export function createRoleDistributionChartModel(
 
     usedKeys.add(roleKey)
     config[roleKey] = {
-      label: role,
+      label: formatRoleLabel(role),
       color: ROLE_CHART_COLORS[index % ROLE_CHART_COLORS.length],
     }
     data.push({

@@ -3,8 +3,9 @@ from enum import Enum
 
 from psycopg2.pool import ThreadedConnectionPool
 
-from src.config.auth import USER_ID, USER_ROLE
 from src.metrics.connection import execute_query
+from src.metrics.context import MetricsActor
+
 
 # ---------------------------------
 # Float metric list
@@ -29,16 +30,38 @@ class Metrics(Enum):
 # Metric storage
 # ---------------------------------
 
-def insert_metric(pool: ThreadedConnectionPool, tag: str, value: float):
+def insert_metric(
+    pool: ThreadedConnectionPool,
+    tag: str,
+    value: float,
+    *,
+    actor: MetricsActor,
+):
     query = """
     INSERT INTO metrics (ts, user_id, user_role, tag, value)
     VALUES (NOW(), %s, %s, %s, %s)
     """
 
-    execute_query(pool, query, (USER_ID, USER_ROLE, tag, value))
+    execute_query(pool, query, (actor.user_id, actor.user_role, tag, value))
 
 
-def register_words(pool: ThreadedConnectionPool, words: set[str], lang: str = 'es'):
+def insert_system_metric(pool: ThreadedConnectionPool, tag: str, value: float):
+    """Record server-wide metrics (CPU, RAM, GPU) without user attribution."""
+    query = """
+    INSERT INTO metrics (ts, tag, value)
+    VALUES (NOW(), %s, %s)
+    """
+
+    execute_query(pool, query, (tag, value))
+
+
+def register_words(
+    pool: ThreadedConnectionPool,
+    words: set[str],
+    *,
+    actor: MetricsActor,
+    lang: str = 'es',
+):
     if not words:
         return
 
@@ -54,12 +77,17 @@ def register_words(pool: ThreadedConnectionPool, words: set[str], lang: str = 'e
     params = []
 
     for w in words:
-        params.extend([lang, USER_ID, USER_ROLE, w])
+        params.extend([lang, actor.user_id, actor.user_role, w])
 
     execute_query(pool, query, tuple(params))
 
 
-def register_topics(pool: ThreadedConnectionPool, topics: dict[str, str]):
+def register_topics(
+    pool: ThreadedConnectionPool,
+    topics: dict[str, str],
+    *,
+    actor: MetricsActor,
+):
     if not topics:
         return
 
@@ -73,7 +101,7 @@ def register_topics(pool: ThreadedConnectionPool, topics: dict[str, str]):
     params = []
 
     for topic_id, name in topics.items():
-        params.extend([USER_ID, USER_ROLE, name, topic_id])
+        params.extend([actor.user_id, actor.user_role, name, topic_id])
 
     execute_query(pool, query, tuple(params))
 
@@ -101,28 +129,40 @@ def register_topic_intl(pool: ThreadedConnectionPool, mapping: dict):
 
     params = []
 
-    for t in topics:
-        params.extend([USER_ID, USER_ROLE, t])
+    for topic_id, name, lang in rows:
+        params.extend([topic_id, name, lang])
 
     execute_query(pool, query, tuple(params))
 
 
-def register_user_activity(pool: ThreadedConnectionPool):
+def register_user_activity(pool: ThreadedConnectionPool, *, actor: MetricsActor):
     query = """
     INSERT INTO user_activity (ts, user_id, user_role)
     VALUES (NOW(), %s, %s)
     """
 
-    execute_query(pool, query, (USER_ID, USER_ROLE))
+    execute_query(pool, query, (actor.user_id, actor.user_role))
 
 
-def log_request(pool: ThreadedConnectionPool, endpoint: str, method: str, status: int, latency: float):
+def log_request(
+    pool: ThreadedConnectionPool,
+    endpoint: str,
+    method: str,
+    status: int,
+    latency: float,
+    *,
+    actor: MetricsActor,
+):
     query = """
     INSERT INTO requests (ts, user_id, user_role, endpoint, method, status, latency)
     VALUES (NOW(), %s, %s, %s, %s, %s, %s)
     """
 
-    execute_query(pool, query, (USER_ID, USER_ROLE, endpoint, method, status, latency))
+    execute_query(
+        pool,
+        query,
+        (actor.user_id, actor.user_role, endpoint, method, status, latency),
+    )
 
 # ---------------------------------
 # Helpers
@@ -135,7 +175,7 @@ class TimedMetric:
     Example usage:
 
         ```python
-        with TimedMetric(Metrics.REQ_RESPONSE_TIME.value):
+        with TimedMetric(pool, Metrics.REQ_RESPONSE_TIME.value, actor=actor):
             response = make_request()
         ```
 
@@ -146,9 +186,10 @@ class TimedMetric:
     Parameters:
         metric (str): The name of the metric to record. Use the `Metrics` enum.
     """
-    def __init__(self, pool: ThreadedConnectionPool, metric):
+    def __init__(self, pool: ThreadedConnectionPool, metric, *, actor: MetricsActor):
         self.metric = metric
         self.pool = pool
+        self.actor = actor
 
     def __enter__(self):
         self.start = time.perf_counter()
@@ -158,6 +199,6 @@ class TimedMetric:
         # Only insert the metric if no exception occurred
         if exception_type is None:
             elapsed = time.perf_counter() - self.start
-            insert_metric(self.pool, self.metric, elapsed)
+            insert_metric(self.pool, self.metric, elapsed, actor=self.actor)
 
         return False

@@ -7,10 +7,6 @@ from src.config.sources import SOURCES
 from src.metrics.connection import execute_query
 
 
-USER_ID = "user in2ai"
-USER_ROLE = "admin in2ai"
-
-
 def normalize_timestamp(value: datetime | None) -> datetime | None:
     if value is None or value.tzinfo is None:
         return value

@@ -4,6 +4,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from src.connectors.store import QDRANT_META_PATH
+from src.metrics.context import MetricsActor
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
@@ -25,9 +26,20 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     sources = configurable["sources"]
     reranker = configurable["reranker"]
     pool = configurable.get("questdb_pool")
+    metrics_actor = configurable.get("metrics_actor")
+    if not isinstance(metrics_actor, MetricsActor):
+        logging.warning("vectordb_search missing metrics_actor; skipping metric writes")
+        metrics_actor = None
 
     try:
-        with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
+        if metrics_actor is not None:
+            with TimedMetric(
+                pool, Metrics.DOC_RESPONSE_TIME.value, actor=metrics_actor
+            ):
+                chunks, available_sources, lang_code = retrieve_and_rerank(
+                    query, vectorstore, reranker, sources
+                )
+        else:
             chunks, available_sources, lang_code = retrieve_and_rerank(
                 query, vectorstore, reranker, sources
             )
@@ -36,28 +48,36 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         logging.exception("vectordb_search failed")
         return "[Search error: the document search is temporarily unavailable.]"
 
-    try:
-        insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
+    if metrics_actor is None:
+        pass
+    else:
+        try:
+            insert_metric(
+                pool,
+                Metrics.NUM_DOCS_RAG.value,
+                len(chunks),
+                actor=metrics_actor,
+            )
 
-    except Exception:
-        logging.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
+        except Exception:
+            logging.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
 
-    try:
-        search_terms = extract_search_terms(query, lang_code)
-        register_words(pool, search_terms, lang_code)
+        try:
+            search_terms = extract_search_terms(query, lang_code)
+            register_words(pool, search_terms, actor=metrics_actor, lang=lang_code)
 
-    except Exception:
-        logging.warning("Failed to record search terms", exc_info=True)
+        except Exception:
+            logging.warning("Failed to record search terms", exc_info=True)
 
-    try:
-        topic_indices = {t for c in chunks for t in c.metadata.get("topics", {})}
+        try:
+            topic_indices = {t for c in chunks for t in c.metadata.get("topics", {})}
 
-        if topic_indices:
-            topics = resolve_topic_names(topic_indices, lang_code, QDRANT_META_PATH)
-            register_topics(pool, topics)
+            if topic_indices:
+                topics = resolve_topic_names(topic_indices, lang_code, QDRANT_META_PATH)
+                register_topics(pool, topics, actor=metrics_actor)
 
-    except Exception:
-        logging.warning("Failed to record topics", exc_info=True)
+        except Exception:
+            logging.warning("Failed to record topics", exc_info=True)
 
     # --- Build response ---
     fallback_messages = {
