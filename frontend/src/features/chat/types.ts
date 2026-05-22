@@ -4,6 +4,7 @@ export interface ChatSource {
   title: string
   source_type: string
   link: string | null
+  pages?: number[]
 }
 
 export interface ChatMessageMetadata {
