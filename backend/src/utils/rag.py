@@ -92,7 +92,7 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
     """Retrieval-only function: hybrid search + permission filtering + reranking.
 
     Returns:
-        (allowed_chunks, available_sources, lang_code)
+        (allowed_chunks, lang_code)
     """
     lang_code = detect_language(query)
 
