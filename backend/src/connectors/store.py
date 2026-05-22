@@ -81,11 +81,33 @@ def get_vectordb(embeddings) -> Qdrant:
 
 
 def build_vectordb_from_sources(llm, embeddings, sources: List[DataSource]):
-    vectordb = None
-    for src in sources:
-        vectordb = build_vectorstore(embeddings, src.list_files(), src.name)
+    # Group sources by name
+    grouped_sources = {}
 
+    for source in sources:
+        grouped_sources.setdefault(source.name, []).append(source)
+
+    # Get unique files by grouped source
+    grouped_files = {}
+
+    for name, source_list in grouped_sources.items():
+        files = grouped_files.setdefault(name, [])
+        seen = set()
+
+        for source in source_list:
+            source_files = source.list_files()
+            files.extend(f for f in source_files if f.metadata['id'] not in seen)
+            seen.update(f.metadata['id'] for f in source_files)
+
+    # Build for each grouped source
+    vectordb = None
+
+    for name, files in grouped_files.items():
+        vectordb = build_vectorstore(embeddings, files, name)
+
+    # Execute topic extraction
     extract_topics(llm, vectordb)
+
     return vectordb
 
 
