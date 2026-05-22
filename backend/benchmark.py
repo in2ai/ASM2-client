@@ -7,8 +7,8 @@ from src.utils.nlp import init_nlp
 from graph.agent import build_graph, get_checkpointer
 from graph.model import get_llm_with_tools
 from src.config.auth import get_authenticated_admin_sources
-from src.connectors.embeddings import LocalEmbedder
-from src.connectors.llms import get_openai_llm
+from src.connectors.embeddings import get_configured_embeddings
+from src.connectors.llms import get_configured_llm
 from src.connectors.store import get_vectordb
 from src.metrics.connection import get_questdb_pool
 from src.utils.rag import get_reranker
@@ -16,9 +16,9 @@ from src.utils.rag import get_reranker
 
 init_nlp()
 
-LLM = get_openai_llm()
+LLM = get_configured_llm()
 LLM_WITH_TOOLS = get_llm_with_tools(LLM)
-VDB = get_vectordb(LocalEmbedder())
+VDB = get_vectordb(get_configured_embeddings())
 RERANKER = get_reranker()
 GRAPH = build_graph(get_checkpointer())
 QUESTDB_POOL = get_questdb_pool()

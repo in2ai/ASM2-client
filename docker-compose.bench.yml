@@ -38,7 +38,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
-    restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:latest
