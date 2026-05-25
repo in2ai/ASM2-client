@@ -14,10 +14,10 @@ until pg_isready -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" >/dev/null 2>&1; do
   sleep 5
 done
 
-echo "TimescaleDB is reachable. Executing init_tdb.sql ..."
+echo "TimescaleDB is reachable. Executing init_tsdb.sql ..."
 
 export PGPASSWORD="$PG_PASSWORD"
 
-psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" -f init_tdb.sql
+psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" -f init_tsdb.sql
 
 echo "SQL applied successfully. Exiting."
