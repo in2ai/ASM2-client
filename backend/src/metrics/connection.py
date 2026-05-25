@@ -10,6 +10,12 @@ DB_USER = get_env("QUESTDB_USER", "admin")
 DB_PASSWORD = get_env("QUESTDB_PASSWORD", "quest")
 DB_NAME = get_env("QUESTDB_DB", "qdb")
 
+PG_HOST = get_env("PG_HOST", "timescaledb")
+PG_PORT = get_int_env("PG_PORT", 5432)
+PG_USER = get_env("PG_USER", "postgres")
+PG_PASSWORD = get_env("PG_PASSWORD", "")
+PG_DB = get_env("PG_DB", "tsdb")
+
 
 # Connection and query management
 def get_questdb_pool():
@@ -21,6 +27,19 @@ def get_questdb_pool():
         user=DB_USER,
         password=DB_PASSWORD,
         dbname=DB_NAME,
+        connect_timeout=5,
+    )
+
+
+def get_pg_pool():
+    return ThreadedConnectionPool(
+        minconn=1,
+        maxconn=10,
+        host=PG_HOST,
+        port=PG_PORT,
+        user=PG_USER,
+        password=PG_PASSWORD,
+        dbname=PG_DB,
         connect_timeout=5,
     )
 

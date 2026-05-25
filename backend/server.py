@@ -33,7 +33,7 @@ from src.connectors.store import (
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
-from src.metrics.connection import get_questdb_pool
+from src.metrics.connection import get_pg_pool, get_questdb_pool
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
@@ -58,7 +58,7 @@ from src.metrics.dashboard_queries import (
     top_k_search_terms,
     top_k_topics,
 )
-from src.chat.store import ChatNotFoundError, ChatStore
+from src.chat.store import ChatNotFoundError, ChatStore, PostgresChatStore
 from src.tracing import get_langfuse_handler
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
@@ -75,17 +75,19 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_nlp()
-    
+
     # Global shared data
     app.state.llm = get_configured_llm()
     app.state.llm_with_tools = get_llm_with_tools(app.state.llm)
     app.state.vectorstore = get_vectordb(get_configured_embeddings())
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
+    app.state.pg_pool = get_pg_pool()
     chat_db_path = os.getenv(
         "CHAT_DB_PATH", os.path.join(os.path.dirname(__file__), "chat_history.sqlite3")
     )
     app.state.chat_store = ChatStore(chat_db_path)
+    app.state.tsdb_chat_store = PostgresChatStore(app.state.pg_pool)
 
     # Async periodic jobs
     jobs = [
@@ -114,6 +116,7 @@ async def lifespan(app: FastAPI):
                 pass
 
         app.state.questdb_pool.closeall()
+        app.state.pg_pool.closeall()
 
 
 setup_logging()
@@ -422,7 +425,7 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
                 if isinstance(followup, ToolMessage) and followup.tool_call_id == call_id:
                     try:
                         return json.loads(followup.content)
-                    
+
                     except:
                         return None
 
@@ -622,7 +625,7 @@ def record_token_usage_metrics(questdb_pool, messages: list[Any]) -> None:
 def validate_source(source: str) -> str:
     if source not in SOURCES:
         raise HTTPException(status_code=404, detail=f"Unknown source: {source}")
-    
+
     return source
 @app.get("/metrics/dashboard", response_model=DashboardMetricsResponseModel)
 async def metrics_dashboard(
