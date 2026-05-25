@@ -21,20 +21,25 @@ services:
       retries: 5
     volumes:
       - "./timescaledb:/var/lib/postgresql/data"
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
 
   timescaledb-init:
     image: postgres:15-alpine
     restart: "no"
     depends_on:
       timescaledb:
-        condition: service_started
+        condition: service_healthy
     volumes:
-      - ./sql/init.sql:/init/init.sql:ro
-      - ./sql/init.sh:/init/init_tdb.sh:ro
+      - ./sql/init_tsdb.sql:/init/init_tsdb.sql:ro
+      - ./sql/init_tsdb.sh:/init/init_tsdb.sh:ro
     env_file:
       - .env
     working_dir: /init
-    entrypoint: ["sh", "/init/init.sh"]
+    entrypoint: ["sh", "/init/init_tsdb.sh"]
+
 
 
   questdb:
