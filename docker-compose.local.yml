@@ -30,7 +30,7 @@ services:
         condition: service_started
     volumes:
       - ./sql/init.sql:/init/init.sql:ro
-      - ./sql/init.sh:/init/init.sh:ro
+      - ./sql/init.sh:/init/init_tdb.sh:ro
     env_file:
       - .env
     working_dir: /init
