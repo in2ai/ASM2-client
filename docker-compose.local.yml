@@ -22,6 +22,21 @@ services:
     volumes:
       - "./timescaledb:/var/lib/postgresql/data"
 
+  timescaledb-init:
+    image: postgres:15-alpine
+    restart: "no"
+    depends_on:
+      timescaledb:
+        condition: service_started
+    volumes:
+      - ./sql/init.sql:/init/init.sql:ro
+      - ./sql/init.sh:/init/init.sh:ro
+    env_file:
+      - .env
+    working_dir: /init
+    entrypoint: ["sh", "/init/init.sh"]
+
+
   questdb:
     image: questdb/questdb:latest
     restart: unless-stopped
