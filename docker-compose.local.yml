@@ -110,3 +110,4 @@ services:
 volumes:
   logto-connectors:
   logto-postgres-data:
+  timescaledb-data:
