@@ -28,8 +28,20 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat_created
 
 -- Create metric tables (previously QuestDB)
 CREATE TABLE metrics (
-  ts TIMESTAMPTZ NOT NULL, user_id TEXT, user_role TEXT,
-  tag TEXT, value DOUBLE PRECISION);
+  ts TIMESTAMPTZ NOT NULL,
+  user_id TEXT,
+  user_role TEXT,
+  tag TEXT,
+  value DOUBLE PRECISION
+  );
+
+CREATE TABLE  word_counts (
+    ts TIMESTAMPZ NOT NULL,
+    lang TEXT,
+    user_id TEXT,
+    user_role TEXT,
+    word TEXT
+);
 
 SELECT create_hypertable('metrics','ts');
 
