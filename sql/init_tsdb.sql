@@ -1,5 +1,7 @@
+-- Activate TimescaleDB extension
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
+-- Create chat and message tables in DB (previously SQLite)
 CREATE TABLE IF NOT EXISTS chats (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -22,3 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_chats_user_updated
     ON chats(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat_created
     ON messages(chat_id, created_at ASC);
+
+
+
+-- Create metric tables (previously QuestDB)
