@@ -58,7 +58,7 @@ from src.metrics.dashboard_queries import (
     top_k_search_terms,
     top_k_topics,
 )
-from src.chat.store import ChatNotFoundError, ChatStore, PostgresChatStore
+from src.chat.store import ChatNotFoundError,PostgresChatStore, PostgresChatStore
 from src.tracing import get_langfuse_handler
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
@@ -83,10 +83,12 @@ async def lifespan(app: FastAPI):
     app.state.reranker = get_reranker()
     app.state.questdb_pool = get_questdb_pool()
     app.state.pg_pool = get_pg_pool()
-    chat_db_path = os.getenv(
-        "CHAT_DB_PATH", os.path.join(os.path.dirname(__file__), "chat_history.sqlite3")
-    )
-    app.state.chat_store = ChatStore(chat_db_path)
+
+    # chat_db_path = os.getenv(
+    #    "CHAT_DB_PATH", os.path.join(os.path.dirname(__file__), "chat_history.sqlite3")
+    # )
+    # app.state.chat_store =PostgresChatStore(chat_db_path)
+
     app.state.tsdb_chat_store = PostgresChatStore(app.state.pg_pool)
 
     # Async periodic jobs
@@ -377,18 +379,18 @@ async def get_auth_sources(auth: AuthenticatedAuth):
 
 @app.get("/chats", response_model=list[ChatSummaryModel])
 async def list_chats(auth: AuthenticatedAuth):
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
     return chat_store.list_chats(auth.sub)
 
 
 @app.post("/chats", response_model=ChatDetailModel)
 async def create_chat(auth: AuthenticatedAuth, payload: CreateChatRequestModel):
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
     return chat_store.create_chat(auth.sub, title=payload.title)
 
 
 def _get_chat_or_404(
-    chat_store: ChatStore, user_id: str, chat_id: str
+    chat_store:PostgresChatStore, user_id: str, chat_id: str
 ) -> dict[str, Any]:
     chat = chat_store.get_chat(user_id, chat_id)
     if chat is None:
@@ -434,13 +436,13 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
 
 @app.get("/chats/{chat_id}", response_model=ChatDetailModel)
 async def get_chat(auth: AuthenticatedAuth, chat_id: str):
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
     return _get_chat_or_404(chat_store, auth.sub, chat_id)
 
 
 @app.delete("/chats/{chat_id}", status_code=204)
 async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
 
     try:
         chat_store.delete_chat(auth.sub, chat_id)
@@ -522,7 +524,7 @@ async def send_chat_message(
     if not content:
         raise HTTPException(status_code=422, detail="content must not be empty")
 
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
     _get_chat_or_404(chat_store, auth.sub, chat_id)
 
     try:
