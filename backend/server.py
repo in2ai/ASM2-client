@@ -58,7 +58,7 @@ from src.metrics.dashboard_queries import (
     top_k_search_terms,
     top_k_topics,
 )
-from src.chat.store import ChatNotFoundError,PostgresChatStore, PostgresChatStore
+from src.chat.store import ChatNotFoundError, ChatStore, PostgresChatStore
 from src.tracing import get_langfuse_handler
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
@@ -81,13 +81,13 @@ async def lifespan(app: FastAPI):
     app.state.llm_with_tools = get_llm_with_tools(app.state.llm)
     app.state.vectorstore = get_vectordb(get_configured_embeddings())
     app.state.reranker = get_reranker()
-    app.state.questdb_pool = get_questdb_pool()
+    # app.state.questdb_pool = get_questdb_pool()
     app.state.pg_pool = get_pg_pool()
 
     # chat_db_path = os.getenv(
     #    "CHAT_DB_PATH", os.path.join(os.path.dirname(__file__), "chat_history.sqlite3")
     # )
-    # app.state.chat_store =PostgresChatStore(chat_db_path)
+    # app.state.chat_store = ChatStore(chat_db_path)
 
     app.state.tsdb_chat_store = PostgresChatStore(app.state.pg_pool)
 
@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
 
-        app.state.questdb_pool.closeall()
+        # app.state.questdb_pool.closeall()
         app.state.pg_pool.closeall()
 
 
@@ -149,10 +149,11 @@ app.add_middleware(
     responses={503: {"description": "Service not ready"}},
 )
 async def healthcheck():
-    questdb_pool = getattr(app.state, "questdb_pool", None)
+    # questdb_pool = getattr(app.state, "questdb_pool", None)
+    pg_pool = getattr(app.state, "pg_pool", None)
     graph = getattr(app.state, "graph", None)
 
-    if questdb_pool is None or graph is None:
+    if pg_pool is None or graph is None:
         raise HTTPException(status_code=503, detail="Service not ready")
 
     return {"status": "ok"}
@@ -166,10 +167,11 @@ def refresh_tokens():
         if os.path.isfile(VDB_LOCK):
             logging.info("Refreshing access tokens...")
 
-            questdb_pool = app.state.questdb_pool
+            # questdb_pool = app.state.questdb_pool
+            pg_pool = app.state.pg_pool
 
             # Get admin authenticated sources and update DB
-            credentials = get_credentials_to_refresh(questdb_pool)
+            credentials = get_credentials_to_refresh(pg_pool)
 
             logging.info("Found %s tokens to refresh", len(credentials))
 
@@ -184,7 +186,7 @@ def refresh_tokens():
 
                 # Add new credentials entry
                 new_creds = source.raw_creds
-                add_credentials(questdb_pool, user_id, source.name, new_creds, is_admin)
+                add_credentials(pg_pool, user_id, source.name, new_creds, is_admin)
 
             logging.info("Finished token refresh job for %s credentials", len(credentials))
 
@@ -202,12 +204,13 @@ def run_vdb_update_once() -> None:
     try:
         start_time = time.time()
 
-        questdb_pool = app.state.questdb_pool
+        # questdb_pool = app.state.questdb_pool
+        pg_pool = app.state.pg_pool
         embeddings = app.state.vectorstore.embeddings
         llm = app.state.llm
 
         # Get admin authenticated sources and update DB
-        sources = get_authenticated_admin_sources(questdb_pool)
+        sources = get_authenticated_admin_sources(pg_pool)
 
         logging.info(
             "Found %s valid admin sources for VDB update: %s",
@@ -239,21 +242,22 @@ def extract_usage_metrics():
     def calc():
         logging.info("Collecting hardware usage metrics...")
 
-        questdb_pool = app.state.questdb_pool
+        # questdb_pool = app.state.questdb_pool
+        pg_pool = app.state.pg_pool
 
         # CPU
         cpu_usage = psutil.cpu_percent(interval=1)
-        insert_metric(questdb_pool, Metrics.CPU_USAGE.value, cpu_usage)
+        insert_metric(pg_pool, Metrics.CPU_USAGE.value, cpu_usage)
 
         # RAM
         mem = psutil.virtual_memory()
-        insert_metric(questdb_pool, Metrics.RAM_USAGE.value, mem.percent)
+        insert_metric(pg_pool, Metrics.RAM_USAGE.value, mem.percent)
 
         # GPU (if available)
         gpus = GPUtil.getGPUs()
 
         if len(gpus) > 0:
-            insert_metric(questdb_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100)
+            insert_metric(pg_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100)
 
     periodic_task(calc, 30)
 
@@ -311,13 +315,14 @@ async def login_source(
         raise HTTPException(500, detail=f"Authentication failed for source {source}")
 
     # Store credentials in database
-    questdb_pool = app.state.questdb_pool
+    # questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
     user_id = auth.sub
     is_admin = has_role(auth, "admin")
     needs_refresh_at, expires_at = source_instance.expiry()
 
     add_credentials(
-        questdb_pool,
+        pg_pool,
         user_id,
         source,
         source_instance.raw_creds,
@@ -327,9 +332,9 @@ async def login_source(
     )
 
 
-def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
-    connected_sources = sorted(get_authenticated_sources(questdb_pool, user_id).keys())
-    selected_sources = get_selected_sources(questdb_pool, user_id)
+def build_sources_status(pg_pool, user_id: str) -> dict[str, Any]:
+    connected_sources = sorted(get_authenticated_sources(pg_pool, user_id).keys())
+    selected_sources = get_selected_sources(pg_pool, user_id)
     connected_set = set(connected_sources)
     selected_connected_sources = sorted(
         source for source in selected_sources if source in connected_set
@@ -344,8 +349,9 @@ def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
 
 @app.get("/sources/status", response_model=SourcesStatusModel, status_code=200)
 async def get_sources_status(auth: AuthenticatedAuth):
-    questdb_pool = app.state.questdb_pool
-    return build_sources_status(questdb_pool, auth.sub)
+    # questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
+    return build_sources_status(pg_pool, auth.sub)
 
 
 @app.put("/sources/selection", response_model=SourcesStatusModel, status_code=200)
@@ -353,8 +359,9 @@ async def update_sources_selection(
     auth: AuthenticatedAuth,
     body: SourceSelectionRequestModel,
 ):
-    questdb_pool = app.state.questdb_pool
-    connected_sources = sorted(get_authenticated_sources(questdb_pool, auth.sub).keys())
+    # questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
+    connected_sources = sorted(get_authenticated_sources(pg_pool, auth.sub).keys())
     connected_set = set(connected_sources)
 
     normalized_sources: list[str] = []
@@ -367,14 +374,15 @@ async def update_sources_selection(
             )
         normalized_sources.append(source)
 
-    set_selected_sources(questdb_pool, auth.sub, normalized_sources)
-    return build_sources_status(questdb_pool, auth.sub)
+    set_selected_sources(pg_pool, auth.sub, normalized_sources)
+    return build_sources_status(pg_pool, auth.sub)
 
 
 @app.get("/authenticated-sources", status_code=200)
 async def get_auth_sources(auth: AuthenticatedAuth):
-    questdb_pool = app.state.questdb_pool
-    return build_sources_status(questdb_pool, auth.sub)
+    # questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
+    return build_sources_status(pg_pool, auth.sub)
 
 
 @app.get("/chats", response_model=list[ChatSummaryModel])
@@ -451,15 +459,16 @@ async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
 
 
 async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
-    questdb_pool = app.state.questdb_pool
-    sources = get_selected_authenticated_sources(questdb_pool, auth.sub)
+    # questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
+    sources = get_selected_authenticated_sources(pg_pool, auth.sub)
     if not sources:
         raise HTTPException(
             status_code=409,
             detail="Connect and select at least one source before chatting",
         )
 
-    register_user_activity(questdb_pool)
+    register_user_activity(pg_pool)
 
     config: dict[str, Any] = {
         "configurable": {
@@ -468,7 +477,8 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "llm_with_tools": app.state.llm_with_tools,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
-            "questdb_pool": questdb_pool,
+            # "questdb_pool": questdb_pool,
+            "pg_pool": pg_pool,
             "sources": sources,
         }
     }
@@ -484,7 +494,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "langfuse_tags": ["asm2", "chat"],
         }
 
-    with TimedMetric(questdb_pool, Metrics.LLM_RESPONSE_TIME.value):
+    with TimedMetric(pg_pool, Metrics.LLM_RESPONSE_TIME.value):
         try:
             result = await app.state.graph.ainvoke(
                 {"messages": [HumanMessage(content=query)]}, config
@@ -506,7 +516,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     if search_results is not None:
         available_sources = search_results['sources']
 
-    record_token_usage_metrics(questdb_pool, messages)
+    record_token_usage_metrics(pg_pool, messages)
     return {
         "answer": str(messages[-1].content),
         "detected_lang": str(result.get("detected_lang", "es")),
@@ -605,18 +615,18 @@ def _fetch_shared_metrics_data(
     }
 
 
-def record_token_usage_metrics(questdb_pool, messages: list[Any]) -> None:
+def record_token_usage_metrics(pg_pool, messages: list[Any]) -> None:
     try:
         for msg in messages:
             if isinstance(msg, AIMessage) and msg.usage_metadata:
                 usage = msg.usage_metadata
                 insert_metric(
-                    questdb_pool,
+                    pg_pool,
                     Metrics.NUM_LLM_TOKENS_IN.value,
                     usage.get("input_tokens", 0),
                 )
                 insert_metric(
-                    questdb_pool,
+                    pg_pool,
                     Metrics.NUM_LLM_TOKENS_OUT.value,
                     usage.get("output_tokens", 0),
                 )
@@ -640,12 +650,13 @@ async def metrics_dashboard(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    questdb_pool = app.state.questdb_pool
+    # questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
-    shared = _fetch_shared_metrics_data(questdb_pool, params, 10, 10)
+    shared = _fetch_shared_metrics_data(pg_pool, params, 10, 10)
 
-    metrics_count = count_metrics(questdb_pool, params)
-    metrics_by_tag = get_metrics_by_tag(questdb_pool, params)
+    metrics_count = count_metrics(pg_pool, params)
+    metrics_by_tag = get_metrics_by_tag(pg_pool, params)
 
     return {
         "metrics": {
@@ -686,15 +697,16 @@ async def metrics_stats(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    questdb_pool = app.state.questdb_pool
+    # questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
 
     mean_response_time = mean_metric(
-        questdb_pool, Metrics.LLM_RESPONSE_TIME.value, params
+        pg_pool, Metrics.LLM_RESPONSE_TIME.value, params
     )
-    session_length = mean_session_length(questdb_pool, params, 10)
-    unique_users_count = get_unique_users(questdb_pool, params)
-    total_events = get_total_activity_events(questdb_pool, params)
+    session_length = mean_session_length(pg_pool, params, 10)
+    unique_users_count = get_unique_users(pg_pool, params)
+    total_events = get_total_activity_events(pg_pool, params)
 
     return {
         "totalMetricsRecords": total_events,
@@ -715,9 +727,10 @@ async def metrics_export(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    questdb_pool = app.state.questdb_pool
+    # questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
-    shared = _fetch_shared_metrics_data(questdb_pool, params, 100, 100)
+    shared = _fetch_shared_metrics_data(pg_pool, params, 100, 100)
 
     token_usage = shared["token_usage"]
     total_tokens = (

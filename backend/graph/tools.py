@@ -27,7 +27,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     vectorstore = configurable["vectorstore"]
     sources = configurable["sources"]
     reranker = configurable["reranker"]
-    pool = configurable.get("questdb_pool")
+    # pool = configurable.get("questdb_pool")
+    pool = configurable.get("pg_pool")
 
     # Perform VDB search
     try:
