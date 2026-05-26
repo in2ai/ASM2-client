@@ -159,7 +159,7 @@ def mean_session_length(
     params: MetricsQueryParams,
     session_gap_minutes: int = 10,
 ) -> float | None:
-    gap_micros = session_gap_minutes * 60 * 1000 * 1000
+    gap_seconds = session_gap_minutes * 60
     conditions, query_params = _build_filter_conditions(
         params,
         include_user_id=True,
@@ -180,12 +180,12 @@ def mean_session_length(
         SELECT
             user_id,
             ts,
-            SUM(CASE WHEN prev_ts IS NULL OR (ts - prev_ts) >= {gap_micros} THEN 1 ELSE 0 END)
+            SUM(CASE WHEN prev_ts IS NULL OR EXTRACT(EPOCH FROM (ts - prev_ts)) >= {gap_seconds} THEN 1 ELSE 0 END)
                 OVER (PARTITION BY user_id ORDER BY ts ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS session_id
         FROM user_events
     )
     SELECT
-        AVG(session_length) / 1000000.0 AS mean_session_seconds
+        AVG(EXTRACT(EPOCH FROM session_length)) AS mean_session_seconds
     FROM (
         SELECT
             user_id,
