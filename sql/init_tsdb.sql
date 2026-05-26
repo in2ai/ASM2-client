@@ -28,41 +28,41 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat_created
 
 -- Create metric tables (previously QuestDB)
 CREATE TABLE IF NOT EXISTS metrics (
-  ts TIMESTAMPZ NOT NULL,
-  user_id TEXT,
-  user_role TEXT,
-  tag TEXT,
-  value DOUBLE PRECISION
+    ts TIMESTAMPTZ NOT NULL,
+    user_id TEXT,
+    user_role TEXT,
+    tag TEXT,
+    value DOUBLE PRECISION
   );
 
 CREATE TABLE IF NOT EXISTS word_counts (
-    ts TIMESTAMPZ NOT NULL,
+    ts TIMESTAMPTZ NOT NULL,
     lang TEXT,
     user_id TEXT,
     user_role TEXT,
     word TEXT
-);
+    );
 
 CREATE TABLE IF NOT EXISTS topic_counts (
-    ts TIMESTAMPZ NOT NULL,
+    ts TIMESTAMPTZ NOT NULL,
     user_id TEXT,
     user_role TEXT,
     word TEXT,
     topic_id TEXT
-);
+    );
 
 CREATE TABLE IF NOT EXISTS topic_intl (
-    ts TIMESTAMPZ NOT NULL,
+    ts TIMESTAMPTZ NOT NULL,
     topic_id TEXT,
     word TEXT,
     lang TEXT
-);
+    );
 
 CREATE TABLE IF NOT EXISTS user_activity (
-    ts TIMESTAMPZ NOT NULL,
+    ts TIMESTAMPTZ NOT NULL,
     user_id TEXT,
     user_role TEXT
-);
+    );
 
 SELECT create_hypertable('metrics', 'ts', if_not_exists => TRUE);
 SELECT create_hypertable('word_counts', 'ts', if_not_exists => TRUE);
@@ -80,7 +80,7 @@ SELECT add_compression_policy('metrics', INTERVAL '7 days');
 SELECT add_compression_policy('word_counts', INTERVAL '7 days');
 SELECT add_compression_policy('topic_counts', INTERVAL '7 days');
 SELECT add_compression_policy('topic_intl', INTERVAL '7 days');
-SELECT add_compression_policy('user_activity', INTERVAL '7 days');;
+SELECT add_compression_policy('user_activity', INTERVAL '7 days');
 
 -- (Optional) auto-delete chunks older than 180 days. Disabled
 -- SELECT add_retention_policy('metrics', INTERVAL '180 days');
