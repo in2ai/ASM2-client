@@ -84,3 +84,26 @@ SELECT add_compression_policy('user_activity', INTERVAL '7 days');
 
 -- (Optional) auto-delete chunks older than 180 days. Disabled
 -- SELECT add_retention_policy('metrics', INTERVAL '180 days');
+
+-- Create credential tables
+
+CREATE TABLE IF NOT EXISTS credentials (
+    user_id TEXT,
+    source TEXT,
+    credentials TEXT,
+    issued_at TIMESTAMPTZ NOT NULL,
+    needs_refresh_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    is_admin BOOLEAN
+    );
+
+CREATE TABLE IF NOT EXISTS source_preferences (
+    user_id TEXT,
+    selected_sources TEXT,
+    updated_at TIMESTAMPTZ NOT NULL
+    );
+
+CREATE INDEX IF NOT EXISTS idx_credentials_user_source_issued
+    ON credentials (user_id, source, issued_at DESC);
+CREATE INDEX IF NOT EXISTS idx_source_preferences_user_updated
+    ON source_preferences (user_id, updated_at DESC);
