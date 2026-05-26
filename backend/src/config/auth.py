@@ -49,12 +49,12 @@ def add_credentials(
 
 def get_user_credentials(pool: ThreadedConnectionPool, user_id: str):
     query = """
-    SELECT source, credentials, issued_at, is_admin
+    SELECT DISTINCT ON (user_id, source) source, credentials, issued_at, is_admin
     FROM credentials
-    WHERE 
+    WHERE
         user_id = %s
         AND (expires_at IS NULL OR expires_at > NOW())
-    LATEST ON issued_at PARTITION BY user_id, source
+    ORDER BY user_id, source, issued_at DESC
     """
 
     return execute_query(pool, query, (user_id,))
@@ -62,12 +62,12 @@ def get_user_credentials(pool: ThreadedConnectionPool, user_id: str):
 
 def get_admin_credentials(pool: ThreadedConnectionPool):
     query = """
-    SELECT source, credentials, issued_at, is_admin
+    SELECT DISTINCT ON (user_id, source) source, credentials, issued_at, is_admin
     FROM credentials
-    WHERE 
+    WHERE
         is_admin = true
         AND (expires_at IS NULL OR expires_at > NOW())
-    LATEST ON issued_at PARTITION BY user_id, source
+    ORDER BY user_id, source, issued_at DESC
     """
 
     return execute_query(pool, query)
@@ -75,13 +75,13 @@ def get_admin_credentials(pool: ThreadedConnectionPool):
 
 def get_credentials_to_refresh(pool: ThreadedConnectionPool):
     query = """
-    SELECT user_id, source, credentials, is_admin
+    SELECT DISTINCT ON (user_id, source) user_id, source, credentials, is_admin
     FROM credentials
-    WHERE 
+    WHERE
         (expires_at IS NULL OR expires_at > NOW())
         AND needs_refresh_at IS NOT NULL
         AND needs_refresh_at < NOW()
-    LATEST ON issued_at PARTITION BY user_id, source
+    ORDER BY user_id, source, issued_at DESC
     """
 
     return execute_query(pool, query)
@@ -98,10 +98,10 @@ def set_selected_sources(pool: ThreadedConnectionPool, user_id: str, sources: li
 
 def get_selected_sources(pool: ThreadedConnectionPool, user_id: str) -> list[str]:
     query = """
-    SELECT selected_sources
+    SELECT DISTINCT ON (user_id) selected_sources
     FROM source_preferences
     WHERE user_id = %s
-    LATEST ON updated_at PARTITION BY user_id
+    ORDER BY user_id, updated_at DESC
     """
 
     try:
