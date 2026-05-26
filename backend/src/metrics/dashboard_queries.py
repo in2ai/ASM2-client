@@ -261,12 +261,12 @@ def get_activity_by_day(
     )
     query = f"""
     SELECT
-      to_str(ts, 'yyyy-MM-dd') as date,
+      to_char(ts, 'YYYY-MM-DD') as date,
       COUNT(*) as event_count,
       COUNT(DISTINCT user_id) as unique_users
     FROM user_activity
     {_append_and_conditions("WHERE 1=1", conditions)}
-    GROUP BY to_str(ts, 'yyyy-MM-dd')
+    GROUP BY to_char(ts, 'YYYY-MM-DD')
     ORDER BY date DESC
     LIMIT 30
     """
@@ -316,12 +316,12 @@ def get_response_time_trend(
     conditions, query_params = _build_filter_conditions(params)
     query = f"""
     SELECT
-      to_str(ts, 'yyyy-MM-dd') as date,
+      to_char(ts, 'YYYY-MM-DD') as date,
       AVG(CASE WHEN tag = 'LLM_RESPONSE_TIME' THEN value ELSE NULL END) as llm_response_time,
       AVG(CASE WHEN tag = 'DOC_RESPONSE_TIME' THEN value ELSE NULL END) as doc_response_time
     FROM metrics
     {_append_and_conditions("WHERE tag IN ('LLM_RESPONSE_TIME', 'DOC_RESPONSE_TIME')", conditions)}
-    GROUP BY to_str(ts, 'yyyy-MM-dd')
+    GROUP BY to_char(ts, 'YYYY-MM-DD')
     ORDER BY date DESC
     LIMIT 30
     """
