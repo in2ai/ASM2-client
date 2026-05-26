@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from psycopg_pool import AsyncConnectionPool
 
 from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
@@ -84,10 +85,9 @@ async def lifespan(app: FastAPI):
     # app.state.questdb_pool = get_questdb_pool()
     app.state.pg_pool = get_pg_pool()
 
-    # chat_db_path = os.getenv(
-    #    "CHAT_DB_PATH", os.path.join(os.path.dirname(__file__), "chat_history.sqlite3")
-    # )
-    # app.state.chat_store = ChatStore(chat_db_path)
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    app.state.async_pg_pool = AsyncConnectionPool(DATABASE_URL, open=False)
+    await app.state.async_pg_pool.open()
 
     app.state.tsdb_chat_store = PostgresChatStore(app.state.pg_pool)
 
@@ -98,7 +98,9 @@ async def lifespan(app: FastAPI):
         refresh_tokens,  # Refresh all valid access tokens near expiration
     ]
 
-    app.state.graph = build_graph(get_checkpointer())
+    graph_working_memory_saver = get_checkpointer(app.state.async_pg_pool)
+    await graph_working_memory_saver.setup()
+    app.state.graph = build_graph(graph_working_memory_saver)
 
     loop = asyncio.get_running_loop()
     app.state.periodic_tasks = [loop.create_task(asyncio.to_thread(j)) for j in jobs]
@@ -119,6 +121,7 @@ async def lifespan(app: FastAPI):
 
         # app.state.questdb_pool.closeall()
         app.state.pg_pool.closeall()
+        await app.state.async_pg_pool.close()
 
 
 setup_logging()

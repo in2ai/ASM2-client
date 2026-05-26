@@ -1,5 +1,5 @@
 from langchain_core.messages import AIMessage
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -9,8 +9,8 @@ from .nodes import detect_language_node, summarize_conversation
 from .state import State
 
 
-def get_checkpointer():
-    return MemorySaver()
+def get_checkpointer(pool):
+    return AsyncPostgresSaver(pool)
 
 
 def should_continue(state: State):
