@@ -27,15 +27,15 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat_created
 
 
 -- Create metric tables (previously QuestDB)
-CREATE TABLE metrics (
-  ts TIMESTAMPTZ NOT NULL,
+CREATE TABLE IF NOT EXISTS metrics (
+  ts TIMESTAMPZ NOT NULL,
   user_id TEXT,
   user_role TEXT,
   tag TEXT,
   value DOUBLE PRECISION
   );
 
-CREATE TABLE  word_counts (
+CREATE TABLE IF NOT EXISTS word_counts (
     ts TIMESTAMPZ NOT NULL,
     lang TEXT,
     user_id TEXT,
@@ -43,12 +43,44 @@ CREATE TABLE  word_counts (
     word TEXT
 );
 
-SELECT create_hypertable('metrics','ts');
+CREATE TABLE IF NOT EXISTS topic_counts (
+    ts TIMESTAMPZ NOT NULL,
+    user_id TEXT,
+    user_role TEXT,
+    word TEXT,
+    topic_id TEXT
+);
 
-ALTER TABLE metrics SET (timescaledb.compress,
-  timescaledb.compress_segmentby='tag,user_id');
+CREATE TABLE IF NOT EXISTS topic_intl (
+    ts TIMESTAMPZ NOT NULL,
+    topic_id TEXT,
+    word TEXT,
+    lang TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_activity (
+    ts TIMESTAMPZ NOT NULL,
+    user_id TEXT,
+    user_role TEXT
+);
+
+SELECT create_hypertable('metrics', 'ts', if_not_exists => TRUE);
+SELECT create_hypertable('word_counts', 'ts', if_not_exists => TRUE);
+SELECT create_hypertable('topic_counts','ts', if_not_exists => TRUE);
+SELECT create_hypertable('topic_intl', 'ts', if_not_exists => TRUE);
+SELECT create_hypertable('user_activity', 'ts', if_not_exists => TRUE);
+
+ALTER TABLE metrics SET (timescaledb.compress, timescaledb.compress_segmentby='tag,user_id');
+ALTER TABLE word_counts SET (timescaledb.compress, timescaledb.compress_segmentby='lang,user_id');
+ALTER TABLE topic_counts SET (timescaledb.compress, timescaledb.compress_segmentby='topic_id,user_id');
+ALTER TABLE topic_intl SET (timescaledb.compress, timescaledb.compress_segmentby='topic_id,lang');
+ALTER TABLE user_activity SET (timescaledb.compress, timescaledb.compress_segmentby='user_id');
 
 SELECT add_compression_policy('metrics', INTERVAL '7 days');
+SELECT add_compression_policy('word_counts', INTERVAL '7 days');
+SELECT add_compression_policy('topic_counts', INTERVAL '7 days');
+SELECT add_compression_policy('topic_intl', INTERVAL '7 days');
+SELECT add_compression_policy('user_activity', INTERVAL '7 days');;
 
 -- (Optional) auto-delete chunks older than 180 days. Disabled
 -- SELECT add_retention_policy('metrics', INTERVAL '180 days');
