@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 from typing import Annotated, Any
 
@@ -155,7 +157,7 @@ class ChatMessageModel(BaseModel):
     chat_id: str
     role: str
     content: str
-    created_at: str
+    created_at: datetime
     status: str | None = None
     metadata: dict[str, Any] | None = None
 
@@ -163,8 +165,8 @@ class ChatMessageModel(BaseModel):
 class ChatSummaryModel(BaseModel):
     id: str
     title: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
     last_message_preview: str | None = None
 
 
