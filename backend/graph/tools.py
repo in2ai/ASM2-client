@@ -28,10 +28,11 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     sources = configurable["sources"]
     reranker = configurable["reranker"]
     pool = configurable.get("questdb_pool")
+    metrics_actor = configurable.get("metrics_actor")
 
     # Perform VDB search
     try:
-        with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
+        with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value, actor=metrics_actor):
             chunks, lang_code = retrieve_and_rerank(
                 query, vectorstore, reranker, sources
             )
@@ -51,8 +52,11 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     available_sources = get_chunk_sources(chunks, sources)
 
     # Send usage metrics
-    try:
-        insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
+    if pool is not None and metrics_actor is not None:
+        try:
+            insert_metric(
+                pool, Metrics.NUM_DOCS_RAG.value, len(chunks), actor=metrics_actor
+            )
 
         except Exception:
             logging.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
