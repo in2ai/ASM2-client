@@ -183,7 +183,13 @@
     "topTopics": {
       "title": "Most frequent topics",
       "hint": "Groups queries by detected topic. Helps understand which knowledge areas are consulted most and where to prioritize content improvements.",
-      "description": "Top topics by frequency"
+      "description": "Top topics by frequency",
+      "filters": {
+        "ariaLabel": "Filter top topics by language",
+        "placeholder": "Select language",
+        "loading": "Loading top topics",
+        "empty": "No top topics found for {language}"
+      }
     }
   },
   "ChartHint": {
