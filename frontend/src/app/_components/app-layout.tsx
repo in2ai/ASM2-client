@@ -70,7 +70,7 @@ export function AppLayout({
         {mobileMenuOpen && (
           <button
             type="button"
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 cursor-pointer z-40 bg-black/20 backdrop-blur-sm lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
             aria-label={t('closeSidebarMenu')}
           />
