@@ -349,9 +349,10 @@ function DriveSourceCard({
               {t('sources.connectDrive')}
             </Button>
           ) : (
-            <label className="border-border bg-background flex min-h-10 items-center gap-3 rounded-2xl border px-3 py-2 text-sm">
+            <label className="border-border bg-background flex min-h-10 cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2 text-sm">
               <input
                 type="checkbox"
+                className="cursor-pointer"
                 aria-label={t('sources.selectForChat')}
                 checked={optimisticSelected}
                 disabled={selectionPending}
