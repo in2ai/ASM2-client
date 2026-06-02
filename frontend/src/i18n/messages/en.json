@@ -171,7 +171,14 @@
     "topWords": {
       "title": "Top searched words",
       "hint": "Shows the keywords users mention most often in their queries. Helps identify high-interest topics and potential knowledge gaps.",
-      "description": "Top words by frequency"
+      "description": "Top words by frequency",
+      "filters": {
+        "ariaLabel": "Filter top searched words by language",
+        "placeholder": "Select language",
+        "allLanguages": "All languages",
+        "loading": "Loading top searched words",
+        "empty": "No top searched words found for {language}"
+      }
     },
     "topTopics": {
       "title": "Most frequent topics",
