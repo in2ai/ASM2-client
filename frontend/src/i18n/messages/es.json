@@ -183,7 +183,13 @@
     "topTopics": {
       "title": "Temas más frecuentes",
       "hint": "Agrupa las consultas por temática detectada automáticamente. Permite entender que áreas del conocimiento son más consultadas y priorizar la mejora del contenido.",
-      "description": "Top temas por frecuencia"
+      "description": "Top temas por frecuencia",
+      "filters": {
+        "ariaLabel": "Filtrar temas más frecuentes por idioma",
+        "placeholder": "Seleccionar idioma",
+        "loading": "Cargando temas más frecuentes",
+        "empty": "No se encontraron temas más frecuentes para {language}"
+      }
     }
   },
   "ChartHint": {

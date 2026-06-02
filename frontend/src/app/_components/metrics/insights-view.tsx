@@ -30,23 +30,20 @@ import {
   createInsightsTopWordsChartConfig,
   createInsightsTopicsChartConfig,
 } from './constants'
-import { type MetricsResponse } from './types'
 
-type TopWordsLanguageFilter = AppLocale | 'all'
+type LanguageFilter = AppLocale | 'all'
 
 interface InsightsViewProps {
-  metrics: MetricsResponse
   dateRange: DateRange | undefined
 }
 
-export function InsightsView({
-  metrics,
-  dateRange,
-}: Readonly<InsightsViewProps>) {
+export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
   const t = useTranslations('InsightsView')
   const languageSwitcherT = useTranslations('LanguageSwitcher')
   const [topWordsLanguage, setTopWordsLanguage] =
-    useState<TopWordsLanguageFilter>('all')
+    useState<LanguageFilter>('all')
+  const [topTopicsLanguage, setTopTopicsLanguage] =
+    useState<LanguageFilter>('all')
 
   const {
     state: { visibility },
@@ -65,7 +62,6 @@ export function InsightsView({
       }),
     [t],
   )
-  const topTopics = metrics.top_topics
 
   const topWordsQuery = api.metrics.get.useQuery(
     {
@@ -83,7 +79,23 @@ export function InsightsView({
   const isTopWordsPending = topWordsQuery.isPending
   const isTopWordsUpdating = topWordsQuery.isFetching && !isTopWordsPending
 
-  const topWordsLanguageLabels: Record<TopWordsLanguageFilter, string> = {
+  const topTopicsQuery = api.metrics.get.useQuery(
+    {
+      startDate: dateRange?.from,
+      endDate: dateRange?.to,
+      lang: topTopicsLanguage === 'all' ? undefined : topTopicsLanguage,
+    },
+    {
+      refetchInterval: 60_000,
+      staleTime: 30_000,
+    },
+  )
+
+  const topTopics = topTopicsQuery.data?.top_topics ?? []
+  const isTopTopicsPending = topTopicsQuery.isPending
+  const isTopTopicsUpdating = topTopicsQuery.isFetching && !isTopTopicsPending
+
+  const languageLabels: Record<LanguageFilter, string> = {
     all: t('topWords.filters.allLanguages'),
     es: languageSwitcherT('spanish'),
     en: languageSwitcherT('english'),
@@ -111,7 +123,9 @@ export function InsightsView({
 
   const hasNoData =
     topWordsLanguage === 'all' &&
+    topTopicsLanguage === 'all' &&
     !isTopWordsPending &&
+    !isTopTopicsPending &&
     topWords.length === 0 &&
     topTopics.length === 0
 
@@ -148,7 +162,7 @@ export function InsightsView({
                   <Select
                     value={topWordsLanguage}
                     onValueChange={(value) =>
-                      setTopWordsLanguage(value as TopWordsLanguageFilter)
+                      setTopWordsLanguage(value as LanguageFilter)
                     }
                   >
                     <SelectTrigger
@@ -163,18 +177,10 @@ export function InsightsView({
                       </div>
                     </SelectTrigger>
                     <SelectContent align="end">
-                      <SelectItem value="all">
-                        {topWordsLanguageLabels.all}
-                      </SelectItem>
-                      <SelectItem value="es">
-                        {topWordsLanguageLabels.es}
-                      </SelectItem>
-                      <SelectItem value="en">
-                        {topWordsLanguageLabels.en}
-                      </SelectItem>
-                      <SelectItem value="gl">
-                        {topWordsLanguageLabels.gl}
-                      </SelectItem>
+                      <SelectItem value="all">{languageLabels.all}</SelectItem>
+                      <SelectItem value="es">{languageLabels.es}</SelectItem>
+                      <SelectItem value="en">{languageLabels.en}</SelectItem>
+                      <SelectItem value="gl">{languageLabels.gl}</SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="bg-primary/10 text-primary rounded-xl p-2.5">
@@ -234,7 +240,7 @@ export function InsightsView({
                 ) : (
                   <div className="text-muted-foreground flex h-75 items-center justify-center px-6 text-center text-sm">
                     {t('topWords.filters.empty', {
-                      language: topWordsLanguageLabels[topWordsLanguage],
+                      language: languageLabels[topWordsLanguage],
                     })}
                   </div>
                 )}
@@ -242,7 +248,7 @@ export function InsightsView({
             </Card>
           )}
 
-          {visibility.topicsBarChart && topicsBarData.length > 0 && (
+          {visibility.topicsBarChart && (
             <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
@@ -254,81 +260,124 @@ export function InsightsView({
                     {t('topTopics.description')}
                   </CardDescription>
                 </div>
-                <div className="bg-primary/10 text-primary rounded-xl p-2.5">
-                  <TrendingUp size={18} />
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={topTopicsLanguage}
+                    onValueChange={(value) =>
+                      setTopTopicsLanguage(value as LanguageFilter)
+                    }
+                  >
+                    <SelectTrigger
+                      className="bg-background/60 border-border/60 h-10 min-w-44 rounded-xl"
+                      aria-label={t('topTopics.filters.ariaLabel')}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Languages className="text-muted-foreground h-4 w-4" />
+                        <SelectValue
+                          placeholder={t('topTopics.filters.placeholder')}
+                        />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      <SelectItem value="all">{languageLabels.all}</SelectItem>
+                      <SelectItem value="es">{languageLabels.es}</SelectItem>
+                      <SelectItem value="en">{languageLabels.en}</SelectItem>
+                      <SelectItem value="gl">{languageLabels.gl}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                    {isTopTopicsPending || isTopTopicsUpdating ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <TrendingUp size={18} />
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="overflow-hidden p-0 pt-4">
-                <ChartContainer
-                  config={insightsTopicsChartConfig}
-                  className="h-100 w-full"
-                >
-                  <BarChart
-                    data={topicsBarData}
-                    layout="vertical"
-                    margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
+                {isTopTopicsPending ? (
+                  <div className="text-muted-foreground flex h-100 items-center justify-center gap-3 text-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{t('topTopics.filters.loading')}</span>
+                  </div>
+                ) : topicsBarData.length > 0 ? (
+                  <ChartContainer
+                    config={insightsTopicsChartConfig}
+                    className="h-100 w-full"
                   >
-                    <CartesianGrid
-                      horizontal={false}
-                      strokeDasharray="3 3"
-                      stroke="hsl(var(--border))"
-                      opacity={0.5}
-                    />
-                    <XAxis
-                      type="number"
-                      tickLine={false}
-                      axisLine={false}
-                      style={{ fontSize: 10 }}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="topic"
-                      tickLine={false}
-                      axisLine={false}
-                      width={180}
-                      style={{ fontSize: 11 }}
-                      tick={(props: {
-                        x: number
-                        y: number
-                        payload: { value: string }
-                      }) => (
-                        <text
-                          x={props.x}
-                          y={props.y}
-                          dy={4}
-                          textAnchor="end"
-                          fill="currentColor"
-                          style={{ fontSize: 11 }}
-                        >
-                          <title>{props.payload.value}</title>
-                          {props.payload.value.length > 28
-                            ? props.payload.value.substring(0, 28) + '...'
-                            : props.payload.value}
-                        </text>
-                      )}
-                    />
-                    <ChartTooltip
-                      content={
-                        <ChartTooltipContent
-                          labelFormatter={(_, payload) => {
-                            const data = payload?.[0]?.payload as
-                              | { fullTopic?: string }
-                              | undefined
-                            return data?.fullTopic ?? ''
-                          }}
-                          hideIndicator
-                          className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
-                        />
-                      }
-                    />
-                    <Bar
-                      dataKey="count"
-                      fill="var(--color-count)"
-                      radius={[0, 6, 6, 0]}
-                      barSize={24}
-                    />
-                  </BarChart>
-                </ChartContainer>
+                    <BarChart
+                      data={topicsBarData}
+                      layout="vertical"
+                      margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        horizontal={false}
+                        strokeDasharray="3 3"
+                        stroke="hsl(var(--border))"
+                        opacity={0.5}
+                      />
+                      <XAxis
+                        type="number"
+                        tickLine={false}
+                        axisLine={false}
+                        style={{ fontSize: 10 }}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="topic"
+                        tickLine={false}
+                        axisLine={false}
+                        width={180}
+                        style={{ fontSize: 11 }}
+                        tick={(props: {
+                          x: number
+                          y: number
+                          payload: { value: string }
+                        }) => (
+                          <text
+                            x={props.x}
+                            y={props.y}
+                            dy={4}
+                            textAnchor="end"
+                            fill="currentColor"
+                            style={{ fontSize: 11 }}
+                          >
+                            <title>{props.payload.value}</title>
+                            {props.payload.value.length > 28
+                              ? props.payload.value.substring(0, 28) + '...'
+                              : props.payload.value}
+                          </text>
+                        )}
+                      />
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            labelFormatter={(_, payload) => {
+                              const data = payload?.[0]?.payload as
+                                | { fullTopic?: string }
+                                | undefined
+                              return data?.fullTopic ?? ''
+                            }}
+                            hideIndicator
+                            className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
+                          />
+                        }
+                      />
+                      <Bar
+                        dataKey="count"
+                        fill="var(--color-count)"
+                        radius={[0, 6, 6, 0]}
+                        barSize={24}
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="text-muted-foreground flex h-100 items-center justify-center px-6 text-center text-sm">
+                    {t('topTopics.filters.empty', {
+                      language: languageLabels[topTopicsLanguage],
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

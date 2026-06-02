@@ -73,9 +73,7 @@ function renderMetricsView(
       {view === 'overview' && <OverviewHighlights metrics={userMetrics} />}
       {view === 'usage' && <UsageMetrics metrics={userMetrics} />}
       {view === 'rag-quality' && <RAGQualityMetrics metrics={userMetrics} />}
-      {view === 'insights' && (
-        <InsightsView metrics={userMetrics} dateRange={dateRange} />
-      )}
+      {view === 'insights' && <InsightsView dateRange={dateRange} />}
     </Suspense>
   )
 }
