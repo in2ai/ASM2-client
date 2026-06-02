@@ -171,7 +171,14 @@
     "topWords": {
       "title": "Palabras más buscadas",
       "hint": "Muestra las palabras clave que los usuarios mencionan con más frecuencia en sus consultas. Ayuda a identificar los temas de mayor interés y posibles lagunas de información.",
-      "description": "Top palabras por frecuencia"
+      "description": "Top palabras por frecuencia",
+      "filters": {
+        "ariaLabel": "Filtrar palabras más buscadas por idioma",
+        "placeholder": "Seleccionar idioma",
+        "allLanguages": "Todos los idiomas",
+        "loading": "Cargando palabras más buscadas",
+        "empty": "No se encontraron palabras más buscadas para {language}"
+      }
     },
     "topTopics": {
       "title": "Temas más frecuentes",
