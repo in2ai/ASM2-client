@@ -160,10 +160,10 @@ export function AppLayout({
             </div>
 
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <AreaSwitcher activeArea="dashboard" user={user} />
               {view !== 'overview' ? (
                 <ChartVisibilityControls view={view} />
               ) : null}
+              <AreaSwitcher activeArea="dashboard" user={user} />
               <div className="bg-border mx-1 hidden h-6 w-px sm:block" />
               <UserMenu user={user} showPreferences />
             </div>
