@@ -36,7 +36,6 @@ interface ConversationViewProps {
   onComposerChange: (value: string) => void
   onSendMessage: () => void
   pendingMessage?: ChatMessage | null
-  title: string
 }
 
 export function ConversationView({
@@ -57,7 +56,6 @@ export function ConversationView({
   onComposerChange,
   onSendMessage,
   pendingMessage,
-  title,
 }: Readonly<ConversationViewProps>) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const messages = useMemo(
@@ -73,29 +71,24 @@ export function ConversationView({
   }, [messages, isSending])
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b px-4 py-4 sm:px-6">
-        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {chat?.title ?? emptyDescription}
-        </p>
-      </div>
-
-      <div className="bg-muted/10 min-h-0 flex-1 overflow-hidden">
+    <div className="bg-muted/5 flex h-full flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {isLoading ? <ChatConversationLoadingState /> : null}
 
         {!isLoading && messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-            <div className="bg-primary/10 mb-4 rounded-full p-3">
-              <Bot className="text-primary h-7 w-7" />
+            <div className="bg-primary/10 ring-primary/5 mb-5 rounded-2xl p-4 ring-8">
+              <Bot className="text-primary h-8 w-8" />
             </div>
-            <p className="text-xl font-semibold tracking-tight">{emptyTitle}</p>
-            <p className="text-muted-foreground mt-2 max-w-lg text-sm">
+            <p className="text-2xl font-semibold tracking-tight">
+              {emptyTitle}
+            </p>
+            <p className="text-muted-foreground mt-3 max-w-md text-sm leading-relaxed">
               {emptyDescription}
             </p>
             {emptyPrimaryActionLabel && onEmptyPrimaryAction ? (
               <Button
-                className="mt-5 rounded-2xl"
+                className="mt-6 rounded-2xl"
                 onClick={onEmptyPrimaryAction}
               >
                 {emptyPrimaryActionLabel}
@@ -105,8 +98,8 @@ export function ConversationView({
         ) : null}
 
         {!isLoading && messages.length > 0 ? (
-          <ScrollArea className="h-full px-4 py-6 sm:px-6">
-            <div className="space-y-4">
+          <ScrollArea className="h-full px-4 py-8 sm:px-6">
+            <div className="mx-auto w-full max-w-3xl space-y-6">
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}
@@ -117,11 +110,9 @@ export function ConversationView({
               ))}
 
               {isSending ? (
-                <div className="flex items-center gap-3 px-1 text-sm">
+                <div className="text-muted-foreground flex items-center gap-3 px-1 text-sm">
                   <Loader2 className="text-primary h-4 w-4 animate-spin" />
-                  <span className="text-muted-foreground">
-                    {messageLabels.sending}
-                  </span>
+                  <span>{messageLabels.sending}</span>
                 </div>
               ) : null}
 
@@ -131,48 +122,52 @@ export function ConversationView({
         ) : null}
       </div>
 
-      <div className="border-t bg-background px-4 py-4 sm:px-6">
-        {errorMessage ? (
-          <div className="mb-3 rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-300">
-            {errorMessage}
-          </div>
-        ) : null}
-        {!errorMessage && composerHint ? (
-          <div className="text-muted-foreground mb-3 text-sm">
-            {composerHint}
-          </div>
-        ) : null}
+      <div className="px-4 pt-2 pb-6 sm:px-6">
+        <div className="mx-auto w-full max-w-3xl">
+          {errorMessage ? (
+            <div className="mb-3 rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+              {errorMessage}
+            </div>
+          ) : null}
+          {!errorMessage && composerHint ? (
+            <div className="text-muted-foreground mb-3 px-1 text-sm">
+              {composerHint}
+            </div>
+          ) : null}
 
-        <div className="rounded-3xl border bg-card p-3 shadow-sm">
-          <Textarea
-            disabled={composerDisabled}
-            value={composerValue}
-            onChange={(event) => onComposerChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (composerDisabled) {
-                return
-              }
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                onSendMessage()
-              }
-            }}
-            placeholder={composerPlaceholder}
-            className="min-h-24 resize-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
-          />
-          <div className="mt-3 flex items-center justify-end">
-            <Button
-              size="icon"
-              className="h-11 w-11 rounded-full"
-              disabled={composerDisabled || !composerValue.trim() || isSending}
-              onClick={onSendMessage}
-            >
-              {isSending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowUp className="h-4 w-4" />
-              )}
-            </Button>
+          <div className="bg-card focus-within:ring-primary/30 focus-within:border-primary/40 rounded-3xl border p-3 shadow-lg transition-shadow focus-within:ring-2">
+            <Textarea
+              disabled={composerDisabled}
+              value={composerValue}
+              onChange={(event) => onComposerChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (composerDisabled) {
+                  return
+                }
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  onSendMessage()
+                }
+              }}
+              placeholder={composerPlaceholder}
+              className="max-h-48 min-h-20 resize-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
+            />
+            <div className="mt-2 flex items-center justify-end px-1">
+              <Button
+                size="icon"
+                className="h-10 w-10 rounded-full"
+                disabled={
+                  composerDisabled || !composerValue.trim() || isSending
+                }
+                onClick={onSendMessage}
+              >
+                {isSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -194,26 +189,29 @@ function MessageBubble({
   const sources = getMessageSources(message)
 
   return (
-    <div className={cn('flex gap-3', isUser ? 'justify-end' : 'justify-start')}>
+    <div
+      className={cn(
+        'flex gap-3 sm:gap-4',
+        isUser ? 'justify-end' : 'justify-start',
+      )}
+    >
       {!isUser ? <BubbleAvatar isUser={false} /> : null}
       <div
         className={cn(
-          'min-w-0 max-w-[85%] rounded-3xl border px-4 py-3 shadow-sm',
-          isUser
-            ? 'bg-primary text-primary-foreground border-primary/20'
-            : 'bg-card',
+          'min-w-0 max-w-[85%] rounded-3xl px-5 py-4 shadow-sm',
+          isUser ? 'bg-primary text-primary-foreground' : 'bg-card border',
         )}
       >
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.18em] opacity-80">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">
             {authorLabel}
           </span>
-          <span className="text-xs opacity-70">
+          <span className="text-[11px] opacity-60">
             {formatMessageTimestamp(message.created_at, locale)}
           </span>
         </div>
         {isUser ? (
-          <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6">
+          <p className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed">
             {message.content}
           </p>
         ) : (
@@ -221,7 +219,7 @@ function MessageBubble({
         )}
         {!isUser && sources.length > 0 ? (
           <div className="mt-4 border-t pt-3">
-            <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-[0.18em]">
+            <p className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
               {labels.sources}
             </p>
             <div className="space-y-2">
@@ -254,9 +252,9 @@ function SourceCitation({
   const pagesLabel = formatSourcePages(source.pages, labels)
 
   return (
-    <div className="bg-muted/40 rounded-2xl border px-3 py-2">
+    <div className="bg-muted/40 hover:bg-muted/60 rounded-2xl border px-4 py-3 transition-colors">
       <p className="text-sm font-medium">{source.title}</p>
-      <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
+      <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-2 text-xs">
         <span>{source.source_type}</span>
         {pagesLabel ? <span>{pagesLabel}</span> : null}
         {source.link ? (
@@ -321,7 +319,14 @@ function formatSourcePages(
 
 function BubbleAvatar({ isUser }: Readonly<{ isUser: boolean }>) {
   return (
-    <div className="bg-muted flex h-9 w-9 shrink-0 items-center justify-center rounded-full border">
+    <div
+      className={cn(
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border',
+        isUser
+          ? 'bg-primary/10 text-primary border-primary/20'
+          : 'bg-muted text-muted-foreground',
+      )}
+    >
       {isUser ? <User2 className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
     </div>
   )

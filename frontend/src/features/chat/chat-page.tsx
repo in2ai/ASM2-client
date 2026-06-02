@@ -207,11 +207,14 @@ export function ChatPage({
     }
   }
 
+  const conversationTitle = getChatTitle(
+    activeChat?.title,
+    t('conversation.newChatTitle'),
+  )
+
   return (
     <ChatShell
-      canAccessDashboard={user.role === 'admin'}
       closeSidebarLabel={t('shell.closeSidebar')}
-      dashboardLabel={t('shell.dashboard')}
       headerActions={
         <Button
           variant="outline"
@@ -224,8 +227,7 @@ export function ChatPage({
       }
       openSidebarLabel={t('shell.openSidebar')}
       user={user}
-      title={t('shellTitle')}
-      subtitle={t('shellSubtitle')}
+      title={conversationTitle}
       sidebar={
         <ChatSidebar
           activeChatId={effectiveChatId}
@@ -273,10 +275,6 @@ export function ChatPage({
           chat={activeChat}
           composerDisabled={composerDisabled}
           composerHint={composerHint}
-          title={getChatTitle(
-            activeChat?.title,
-            t('conversation.newChatTitle'),
-          )}
           composerPlaceholder={t('composer.placeholder')}
           composerValue={composerValue}
           emptyTitle={emptyTitle}

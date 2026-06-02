@@ -11,6 +11,11 @@
     "dark": "Dark",
     "system": "System"
   },
+  "AreaSwitcher": {
+    "label": "Switch area",
+    "chat": "Chat",
+    "dashboard": "Dashboard"
+  },
   "AppLayout": {
     "closeSidebarMenu": "Close sidebar",
     "closeNavigationMenu": "Close navigation menu",
@@ -263,8 +268,6 @@
     }
   },
   "ChatPage": {
-    "shellTitle": "Enterprise chat",
-    "shellSubtitle": "Secure conversations connected to the ASM2 backend",
     "shell": {
       "dashboard": "Dashboard",
       "openSidebar": "Open conversations",
