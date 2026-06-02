@@ -91,7 +91,6 @@ function renderConversation(messages: ChatMessage[]) {
       messageLabels={defaultLabels}
       onComposerChange={() => undefined}
       onSendMessage={() => undefined}
-      title="Markdown chat"
     />,
   )
 }

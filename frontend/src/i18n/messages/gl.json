@@ -11,6 +11,11 @@
     "dark": "Escuro",
     "system": "Sistema"
   },
+  "AreaSwitcher": {
+    "label": "Cambiar de sección",
+    "chat": "Chat",
+    "dashboard": "Dashboard"
+  },
   "AppLayout": {
     "closeSidebarMenu": "Pechar menú lateral",
     "closeNavigationMenu": "Pechar menú de navegación",
@@ -263,8 +268,6 @@
     }
   },
   "ChatPage": {
-    "shellTitle": "Chat empresarial",
-    "shellSubtitle": "Conversas seguras conectadas ao backend de ASM2",
     "shell": {
       "dashboard": "Dashboard",
       "openSidebar": "Abrir conversas",
