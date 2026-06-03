@@ -364,7 +364,9 @@
       "callbackInvalidState": "O estado de autorización de Google Drive é inválido ou caducou.",
       "callbackExchangeFailed": "Non se puido completar a conexión con Google Drive.",
       "providers": {
-        "drive": { "description": "Conecta os teus ficheiros de Google Drive para que o asistente poida recuperalos." }
+        "drive": {
+          "description": "Conecta os teus ficheiros de Google Drive para que o asistente poida recuperalos."
+        }
       }
     }
   },

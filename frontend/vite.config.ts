@@ -3,7 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { devtools } from '@tanstack/devtools-vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import viteReact from '@vitejs/plugin-react'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv } from 'vite-plus'
 
 const config = defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, '..', ''), ...process.env }
@@ -14,6 +14,19 @@ const config = defineConfig(({ mode }) => {
   const backendUrl = env.BACKEND_URL || ''
 
   return {
+    lint: {
+      jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
+      rules: { 'vite-plus/prefer-vite-plus-imports': 'error' },
+      options: { typeAware: true, typeCheck: true },
+    },
+    fmt: {
+      semi: false,
+      singleQuote: true,
+      trailingComma: 'all',
+      printWidth: 80,
+      sortPackageJson: false,
+      ignorePatterns: ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'],
+    },
     envDir: '..',
     resolve: {
       tsconfigPaths: true,

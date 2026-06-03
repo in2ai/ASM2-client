@@ -364,7 +364,9 @@
       "callbackInvalidState": "Google Drive authorization state is invalid or expired.",
       "callbackExchangeFailed": "Unable to complete Google Drive connection.",
       "providers": {
-        "drive": { "description": "Connect your Google Drive files so the assistant can retrieve from them." }
+        "drive": {
+          "description": "Connect your Google Drive files so the assistant can retrieve from them."
+        }
       }
     }
   },

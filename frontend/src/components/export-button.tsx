@@ -136,7 +136,8 @@ function generateCSV(data: ExportMetricsOutput, locale: string): string {
     `=== ${copy.sections.hourlyPattern} ===`,
     `${copy.columns.hour},${copy.columns.events}`,
     ...metricsData.hourly_pattern.map(
-      (hour) => `${hour.hour.toString().padStart(2, '0')}:00,${hour.event_count}`,
+      (hour) =>
+        `${hour.hour.toString().padStart(2, '0')}:00,${hour.event_count}`,
     ),
     '',
   ]

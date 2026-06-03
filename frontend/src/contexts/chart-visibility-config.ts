@@ -32,13 +32,10 @@ const chartIds = Object.values(chartsByView).flatMap((charts) =>
 ) as ChartId[]
 
 function buildDefaultVisibility(value: boolean): ChartVisibilityState {
-  return chartIds.reduce(
-    (acc, chartId) => {
-      acc[chartId] = value
-      return acc
-    },
-    {} as ChartVisibilityState,
-  )
+  return chartIds.reduce((acc, chartId) => {
+    acc[chartId] = value
+    return acc
+  }, {} as ChartVisibilityState)
 }
 
 export const DEFAULT_CHART_VISIBILITY = Object.freeze(

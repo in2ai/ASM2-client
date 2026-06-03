@@ -1,8 +1,15 @@
-import { differenceInCalendarDays, endOfDay, format, isSameDay, startOfDay, subDays } from 'date-fns'
+import {
+  differenceInCalendarDays,
+  endOfDay,
+  format,
+  isSameDay,
+  startOfDay,
+  subDays,
+} from 'date-fns'
 import { enUS, es } from 'date-fns/locale'
 import { CalendarIcon, Check, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type {DateRange} from 'react-day-picker';
+import type { DateRange } from 'react-day-picker'
 
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -85,7 +92,9 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
           onClick={() => handlePresetClick(preset)}
           className="min-h-11 text-xs sm:text-sm"
         >
-          <span className="hidden sm:inline">{t('lastDays', { count: preset })}</span>
+          <span className="hidden sm:inline">
+            {t('lastDays', { count: preset })}
+          </span>
           <span className="sm:hidden">{preset}d</span>
         </Button>
       ))}
@@ -108,7 +117,8 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
                       {format(value.from, 'dd MMM yyyy', {
                         locale: dateLocale,
                       })}{' '}
-                      - {format(value.to, 'dd MMM yyyy', { locale: dateLocale })}
+                      -{' '}
+                      {format(value.to, 'dd MMM yyyy', { locale: dateLocale })}
                     </span>
                     <span className="sm:hidden">
                       {format(value.from, 'dd/MM', { locale: dateLocale })} -{' '}
@@ -139,11 +149,21 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
               locale={dateLocale}
             />
             <div className="bg-muted/50 flex items-center justify-end gap-2 border-t p-3">
-              <Button variant="ghost" size="sm" onClick={handleCancel} className="h-8">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancel}
+                className="h-8"
+              >
                 <X className="mr-1 h-4 w-4" />
                 {t('cancel')}
               </Button>
-              <Button size="sm" onClick={handleApply} disabled={!isDraftValid} className="h-8">
+              <Button
+                size="sm"
+                onClick={handleApply}
+                disabled={!isDraftValid}
+                className="h-8"
+              >
                 <Check className="mr-1 h-4 w-4" />
                 {t('apply')}
               </Button>

@@ -46,7 +46,9 @@ export function ErrorState({
             <AlertCircle className="text-destructive h-5 w-5 sm:h-6 sm:w-6" />
           </div>
           <div className="flex-1">
-            <CardTitle className="text-lg sm:text-xl">{resolvedTitle}</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">
+              {resolvedTitle}
+            </CardTitle>
             <CardDescription className="mt-1.5 text-sm sm:text-base">
               {message}
             </CardDescription>
@@ -62,7 +64,9 @@ export function ErrorState({
               disabled={isRetrying}
               className="min-h-11 w-full gap-2 sm:w-auto"
             >
-              <RefreshCw className={`h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`}
+              />
               {isRetrying ? t('retrying') : t('retry')}
             </Button>
           )}
