@@ -10,8 +10,5 @@
   "git": false,
   "routerOnly": true,
   "version": 1,
-  "framework": "react-cra",
-  "chosenAddOns": [
-    "eslint"
-  ]
+  "framework": "react-cra"
 }

@@ -32,13 +32,13 @@ export function useAuthorizedChatRequest() {
       throw new Error('Missing access token')
     }
 
+    const headers = new Headers(init?.headers)
+    headers.set('Authorization', `Bearer ${token}`)
+    headers.set('Content-Type', 'application/json')
+
     const response = await fetch(`${BACKEND_URL}${path}`, {
       ...init,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...init?.headers,
-      },
+      headers,
     })
 
     if (!response.ok) {

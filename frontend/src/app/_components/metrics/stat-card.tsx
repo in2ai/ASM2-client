@@ -57,7 +57,9 @@ export function StatCard({
       </CardHeader>
       {helper ? (
         <CardContent className="p-4 pt-0">
-          <p className="text-muted-foreground text-[10px] font-medium">{helper}</p>
+          <p className="text-muted-foreground text-[10px] font-medium">
+            {helper}
+          </p>
         </CardContent>
       ) : null}
     </Card>

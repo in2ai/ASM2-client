@@ -1,6 +1,6 @@
 {
-  "include": ["**/*.ts", "**/*.tsx", "eslint.config.js", "prettier.config.js", "vite.config.js"],
-  
+  "include": ["**/*.ts", "**/*.tsx", "vite.config.ts"],
+
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",
@@ -10,7 +10,7 @@
       "next-intl": ["./src/i18n/next-intl"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite-plus/client"],
     "allowJs": true,
     "forceConsistentCasingInFileNames": true,
 

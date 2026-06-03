@@ -6,7 +6,7 @@ import type {
   ReactNode,
   TextareaHTMLAttributes,
 } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { ConversationView } from './conversation-view'
 import type { ChatDetail, ChatMessage } from './types'
 
