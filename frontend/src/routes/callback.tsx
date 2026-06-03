@@ -16,7 +16,7 @@ function CallbackPage() {
   }
 
   const { isLoading } = useHandleSignInCallback(() => {
-    finishSignIn()
+    void finishSignIn()
   })
 
   if (isLoading) {

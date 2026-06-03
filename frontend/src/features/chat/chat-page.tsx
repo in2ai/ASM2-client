@@ -201,9 +201,9 @@ export function ChatPage({
   }
 
   const retry = () => {
-    chatsQuery.refetch()
+    void chatsQuery.refetch()
     if (effectiveChatId) {
-      chatQuery.refetch()
+      void chatQuery.refetch()
     }
   }
 

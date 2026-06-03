@@ -125,7 +125,7 @@ export function useCreateChatMutation() {
       }),
     onSuccess: (chat) => {
       queryClient.setQueryData(chatQueryKeys.detail(chat.id), chat)
-      queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
+      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
     },
   })
 }
