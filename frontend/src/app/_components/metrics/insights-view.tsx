@@ -329,11 +329,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                         axisLine={false}
                         width={180}
                         style={{ fontSize: 11 }}
-                        tick={(props: {
-                          x: number
-                          y: number
-                          payload: { value: string }
-                        }) => (
+                        tick={(props) => (
                           <text
                             x={props.x}
                             y={props.y}

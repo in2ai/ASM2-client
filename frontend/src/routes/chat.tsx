@@ -38,7 +38,7 @@ function ChatRoute() {
 
   const handleSelectChat = useCallback(
     (chatId?: string, options?: { replace?: boolean }) => {
-      navigate({
+      void navigate({
         search: chatId ? { chatId } : {},
         replace: options?.replace ?? false,
       })
