@@ -68,7 +68,7 @@ export function ExportButton({ dateRange }: ExportButtonProps) {
   )
 }
 
-function generateCSV(data: ExportMetricsOutput, locale: string): string {
+export function generateCSV(data: ExportMetricsOutput, locale: string): string {
   const { data: metricsData, metadata } = data
   const copy = getCsvCopy(locale)
   const intlLocale = toIntlLocale(locale)
@@ -306,7 +306,7 @@ function escapeCSVCell(
   return value
 }
 
-function generateFilename(metadata: {
+export function generateFilename(metadata: {
   startDate?: string
   endDate?: string
   exportTimestamp: string
@@ -336,7 +336,7 @@ function generateFilename(metadata: {
   return `${parts.join('_')}.csv`
 }
 
-function downloadCSV(csvContent: string, filename: string): void {
+export function downloadCSV(csvContent: string, filename: string): void {
   const BOM = '\uFEFF'
   const blob = new Blob([BOM + csvContent], {
     type: 'text/csv;charset=utf-8;',
