@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { devtools } from '@tanstack/devtools-vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import viteReact from '@vitejs/plugin-react'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, loadEnv } from 'vite-plus'
 
 const config = defineConfig(({ mode }) => {
@@ -12,6 +13,7 @@ const config = defineConfig(({ mode }) => {
   const logtoAppId = env.LOGTO_APP_ID || ''
   const logtoApiResource = env.LOGTO_API_RESOURCE || ''
   const backendUrl = env.BACKEND_URL || ''
+  const useE2eLogtoStub = env.VITE_E2E_LOGTO_STUB === 'true'
 
   return {
     lint: {
@@ -27,8 +29,18 @@ const config = defineConfig(({ mode }) => {
       sortPackageJson: false,
       ignorePatterns: ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'],
     },
+    test: {
+      include: ['src/**/*.test.{ts,tsx}', 'src/**/*.spec.{ts,tsx}'],
+    },
     envDir: '..',
     resolve: {
+      alias: useE2eLogtoStub
+        ? {
+            '@logto/react': fileURLToPath(
+              new URL('./src/test/logto-e2e-stub.tsx', import.meta.url),
+            ),
+          }
+        : undefined,
       tsconfigPaths: true,
     },
     define: {
