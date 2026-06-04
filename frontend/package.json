@@ -12,7 +12,7 @@
     "test": "vp test run",
     "test:e2e": "playwright test",
     "lint": "vp lint",
-    "format": "vp fmt --check .",
+    "format": "vp fmt .",
     "check": "vp check",
     "machine-translate": "inlang machine translate --project project.inlang"
   },
