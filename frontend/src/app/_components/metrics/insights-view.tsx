@@ -4,103 +4,111 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-} from '@/components/ui/chart'
+} from "@/components/ui/chart";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { useChartVisibility } from '@/contexts/chart-visibility-context'
-import { type AppLocale } from '@/i18n/config'
-import { api } from '@/trpc/react'
-import { BarChart3, Languages, Loader2, TrendingUp } from 'lucide-react'
-import { useTranslations } from 'next-intl'
-import { useMemo, useState } from 'react'
-import { type DateRange } from 'react-day-picker'
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
-import { ChartHint } from './chart-hint'
+} from "@/components/ui/select";
+import { useChartVisibility } from "@/contexts/chart-visibility-context";
+import { type AppLocale } from "@/i18n/config";
+import { api } from "@/trpc/react";
+import {
+  BarChart3,
+  Languages,
+  Loader2,
+  TrendingUp,
+  AlertCircle,
+} from "lucide-react";
+import { useTranslations } from "next-intl";
+import { useMemo, useState } from "react";
+import { type DateRange } from "react-day-picker";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { ChartHint } from "./chart-hint";
 import {
   createInsightsTopWordsChartConfig,
   createInsightsTopicsChartConfig,
-} from './constants'
+} from "./constants";
 
-type LanguageFilter = AppLocale | 'all'
+type LanguageFilter = AppLocale | "all";
 
 interface InsightsViewProps {
-  dateRange: DateRange | undefined
+  dateRange: DateRange | undefined;
 }
 
 export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
-  const t = useTranslations('InsightsView')
-  const languageSwitcherT = useTranslations('LanguageSwitcher')
+  const t = useTranslations("InsightsView");
+  const languageSwitcherT = useTranslations("LanguageSwitcher");
   const [topWordsLanguage, setTopWordsLanguage] =
-    useState<LanguageFilter>('all')
+    useState<LanguageFilter>("all");
   const [topTopicsLanguage, setTopTopicsLanguage] =
-    useState<LanguageFilter>('all')
+    useState<LanguageFilter>("all");
 
   const {
     state: { visibility },
-  } = useChartVisibility()
+  } = useChartVisibility();
   const insightsTopWordsChartConfig = useMemo(
     () =>
       createInsightsTopWordsChartConfig({
-        searches: t('chartLabels.searches'),
+        searches: t("chartLabels.searches"),
       }),
     [t],
-  )
+  );
   const insightsTopicsChartConfig = useMemo(
     () =>
       createInsightsTopicsChartConfig({
-        mentions: t('chartLabels.mentions'),
+        mentions: t("chartLabels.mentions"),
       }),
     [t],
-  )
+  );
 
   const topWordsQuery = api.metrics.get.useQuery(
     {
       startDate: dateRange?.from,
       endDate: dateRange?.to,
-      lang: topWordsLanguage === 'all' ? undefined : topWordsLanguage,
+      lang: topWordsLanguage === "all" ? undefined : topWordsLanguage,
     },
     {
       refetchInterval: 60_000,
       staleTime: 30_000,
     },
-  )
+  );
 
-  const topWords = topWordsQuery.data?.top_words ?? []
-  const isTopWordsPending = topWordsQuery.isPending
-  const isTopWordsUpdating = topWordsQuery.isFetching && !isTopWordsPending
+  const topWords = topWordsQuery.data?.top_words ?? [];
+  const isTopWordsPending = topWordsQuery.isPending;
+  const isTopWordsUpdating = topWordsQuery.isFetching && !isTopWordsPending;
+  const isTopWordsError = topWordsQuery.isError;
 
   const topTopicsQuery = api.metrics.get.useQuery(
     {
       startDate: dateRange?.from,
       endDate: dateRange?.to,
-      lang: topTopicsLanguage === 'all' ? undefined : topTopicsLanguage,
+      lang: topTopicsLanguage === "all" ? undefined : topTopicsLanguage,
     },
     {
       refetchInterval: 60_000,
       staleTime: 30_000,
     },
-  )
+  );
 
-  const topTopics = topTopicsQuery.data?.top_topics ?? []
-  const isTopTopicsPending = topTopicsQuery.isPending
-  const isTopTopicsUpdating = topTopicsQuery.isFetching && !isTopTopicsPending
+  const topTopics = topTopicsQuery.data?.top_topics ?? [];
+  const isTopTopicsPending = topTopicsQuery.isPending;
+  const isTopTopicsUpdating = topTopicsQuery.isFetching && !isTopTopicsPending;
+  const isTopTopicsError = topTopicsQuery.isError;
 
   const languageLabels: Record<LanguageFilter, string> = {
-    all: t('topWords.filters.allLanguages'),
-    es: languageSwitcherT('spanish'),
-    en: languageSwitcherT('english'),
-    gl: languageSwitcherT('galician'),
-  }
+    all: t("topWords.filters.allLanguages"),
+    es: languageSwitcherT("spanish"),
+    en: languageSwitcherT("english"),
+    gl: languageSwitcherT("galician"),
+  };
 
   const topWordsBarData = useMemo(
     () =>
@@ -109,7 +117,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
         count: item.count,
       })),
     [topWords],
-  )
+  );
 
   const topicsBarData = useMemo(
     () =>
@@ -119,21 +127,21 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
         count: item.count,
       })),
     [topTopics],
-  )
+  );
 
   const hasNoData =
-    topWordsLanguage === 'all' &&
-    topTopicsLanguage === 'all' &&
+    topWordsLanguage === "all" &&
+    topTopicsLanguage === "all" &&
     !isTopWordsPending &&
     !isTopTopicsPending &&
     topWords.length === 0 &&
-    topTopics.length === 0
+    topTopics.length === 0;
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold sm:text-2xl">{t('title')}</h2>
-        <p className="text-muted-foreground text-sm">{t('subtitle')}</p>
+        <h2 className="text-xl font-semibold sm:text-2xl">{t("title")}</h2>
+        <p className="text-muted-foreground text-sm">{t("subtitle")}</p>
         <div className="bg-border mt-3 h-px" />
       </div>
 
@@ -143,7 +151,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
             <BarChart3 size={24} />
           </div>
           <p className="text-muted-foreground text-sm font-medium">
-            {t('noData')}
+            {t("noData")}
           </p>
         </div>
       ) : (
@@ -153,10 +161,10 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
-                    {t('topWords.title')}
-                    <ChartHint hint={t('topWords.hint')} />
+                    {t("topWords.title")}
+                    <ChartHint hint={t("topWords.hint")} />
                   </CardTitle>
-                  <CardDescription>{t('topWords.description')}</CardDescription>
+                  <CardDescription>{t("topWords.description")}</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   <Select
@@ -167,12 +175,12 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                   >
                     <SelectTrigger
                       className="bg-background/60 border-border/60 h-10 min-w-44 rounded-xl"
-                      aria-label={t('topWords.filters.ariaLabel')}
+                      aria-label={t("topWords.filters.ariaLabel")}
                     >
                       <div className="flex items-center gap-2">
                         <Languages className="text-muted-foreground h-4 w-4" />
                         <SelectValue
-                          placeholder={t('topWords.filters.placeholder')}
+                          placeholder={t("topWords.filters.placeholder")}
                         />
                       </div>
                     </SelectTrigger>
@@ -196,7 +204,12 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                 {isTopWordsPending ? (
                   <div className="text-muted-foreground flex h-75 items-center justify-center gap-3 text-sm">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{t('topWords.filters.loading')}</span>
+                    <span>{t("topWords.filters.loading")}</span>
+                  </div>
+                ) : isTopWordsError ? (
+                  <div className="text-destructive flex h-75 flex-col items-center justify-center gap-2 px-6 text-center text-sm">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>{t("topWords.filters.error")}</span>
                   </div>
                 ) : topWordsBarData.length > 0 ? (
                   <ChartContainer
@@ -239,7 +252,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                   </ChartContainer>
                 ) : (
                   <div className="text-muted-foreground flex h-75 items-center justify-center px-6 text-center text-sm">
-                    {t('topWords.filters.empty', {
+                    {t("topWords.filters.empty", {
                       language: languageLabels[topWordsLanguage],
                     })}
                   </div>
@@ -253,11 +266,11 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
-                    {t('topTopics.title')}
-                    <ChartHint hint={t('topTopics.hint')} />
+                    {t("topTopics.title")}
+                    <ChartHint hint={t("topTopics.hint")} />
                   </CardTitle>
                   <CardDescription>
-                    {t('topTopics.description')}
+                    {t("topTopics.description")}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
@@ -269,12 +282,12 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                   >
                     <SelectTrigger
                       className="bg-background/60 border-border/60 h-10 min-w-44 rounded-xl"
-                      aria-label={t('topTopics.filters.ariaLabel')}
+                      aria-label={t("topTopics.filters.ariaLabel")}
                     >
                       <div className="flex items-center gap-2">
                         <Languages className="text-muted-foreground h-4 w-4" />
                         <SelectValue
-                          placeholder={t('topTopics.filters.placeholder')}
+                          placeholder={t("topTopics.filters.placeholder")}
                         />
                       </div>
                     </SelectTrigger>
@@ -298,7 +311,12 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                 {isTopTopicsPending ? (
                   <div className="text-muted-foreground flex h-100 items-center justify-center gap-3 text-sm">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{t('topTopics.filters.loading')}</span>
+                    <span>{t("topTopics.filters.loading")}</span>
+                  </div>
+                ) : isTopTopicsError ? (
+                  <div className="text-destructive flex h-100 flex-col items-center justify-center gap-2 px-6 text-center text-sm">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>{t("topTopics.filters.error")}</span>
                   </div>
                 ) : topicsBarData.length > 0 ? (
                   <ChartContainer
@@ -340,7 +358,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                           >
                             <title>{props.payload.value}</title>
                             {props.payload.value.length > 28
-                              ? props.payload.value.substring(0, 28) + '...'
+                              ? props.payload.value.substring(0, 28) + "..."
                               : props.payload.value}
                           </text>
                         )}
@@ -351,8 +369,8 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                             labelFormatter={(_, payload) => {
                               const data = payload?.[0]?.payload as
                                 | { fullTopic?: string }
-                                | undefined
-                              return data?.fullTopic ?? ''
+                                | undefined;
+                              return data?.fullTopic ?? "";
                             }}
                             hideIndicator
                             className="bg-background/80 rounded-xl border-none shadow-2xl backdrop-blur-md"
@@ -369,7 +387,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                   </ChartContainer>
                 ) : (
                   <div className="text-muted-foreground flex h-100 items-center justify-center px-6 text-center text-sm">
-                    {t('topTopics.filters.empty', {
+                    {t("topTopics.filters.empty", {
                       language: languageLabels[topTopicsLanguage],
                     })}
                   </div>
@@ -380,5 +398,5 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
         </div>
       )}
     </div>
-  )
+  );
 }

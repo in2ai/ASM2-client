@@ -182,7 +182,8 @@
         "placeholder": "Select language",
         "allLanguages": "All languages",
         "loading": "Loading top searched words",
-        "empty": "No top searched words found for {language}"
+        "empty": "No top searched words found for {language}",
+        "error": "Failed to load top searched words. Please try again."
       }
     },
     "topTopics": {
@@ -193,7 +194,8 @@
         "ariaLabel": "Filter top topics by language",
         "placeholder": "Select language",
         "loading": "Loading top topics",
-        "empty": "No top topics found for {language}"
+        "empty": "No top topics found for {language}",
+        "error": "Failed to load top topics. Please try again."
       }
     }
   },
