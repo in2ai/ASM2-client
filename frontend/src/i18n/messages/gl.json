@@ -182,7 +182,8 @@
         "placeholder": "Seleccionar idioma",
         "allLanguages": "Todos os idiomas",
         "loading": "Cargando palabras máis buscadas",
-        "empty": "Non se atoparon palabras máis buscadas para {language}"
+        "empty": "Non se atoparon palabras máis buscadas para {language}",
+        "error": "Erro ao cargar as palabras máis buscadas. Por favor, tenta de novo."
       }
     },
     "topTopics": {
@@ -193,7 +194,8 @@
         "ariaLabel": "Filtrar temas máis frecuentes por idioma",
         "placeholder": "Seleccionar idioma",
         "loading": "Cargando temas máis frecuentes",
-        "empty": "Non se atoparon temas máis frecuentes para {language}"
+        "empty": "Non se atoparon temas máis frecuentes para {language}",
+        "error": "Erro ao cargar os temas máis frecuentes. Por favor, tenta de novo."
       }
     }
   },
