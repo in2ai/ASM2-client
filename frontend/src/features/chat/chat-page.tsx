@@ -209,6 +209,7 @@ export function ChatPage({
     if (effectiveChatId) {
       void chatQuery.refetch();
     }
+    void sourcesQuery.refetch();
   };
 
   const conversationTitle = getChatTitle(
