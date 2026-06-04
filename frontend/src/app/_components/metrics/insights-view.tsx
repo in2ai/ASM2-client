@@ -134,6 +134,8 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
     topTopicsLanguage === "all" &&
     !isTopWordsPending &&
     !isTopTopicsPending &&
+    !isTopWordsError &&
+    !isTopTopicsError &&
     topWords.length === 0 &&
     topTopics.length === 0;
 
