@@ -9,10 +9,10 @@ from src.connectors.vdb_file import VDBFile
 class DataSource:
     display_name = ""
 
-    def __init__(self, name: str, raw_creds: str, root: str):
+    def __init__(self, name: str, raw_creds: str, roots: list[str]):
         self.name = name
         self.raw_creds = raw_creds
-        self.root = root
+        self.roots = roots
         self.authenticated_principals = []
 
 
