@@ -2,7 +2,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile-bench
+      dockerfile: Dockerfile.bench
       args:
         USE_LOCAL_MODEL: ${USE_LOCAL_MODEL:-false}
         LOCAL_MODEL_REPO: ${LOCAL_MODEL_REPO}
@@ -22,7 +22,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./secrets:/app/secrets:ro
-      - ./backend-data:/app/data
+      - ./benchmark_data:/app/benchmark_data
     depends_on:
       qdrant:
         condition: service_healthy
@@ -43,7 +43,7 @@ services:
     image: qdrant/qdrant:latest
     restart: unless-stopped
     volumes:
-      - ./qdrant_index:/qdrant/storage
+      - qdrant_index:/qdrant/storage
     ports:
       - "127.0.0.1:6333:6333"
     healthcheck:
@@ -85,6 +85,9 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+
+volumes:
+  qdrant_index:
 
 secrets:
   hf_token:

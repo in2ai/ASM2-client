@@ -22,7 +22,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./secrets:/app/secrets:ro
-      - ./backend-data:/app/data
+      - backend-data:/app/data
     depends_on:
       qdrant:
         condition: service_healthy
@@ -44,7 +44,7 @@ services:
     image: qdrant/qdrant:latest
     restart: unless-stopped
     volumes:
-      - ./qdrant_index:/qdrant/storage
+      - qdrant_index:/qdrant/storage
     healthcheck:
       test:
         [
@@ -84,6 +84,10 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+
+volumes:
+  qdrant_index:
+  backend-data:
 
 secrets:
   hf_token:

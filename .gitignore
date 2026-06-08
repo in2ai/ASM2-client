@@ -230,3 +230,7 @@ docs
 .kiro/
 skills/
 backend-data
+
+# benchmark
+benchmark_data/*
+!benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv
