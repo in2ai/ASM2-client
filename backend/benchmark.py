@@ -310,7 +310,7 @@ def benchmark_rag():
     sort_csv(QUERY_TIMING_CSV_PATH, "evaluation_id")
 
 
-def summarize_evaluation(attempt: int) -> pd.DataFrame:
+def summarize_evaluation(attempt: int):
     df_results = pd.read_csv(RESULTS_CSV_PATH)
     df_query_timings = pd.read_csv(QUERY_TIMING_CSV_PATH)
     df_batch_timings = pd.read_csv(BATCH_TIMING_CSV_PATH)
