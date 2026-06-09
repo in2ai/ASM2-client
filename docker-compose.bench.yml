@@ -2,7 +2,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.bench
       args:
         USE_LOCAL_MODEL: ${USE_LOCAL_MODEL:-false}
         LOCAL_MODEL_REPO: ${LOCAL_MODEL_REPO}
@@ -20,11 +20,9 @@ services:
       TRANSFORMERS_OFFLINE: "1"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Remove the following line when the project moves to use internal docker volumes
-    user: "0:0"
     volumes:
       - ./secrets:/app/secrets:ro
-      - backend-data:/app/data
+      - ./benchmark_data:/app/benchmark_data
     depends_on:
       qdrant:
         condition: service_healthy
@@ -40,13 +38,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
-    restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:latest
     restart: unless-stopped
     volumes:
       - qdrant_index:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
     healthcheck:
       test:
         [
@@ -89,7 +88,6 @@ services:
 
 volumes:
   qdrant_index:
-  backend-data:
 
 secrets:
   hf_token:
