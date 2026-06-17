@@ -1,3 +1,5 @@
+./run.sh up --remote --gpu --qdrant nvidia -d
+
 # ASM2-Client 📊
 
 <div align="center">

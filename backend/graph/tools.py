@@ -1,9 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import os
 
+from treedex import TreeDex, OpenAILLM
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from src.config.env import get_env
 from src.connectors.store import QDRANT_META_PATH
 from src.connectors.search import augment_chunks
 from src.metrics.metrics import (
@@ -50,6 +53,27 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
     chunks = [c for c, ok in zip(chunks, relevance) if ok]
     available_sources = get_chunk_sources(chunks, sources)
+
+    USE_LONG_CONTEXT = True
+    long_context = []
+
+    if USE_LONG_CONTEXT:
+        llm = OpenAILLM(
+            api_key=get_env('OPENAI_API_KEY'),
+            model=get_env('OPENAI_MODEL')
+        )
+
+        for source in available_sources:
+            treedex_path = QDRANT_META_PATH + f'/treedex/{source["id"]}.json'
+
+            if os.path.isfile(treedex_path):
+                print(f"Checking long context for {source['title']}")
+                index = TreeDex.load(treedex_path, llm=llm)
+                result = index.query(query, agentic=True)
+                print(result.answer)
+                print(result.page_ranges)
+
+                long_context.append(result)
 
     # Send usage metrics
     if pool is not None and metrics_actor is not None:
@@ -102,6 +126,9 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         )
 
         formatted_chunks.append(f'{header}\n\n{chunk.page_content}')
+
+    for l in long_context:
+        formatted_chunks.append(l)
 
     return {
         "chunks": formatted_chunks,

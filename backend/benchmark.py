@@ -37,7 +37,7 @@ GRAPH = build_graph(get_checkpointer())
 QUESTDB_POOL = get_questdb_pool()
 ADMIN_SOURCES = {}
 
-QA_CSV_PATH = Path("/app/benchmark_data/gutenberg_num_questions_5_num_documents_5_qaps.csv")
+QA_CSV_PATH = Path("/app/benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv")
 RESULTS_CSV_PATH = Path("/app/benchmark_data/rag_evaluation_results.csv")
 QUERY_TIMING_CSV_PATH = Path("/app/benchmark_data/query_timings.csv")
 BATCH_TIMING_CSV_PATH = Path("/app/benchmark_data/batch_timings.csv")

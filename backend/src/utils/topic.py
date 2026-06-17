@@ -100,7 +100,7 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
     logging.info('Executing topic extraction...')
 
     # Iteration variables
-    batch_size = 1024
+    batch_size = 128
     min_cosine = 0.3
 
     ids = []

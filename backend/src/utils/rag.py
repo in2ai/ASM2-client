@@ -131,7 +131,7 @@ def get_chunk_sources(chunks, sources):
             title = d.metadata.get("title") or d.metadata.get("name") or "(sin titulo)"
             link = d.metadata.get("webViewLink")
 
-            available_sources[doc_id] = {"title": title, "source_type": tag, "link": link}
+            available_sources[doc_id] = {"id": doc_id, "title": title, "source_type": tag, "link": link}
 
         page = d.metadata.get('page')
 
