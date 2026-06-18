@@ -20,6 +20,10 @@ import {
 import { ChatPage } from "./chat-page";
 
 type ConversationRenderState = {
+  composerDisabled?: boolean;
+  composerHint?: string;
+  emptyDescription?: string;
+  emptyTitle?: string;
   isSending: boolean;
   pendingContent: string | null;
   persistedUserContents: string[];
@@ -92,7 +96,10 @@ vi.mock("./conversation-view", () => ({
   ConversationView: (props: {
     chat?: { messages?: Array<{ content: string; id: string; role: string }> };
     composerDisabled?: boolean;
+    composerHint?: string;
     composerValue: string;
+    emptyDescription?: string;
+    emptyTitle?: string;
     isSending?: boolean;
     onComposerChange: (value: string) => void;
     onSendMessage: () => void;
@@ -104,6 +111,10 @@ vi.mock("./conversation-view", () => ({
     ];
 
     conversationRenderStates.push({
+      composerDisabled: props.composerDisabled,
+      composerHint: props.composerHint,
+      emptyDescription: props.emptyDescription,
+      emptyTitle: props.emptyTitle,
       isSending: props.isSending ?? false,
       pendingContent: props.pendingMessage?.content ?? null,
       persistedUserContents: (props.chat?.messages ?? [])
@@ -165,6 +176,13 @@ const sourcesStatusChatReadyWhileIndexing = {
 const sourcesStatusSetupInProgress = {
   can_chat: false,
   vdb_indexing_active: true,
+  connected_sources: ["drive"],
+  selected_sources: ["drive"],
+};
+
+const sourcesStatusAwaitingFirstBuild = {
+  can_chat: false,
+  vdb_indexing_active: false,
   connected_sources: ["drive"],
   selected_sources: ["drive"],
 };
@@ -683,7 +701,68 @@ describe("ChatPage", () => {
 
     await waitFor(() => {
       expect(
-        (screen.getByLabelText("composer") as HTMLInputElement).disabled,
+        conversationRenderStates.some(
+          (state) =>
+            state.composerDisabled === true &&
+            state.composerHint === "composer.finishSetupHint" &&
+            state.emptyTitle === "empty.syncTitle" &&
+            state.emptyDescription === "empty.syncDescription",
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it("asks to start the first VDB build before chat is enabled", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        const method = init?.method ?? "GET";
+
+        if (requestUrl.endsWith("/sources/status")) {
+          return jsonResponse(sourcesStatusAwaitingFirstBuild);
+        }
+
+        if (requestUrl.endsWith("/chats") && method === "GET") {
+          return jsonResponse([]);
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`);
+      }),
+    );
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          user={{ role: "admin", sub: "user-1" }}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(
+        conversationRenderStates.some(
+          (state) =>
+            state.composerDisabled === true &&
+            state.composerHint ===
+              "composer.disabledHintIndexingInactiveAdmin" &&
+            state.emptyTitle === "empty.indexingInactiveTitle" &&
+            state.emptyDescription ===
+              "empty.indexingInactiveDescriptionAdmin",
+        ),
       ).toBe(true);
     });
   });

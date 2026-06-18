@@ -294,18 +294,18 @@
       "description": "Choose an existing conversation or start a new one to chat with the assistant.",
       "gatedTitle": "Connect and select at least one source",
       "gatedDescription": "Open the sources panel to start the source setup flow before starting the conversation.",
-      "indexingInactiveTitle": "Indexing is not enabled yet",
-      "indexingInactiveDescriptionAdmin": "Open the sources panel and start VDB indexing when your connected sources are selected for retrieval.",
-      "indexingInactiveDescriptionUser": "Open the sources panel and ask an administrator to start VDB indexing when your connected sources are ready.",
-      "syncTitle": "Finish source setup before chatting",
-      "syncDescription": "Stop the VDB update flow in the sources panel so the backend can finish preparing the RAG before you chat."
+      "indexingInactiveTitle": "Start the first indexing run to enable chat",
+      "indexingInactiveDescriptionAdmin": "Open the sources panel and start the first VDB indexing run when your connected sources are selected for retrieval. Once it finishes, chat will be enabled and you can keep using it even while later indexing runs are active.",
+      "indexingInactiveDescriptionUser": "Open the sources panel and ask an administrator to start the first VDB indexing run when your connected sources are ready. Once it finishes, chat will be enabled and you can keep using it even while later indexing runs are active.",
+      "syncTitle": "The first indexing run is still in progress",
+      "syncDescription": "Chat will be enabled automatically when this first indexing run finishes. After that, you can keep using chat even while later indexing runs are active."
     },
     "composer": {
       "placeholder": "Ask a question about your documents, processes, or data...",
       "disabledHint": "Chat stays disabled until at least one connected source is selected for retrieval.",
-      "disabledHintIndexingInactiveAdmin": "Chat stays disabled until VDB indexing is started. Open the sources panel and start indexing when your sources are selected.",
-      "disabledHintIndexingInactiveUser": "Chat stays disabled until VDB indexing is started. Open the sources panel and ask an administrator to start indexing when your sources are ready.",
-      "finishSetupHint": "Finish the source setup flow in the sources panel before chatting."
+      "disabledHintIndexingInactiveAdmin": "Chat will be enabled after the first VDB indexing run. Open the sources panel and start that first run when your sources are selected.",
+      "disabledHintIndexingInactiveUser": "Chat will be enabled after the first VDB indexing run. Open the sources panel and ask an administrator to start that first run when your sources are ready.",
+      "finishSetupHint": "Chat will be enabled automatically when the first VDB indexing run finishes."
     },
     "messages": {
       "assistant": "Assistant",
