@@ -18,6 +18,7 @@ def load_manifest(path):
         "total_chunks": 0, 
         "completed": {},
         "topics": False,
+        "initialized": False,
     }
 
 
@@ -87,3 +88,11 @@ class VDBManifest:
 
     def set_topics(self):
         self.manifest['topics'] = True
+
+
+    def is_initialized(self):
+        return self.manifest.get('initialized', False)
+
+
+    def set_initialized(self):
+        self.manifest['initialized'] = True
