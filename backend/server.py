@@ -68,7 +68,7 @@ from src.utils.rag import get_reranker
 from src.connectors.llms import get_configured_llm
 
 from graph.agent import build_graph
-from graph import get_checkpointer
+from graph import get_checkpointer, get_store
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 # ---------------------------------
@@ -101,8 +101,12 @@ async def lifespan(app: FastAPI):
     ]
 
     graph_working_memory_saver = get_checkpointer(app.state.async_pg_pool)
+    graph_store_memory_saver = get_store(app.state.async_pg_pool)
     await graph_working_memory_saver.setup()
-    app.state.graph = build_graph(graph_working_memory_saver)
+    await graph_store_memory_saver.setup()
+    app.state.graph = build_graph(
+        checkpointer=graph_working_memory_saver,
+        store=graph_store_memory_saver)
 
     loop = asyncio.get_running_loop()
     app.state.periodic_tasks = [loop.create_task(asyncio.to_thread(j)) for j in jobs]
