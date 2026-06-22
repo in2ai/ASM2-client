@@ -199,9 +199,8 @@ def run_vdb_update_once() -> None:
 
     logging.info("Updating VDB...")
     vectorstore = app.state.vectorstore
-    collection_existed_before = vectorstore.client.collection_exists(QDRANT_COL)
-    initial_build_in_progress = not collection_existed_before
     manifest = VDBManifest(QDRANT_META_PATH)
+    initial_build_in_progress = not manifest.is_initialized()
 
     try:
         start_time = time.time()
@@ -222,6 +221,7 @@ def run_vdb_update_once() -> None:
         build_vectordb_from_sources(llm, embeddings, sources)
 
         if initial_build_in_progress:
+            manifest = VDBManifest(QDRANT_META_PATH)
             manifest.set_initialized()
             manifest.save()
 
@@ -345,29 +345,9 @@ def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
         source for source in selected_sources if source in connected_set
     )
     vdb_indexing_active = os.path.isfile(VDB_LOCK)
-    vectorstore = getattr(app.state, "vectorstore", None)
     manifest = VDBManifest(QDRANT_META_PATH)
 
-    try:
-        vdb_ready = bool(
-            vectorstore is not None
-            and vectorstore.client.collection_exists(QDRANT_COL)
-        )
-    except Exception:
-        logging.exception("Failed to determine Qdrant readiness")
-        vdb_ready = False
-
     initial_build_completed = manifest.is_initialized()
-
-    if (
-        not initial_build_completed
-        and not vdb_indexing_active
-        and vdb_ready
-        and manifest.num_chunks() > 0
-    ):
-        manifest.set_initialized()
-        manifest.save()
-        initial_build_completed = True
 
     return {
         "connected_sources": connected_sources,
@@ -375,7 +355,6 @@ def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
         "vdb_indexing_active": vdb_indexing_active,
         "can_chat": (
             len(selected_connected_sources) > 0
-            and vdb_ready
             and initial_build_completed
         ),
     }
