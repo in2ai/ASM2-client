@@ -6,7 +6,7 @@ from treedex import TreeDex, OpenAILLM
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from src.config.env import get_env
+from src.config.env import get_env, get_bool_env
 from src.connectors.store import QDRANT_META_PATH
 from src.connectors.search import augment_chunks
 from src.metrics.metrics import (
@@ -54,7 +54,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     chunks = [c for c, ok in zip(chunks, relevance) if ok]
     available_sources = get_chunk_sources(chunks, sources)
 
-    USE_LONG_CONTEXT = True
+    USE_LONG_CONTEXT = get_bool_env('LONG_CONTEXT')
     long_context = []
 
     if USE_LONG_CONTEXT:

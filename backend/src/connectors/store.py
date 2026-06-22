@@ -62,6 +62,7 @@ def iterate_qdrant_docs(
             with_payload=with_payload,
             with_vectors=with_vectors,
             scroll_filter=scroll_filter,
+            timeout=600
         )
 
         for p in points:
@@ -80,7 +81,7 @@ def get_vectordb(embeddings) -> Qdrant:
     client = QdrantClient(
         url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
-        prefer_grpc=True,
+        prefer_grpc=True
     )
 
     vectorstore = Qdrant(client, QDRANT_COL, embeddings)
@@ -142,6 +143,12 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         logging.info('Creating Qdrant indexes...')
 
         # Create indexes
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name="metadata.id",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+        
         vectorstore.client.create_payload_index(
             collection_name=QDRANT_COL,
             field_name="metadata.source",
@@ -337,9 +344,10 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
     if docs_batch:
         flush("final")
 
-    # Generate long context
-    with ThreadPoolExecutor() as executor:
-        list(executor.map(generate_treedex_index, files))
+    if get_bool_env('LONG_CONTEXT'):
+        # Generate long context
+        with ThreadPoolExecutor() as executor:
+            list(executor.map(generate_treedex_index, files))
 
     # Update status manifest
     manifest.add_completed_source(source)

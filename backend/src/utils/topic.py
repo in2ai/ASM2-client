@@ -100,7 +100,7 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
     logging.info('Executing topic extraction...')
 
     # Iteration variables
-    batch_size = 128
+    batch_size = 1024
     min_cosine = 0.3
 
     ids = []
@@ -115,7 +115,8 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
             offset=offset,
             limit=batch_size,
             with_payload=False,
-            with_vectors=True
+            with_vectors=True,
+            timeout=600
         )
 
         requests = [
@@ -132,7 +133,8 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
 
         hits = vdb.client.query_batch_points(
             vdb.collection_name,
-            requests
+            requests,
+            timeout=600
         )
 
         for point, nearest in zip(batch, hits):

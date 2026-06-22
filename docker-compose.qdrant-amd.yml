@@ -5,7 +5,7 @@
 #   - Helper script: ./run.sh up --qdrant amd
 services:
   qdrant:
-    image: qdrant/qdrant:gpu-amd-latest
+    image: qdrant/qdrant:v1.16.2-gpu-amd
     environment:
       # enable GPU indexing inside Qdrant
       - QDRANT__GPU__INDEXING=1
