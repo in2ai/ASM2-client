@@ -142,6 +142,7 @@ El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el bu
 | `docker-compose.gpu.yml` | Override para habilitar soporte GPU en `backend` |
 | `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA |
 | `docker-compose.qdrant-amd.yml` | Override para Qdrant con GPU AMD (ROCm) |
+| `docker-compose.bench.yml` | Stack para benchmark: reemplaza el web server del `backend` por el evaluador ([`benchmark.py`](backend/benchmark.py)) |
 
 ### Opción 1: Stack Local Completo (Recomendada)
 
@@ -267,6 +268,28 @@ pnpm dev
 
 El dashboard estará disponible en `http://localhost:3001`.
 
+### Opción 6: Benchmark
+
+El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` por el script de evaluación [`benchmark.py`](backend/benchmark.py), que mide la calidad del pipeline RAG con métricas de **RAGAS** (`context_precision`, `context_recall`, `answer_relevancy`, `faithfulness`) además de los tiempos de cada evaluación (consulta RAG + cálculo de métricas) y de cada lote.
+
+```bash
+./run.sh up --bench
+```
+
+**Requisitos previos:**
+
+- `OPENAI_API_KEY` en `.env` (el evaluador usa `gpt-4o-mini` y `text-embedding-3-small`).
+- Un dataset de preguntas/respuestas en `benchmark_data/` (por defecto `dataset_wikipedia_qa_5_docs_200.csv`).
+
+**Resultados:** se escriben en `benchmark_data/` (montado como volumen), entre otros:
+
+- `rag_evaluation_results_attempt_N.csv` — resultados detallados por pregunta.
+- `rag_evaluation_summary.csv` — resumen agregado de métricas por ejecución.
+- `query_timings_attempt_N.csv` — tiempo total por evaluación (consulta + métricas).
+- `batch_timings_attempt_N.csv` — tiempo por lote.
+
+Por defecto realiza 3 ejecuciones de evaluación (`NUM_EVALUATIONS`).
+
 ## Estructura del Proyecto
 
 ```text
@@ -279,11 +302,13 @@ ASM2-client/
 ├── img/                    # Imágenes y assets
 ├── qdrant_index/           # Estado auxiliar y manifest del índice vectorial
 ├── questdb/               # Datos persistentes de QuestDB (generado)
+├── benchmark_data/         # Datasets QA de entrada y resultados del benchmark de RAG
 ├── docker-compose.yml     # Stack base backend + SPA + qdrant con solo dashboard publicado en localhost
 ├── docker-compose.local.yml    # Infraestructura local (QuestDB + Logto) con Logto publicado en localhost
 ├── docker-compose.gpu.yml # Override para soporte GPU (backend)
 ├── docker-compose.qdrant-nvidia.yml # Override para Qdrant GPU NVIDIA
 ├── docker-compose.qdrant-amd.yml    # Override para Qdrant GPU AMD
+├── docker-compose.bench.yml         # Stack para el benchmark de RAG
 ├── .env.example           # Plantilla de variables de entorno
 └── run.sh                 # Wrapper de modos de ejecución Docker
 ```

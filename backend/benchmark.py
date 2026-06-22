@@ -37,7 +37,8 @@ GRAPH = build_graph(get_checkpointer())
 QUESTDB_POOL = get_questdb_pool()
 ADMIN_SOURCES = {}
 
-QA_CSV_PATH = Path("/app/benchmark_data/gutenberg_num_questions_5_num_documents_5_qaps.csv")
+# QA_CSV_PATH = Path("/app/benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv")
+QA_CSV_PATH = Path("/app/benchmark_data/dataset_wikipedia_qa_5_docs_200.csv")
 RESULTS_CSV_PATH = Path("/app/benchmark_data/rag_evaluation_results.csv")
 QUERY_TIMING_CSV_PATH = Path("/app/benchmark_data/query_timings.csv")
 BATCH_TIMING_CSV_PATH = Path("/app/benchmark_data/batch_timings.csv")
@@ -122,8 +123,8 @@ def call_rag(query: str, thread_id: str):
     return answer, search_results
 
 
-def eval_dataset(query, relevant_docs, answer, reference_answer):
-    print("[BENCHMARK] Evaluating all metrics in parallel...")
+def eval_dataset(query, relevant_docs, answer, reference_answer, eval_id):
+    print(f"[BENCHMARK][eval_id={eval_id}] Evaluating all metrics in parallel...")
 
     def run_metric(args):
         name, fn, kwargs = args
@@ -147,14 +148,14 @@ def eval_dataset(query, relevant_docs, answer, reference_answer):
     ]
 
     futures = [METRIC_EXECUTOR.submit(run_metric, task) for task in tasks]
-    results = dict(f.result(timeout=120) for f in futures)
+    results = dict(f.result(timeout=180) for f in futures)
 
-    print("[BENCHMARK] Evaluation Results:")
+    print(f"[BENCHMARK][eval_id={eval_id}] Evaluation Results:")
     for name, result in results.items():
         if isinstance(result, Exception):
-            print(f"[BENCHMARK] {name}: ERROR -> {type(result).__name__}: {result}")
+            print(f"[BENCHMARK][eval_id={eval_id}] {name}: ERROR -> {type(result).__name__}: {result}")
         else:
-            print(f"[BENCHMARK] {name}: {result.value}")
+            print(f"[BENCHMARK][eval_id={eval_id}] {name}: {result.value}")
 
     return results
 
@@ -197,28 +198,28 @@ def append_result_row(output_path: Path, evaluation_id: int, results: dict[str, 
 
         f.flush()
 
-    print("[BENCHMARK] Saved results to CSV.")
+    print(f"[BENCHMARK][eval_id={evaluation_id}] Saved results to CSV.")
 
 
-def append_query_timing(evaluation_id: int, batch_id: int, start: float):
+def append_query_timing(evaluation_id: int, batch_id: int, start: float, query_timing_path: Path):
     elapsed_seconds = time.perf_counter() - start
 
-    file_exists = QUERY_TIMING_CSV_PATH.exists()
-    with open(QUERY_TIMING_CSV_PATH, "a", newline="", encoding="utf-8") as f:
+    file_exists = query_timing_path.exists()
+    with open(query_timing_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow(["evaluation_id", "batch_id", "elapsed_seconds"])
         writer.writerow([evaluation_id, batch_id, round(elapsed_seconds, 3)])
         f.flush()
 
-    print(f"[BENCHMARK] Total query time:\t{elapsed_seconds:.3f}s")
+    print(f"[BENCHMARK][eval_id={evaluation_id}] Total query time:\t{elapsed_seconds:.3f}s")
 
 
-def append_batch_timing(batch_id: int, num_rows: int, batch_start: float):
+def append_batch_timing(batch_id: int, num_rows: int, batch_start: float, batch_timing_path: Path):
     elapsed_seconds = time.perf_counter() - batch_start
 
-    file_exists = BATCH_TIMING_CSV_PATH.exists()
-    with open(BATCH_TIMING_CSV_PATH, "a", newline="", encoding="utf-8") as f:
+    file_exists = batch_timing_path.exists()
+    with open(batch_timing_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow(["batch_id", "num_rows", "batch_elapsed_seconds"])
@@ -235,10 +236,11 @@ def sort_csv(path: Path, column_name: str):
     print(f"[BENCHMARK] Sorted {path.name} by {column_name}.")
 
 
-def process_row(row):
+def process_row(row, run_attempt):
     attempt = 0
     results = None
     answer = ""
+    chunks = None
     start = time.perf_counter()
 
     eval_id = row.evaluation_id
@@ -248,40 +250,47 @@ def process_row(row):
 
     while attempt < MAX_RETRIES:
         try:
-            print(f"\n[BENCHMARK] Document ID:\t {doc_id}")
-            print(f"[BENCHMARK] Query:\t\t {query}")
-            print(f"[BENCHMARK] Reference Answer:\t {reference_answer}")
 
-            answer, search_results = call_rag(query, thread_id=f"benchmark-{eval_id}")
+            if chunks is None:
+                print(f"\n[BENCHMARK][eval_id={eval_id}] Document ID:\t {doc_id}")
+                print(f"[BENCHMARK][eval_id={eval_id}] Query:\t\t {query}")
+                print(f"[BENCHMARK][eval_id={eval_id}] Reference Answer:\t {reference_answer}")
 
-            print(f"[BENCHMARK] Generated Answer:\t {answer}")
+                answer, search_results = call_rag(query, thread_id=f"benchmark-{run_attempt}-{eval_id}-{attempt}")
 
-            if search_results is None:
-                print(f"\n[BENCHMARK] No search results found for query={query} on document={doc_id}. Skipping {eval_id}.")
-                break
+                print(f"[BENCHMARK][eval_id={eval_id}] Generated Answer:\t {answer}")
 
-            chunks = search_results.get("chunks", [])
+                if search_results is None:
+                    print(f"\n[BENCHMARK][eval_id={eval_id}] No search results found for query={query} on document={doc_id}. Skipping {eval_id}.")
+                    break
 
-            if not chunks:
-                print(f"\n[BENCHMARK] No chunks found for query={query} on document={doc_id}. Skipping {eval_id}.")
-                break
+                chunks = search_results.get("chunks", [])
 
-            print(f"[BENCHMARK] Search Results:\t {len(chunks)}")
-            print(f"\n[BENCHMARK] Evaluating the generated answer...")
-            results = eval_dataset(query, chunks, answer, reference_answer)
+                if not chunks:
+                    print(f"\n[BENCHMARK][eval_id={eval_id}] No chunks found for query={query} on document={doc_id}. Skipping {eval_id}.")
+                    break
+
+                print(f"[BENCHMARK][eval_id={eval_id}] Search Results:\t {len(chunks)}")
+
+            print(f"\n[BENCHMARK][eval_id={eval_id}] Evaluating the generated answer...")
+            results = eval_dataset(query, chunks, answer, reference_answer, eval_id)
             break
 
         except Exception as e:
             tb = traceback.format_exc()
-            print(f"\n[BENCHMARK] Error processing document={doc_id}: {type(e).__name__}: {e}")
+            print(f"\n[BENCHMARK][eval_id={eval_id}] Error processing document={doc_id}: {type(e).__name__}: {e}")
             print(tb)
             attempt += 1
-            print(f"[BENCHMARK] Retrying... (attempt {attempt + 1}/{MAX_RETRIES})")
+            
+            if attempt < MAX_RETRIES:
+                backoff = min(30.0, 2.0 ** attempt)
+                print(f"[BENCHMARK][eval_id={eval_id}] Retrying in {backoff:.0f}s... (attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(backoff)
 
     return eval_id, results, answer, start
 
 
-def benchmark_rag():
+def benchmark_rag(run_attempt: int, results_path: Path, query_timing_path: Path, batch_timing_path: Path):
     qa_df = pd.read_csv(QA_CSV_PATH)
     rows = list(qa_df.itertuples(index=False))
 
@@ -292,28 +301,28 @@ def benchmark_rag():
 
         print(f"\n[BENCHMARK] Processing batch {batch_id} ({len(batch)} rows)...")
 
-        futures = {RAG_EXECUTOR.submit(process_row, row): row for row in batch}
+        futures = {RAG_EXECUTOR.submit(process_row, row, run_attempt): row for row in batch}
 
         for future in as_completed(futures):
             try:
                 eval_id, results, answer, start = future.result()
-                append_result_row(RESULTS_CSV_PATH, eval_id, results, answer)
-                append_query_timing(eval_id, batch_id, start)
+                append_result_row(results_path, eval_id, results, answer)
+                append_query_timing(eval_id, batch_id, start, query_timing_path)
 
             except Exception as e:
                 print(f"[BENCHMARK] Fatal error in row: {type(e).__name__}: {e}")
 
-        append_batch_timing(batch_id, len(batch), batch_start)
+        append_batch_timing(batch_id, len(batch), batch_start, batch_timing_path)
         print(f"[BENCHMARK] Batch {batch_id} complete.")
 
-    sort_csv(RESULTS_CSV_PATH, "evaluation_id")
-    sort_csv(QUERY_TIMING_CSV_PATH, "evaluation_id")
+    sort_csv(results_path, "evaluation_id")
+    sort_csv(query_timing_path, "evaluation_id")
 
 
-def summarize_evaluation(attempt: int):
-    df_results = pd.read_csv(RESULTS_CSV_PATH)
-    df_query_timings = pd.read_csv(QUERY_TIMING_CSV_PATH)
-    df_batch_timings = pd.read_csv(BATCH_TIMING_CSV_PATH)
+def summarize_evaluation(attempt: int, results_path: Path, query_timing_path: Path, batch_timing_path: Path):
+    df_results = pd.read_csv(results_path)
+    df_query_timings = pd.read_csv(query_timing_path)
+    df_batch_timings = pd.read_csv(batch_timing_path)
 
 
     metric_cols = ["context_precision", "context_recall", "answer_relevancy", "faithfulness"]
@@ -335,8 +344,9 @@ def summarize_evaluation(attempt: int):
         "mean_batch_time_seconds": mean_batch_time,
     }])
 
-    df_summary.to_csv(SUMMARY_CSV_PATH, index=False)
-    print(f"[BENCHMARK] Saved evaluation summary to {SUMMARY_CSV_PATH}.")
+    file_exists = SUMMARY_CSV_PATH.exists()
+    df_summary.to_csv(SUMMARY_CSV_PATH, mode="a", header=not file_exists, index=False)
+    print(f"[BENCHMARK] Appended evaluation summary for attempt {attempt} to {SUMMARY_CSV_PATH}.")
 
 
 
@@ -424,8 +434,24 @@ def call_rag_perfomance_evaluation():
             print(f"[BENCHMARK] Completed attempt {j} of performance evaluation with {i} worker(s).")
 
 
-if __name__ == "__main__":
+def run_evaluation(attempt: int):
+    suffix = f"_attempt_{attempt}"
+    results_path = RESULTS_CSV_PATH.with_stem(f"{RESULTS_CSV_PATH.stem}{suffix}")
+    query_timing_path = QUERY_TIMING_CSV_PATH.with_stem(f"{QUERY_TIMING_CSV_PATH.stem}{suffix}")
+    batch_timing_path = BATCH_TIMING_CSV_PATH.with_stem(f"{BATCH_TIMING_CSV_PATH.stem}{suffix}")
 
-    benchmark_rag()
-    summarize_evaluation(attempt=1)
-    
+    benchmark_rag(attempt, results_path, query_timing_path, batch_timing_path)
+    summarize_evaluation(attempt, results_path, query_timing_path, batch_timing_path)
+
+
+def main():
+    NUM_EVALUATIONS = 3
+
+    for attempt in range(1, NUM_EVALUATIONS + 1):
+        print(f"\n[BENCHMARK] ===== RAG evaluation run {attempt}/{NUM_EVALUATIONS} =====")
+        run_evaluation(attempt)
+
+
+if __name__ == "__main__":
+    main()
+
