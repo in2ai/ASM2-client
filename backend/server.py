@@ -88,7 +88,11 @@ async def lifespan(app: FastAPI):
     app.state.pg_pool = get_pg_pool()
 
     DATABASE_URL = os.getenv("DATABASE_URL")
-    app.state.async_pg_pool = AsyncConnectionPool(DATABASE_URL, open=False)
+    app.state.async_pg_pool = AsyncConnectionPool(
+        DATABASE_URL,
+        open=False,
+        kwargs={"autocommit": True, "prepare_threshold": 0},
+    )
     await app.state.async_pg_pool.open()
 
     app.state.tsdb_chat_store = PostgresChatStore(app.state.pg_pool)
