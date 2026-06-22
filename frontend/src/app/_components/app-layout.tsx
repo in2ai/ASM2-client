@@ -1,26 +1,12 @@
-import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 
-import { useLogto } from '@logto/react'
-import { Link } from '@tanstack/react-router'
-import {
-  BarChart3,
-  Loader2,
-  LogOut,
-  Menu,
-  MessageSquareText,
-  Shield,
-  User,
-  X,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-import { useTranslations } from 'next-intl'
-
-import { DASHBOARD_VIEWS } from '@/app/_components/dashboard-views'
+import { AreaSwitcher } from '@/app/_components/area-switcher'
 import type { DashboardView } from '@/app/_components/dashboard-views'
+import { DASHBOARD_VIEWS } from '@/app/_components/dashboard-views'
 import { ChartVisibilityControls } from '@/components/chart-visibility-controls'
-import { LanguageSwitcher } from '@/components/language-switcher'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { LanguageMenuSection } from '@/components/language-switcher'
+import { ThemeMenuSection } from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -34,6 +20,10 @@ import {
 import { ChartVisibilityProvider } from '@/contexts/chart-visibility-context'
 import type { LogtoUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
+import { useLogto } from '@logto/react'
+import type { LucideIcon } from 'lucide-react'
+import { BarChart3, Loader2, LogOut, Menu, Shield, User, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface AppLayoutProps {
   readonly children: ReactNode
@@ -80,7 +70,7 @@ export function AppLayout({
         {mobileMenuOpen && (
           <button
             type="button"
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 cursor-pointer z-40 bg-black/20 backdrop-blur-sm lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
             aria-label={t('closeSidebarMenu')}
           />
@@ -126,30 +116,17 @@ export function AppLayout({
                   collapsed={!sidebarOpen}
                 />
               ))}
-              <Button
-                asChild
-                variant="ghost"
-                className={cn(
-                  'text-muted-foreground hover:bg-primary/5 hover:text-foreground h-11 w-full justify-start gap-4 rounded-xl px-3 py-2 text-sm font-semibold',
-                  !sidebarOpen && 'justify-center px-0',
-                )}
-              >
-                <Link to="/chat">
-                  <MessageSquareText className="h-5 w-5 shrink-0" />
-                  {!sidebarOpen ? null : <span className="truncate tracking-tight">{t('chat')}</span>}
-                </Link>
-              </Button>
             </nav>
           </div>
         </aside>
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          <header className="bg-background/40 flex h-16 items-center justify-between border-b px-4 backdrop-blur-md sm:px-6">
-            <div className="flex items-center gap-4">
+          <header className="bg-background/60 flex h-16 items-center justify-between gap-3 border-b px-4 backdrop-blur-md sm:px-6">
+            <div className="flex min-w-0 items-center gap-3">
               <Button
                 variant="ghost"
                 size="icon"
-                className="bg-muted/50 hover:bg-muted h-10 w-10 rounded-xl transition-colors"
+                className="bg-muted/50 hover:bg-muted h-10 w-10 shrink-0 rounded-xl transition-colors"
                 onClick={handleSidebarToggle}
                 aria-label={
                   mobileMenuOpen
@@ -164,8 +141,8 @@ export function AppLayout({
                     : t('openNavigationMenu')}
                 </span>
               </Button>
-              <div className="hidden sm:block">
-                <h1 className="text-sm font-bold tracking-tight md:text-base">
+              <div className="hidden min-w-0 sm:block">
+                <h1 className="truncate text-sm font-bold tracking-tight md:text-base">
                   {t('title')}
                 </h1>
                 <div className="flex items-center gap-2">
@@ -182,14 +159,13 @@ export function AppLayout({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-4">
-              <CompanyDisplay user={user} />
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               {view !== 'overview' ? (
                 <ChartVisibilityControls view={view} />
               ) : null}
-              <LanguageSwitcher />
-              <ThemeToggle />
-              <UserMenu user={user} />
+              <AreaSwitcher activeArea="dashboard" user={user} />
+              <div className="bg-border mx-1 hidden h-6 w-px sm:block" />
+              <UserMenu user={user} showPreferences />
             </div>
           </header>
 
@@ -239,40 +215,30 @@ function NavItem({
   )
 }
 
-export function CompanyDisplay({ user }: Readonly<{ user: LogtoUser | null }>) {
-  if (!user) {
-    return null
-  }
-
-  return (
-    <div className="text-muted-foreground hidden items-center gap-2 text-sm md:flex">
-      <User className="h-4 w-4" />
-      <span className="font-medium">{user.email}</span>
-    </div>
-  )
-}
-
 function getInitials(user: LogtoUser | null): string {
-  if (user && user.firstName && user.lastName) {
+  if (user?.firstName && user.lastName) {
     return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
   }
-  if (user && user.email) {
+  if (user?.email) {
     return user.email.substring(0, 2).toUpperCase()
   }
   return 'U'
 }
 
 function getDisplayName(user: LogtoUser | null, fallbackName: string): string {
-  if (user && user.firstName && user.lastName) {
+  if (user?.firstName && user.lastName) {
     return `${user.firstName} ${user.lastName}`
   }
-  if (user && user.firstName) {
+  if (user?.firstName) {
     return user.firstName
   }
   return fallbackName
 }
 
-export function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
+export function UserMenu({
+  user,
+  showPreferences = false,
+}: Readonly<{ user: LogtoUser | null; showPreferences?: boolean }>) {
   const t = useTranslations('AppLayout')
   const { signOut } = useLogto()
   const [pending, setPending] = useState(false)
@@ -326,6 +292,14 @@ export function UserMenu({ user }: Readonly<{ user: LogtoUser | null }>) {
             </p>
           </div>
         </DropdownMenuLabel>
+
+        {showPreferences ? (
+          <>
+            <DropdownMenuSeparator />
+            <LanguageMenuSection />
+            <ThemeMenuSection />
+          </>
+        ) : null}
 
         <DropdownMenuSeparator />
         <button

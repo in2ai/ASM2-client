@@ -11,6 +11,11 @@
     "dark": "Dark",
     "system": "System"
   },
+  "AreaSwitcher": {
+    "label": "Switch area",
+    "chat": "Chat",
+    "dashboard": "Dashboard"
+  },
   "AppLayout": {
     "closeSidebarMenu": "Close sidebar",
     "closeNavigationMenu": "Close navigation menu",
@@ -171,12 +176,27 @@
     "topWords": {
       "title": "Top searched words",
       "hint": "Shows the keywords users mention most often in their queries. Helps identify high-interest topics and potential knowledge gaps.",
-      "description": "Top words by frequency"
+      "description": "Top words by frequency",
+      "filters": {
+        "ariaLabel": "Filter top searched words by language",
+        "placeholder": "Select language",
+        "allLanguages": "All languages",
+        "loading": "Loading top searched words",
+        "empty": "No top searched words found for {language}",
+        "error": "Failed to load top searched words. Please try again."
+      }
     },
     "topTopics": {
       "title": "Most frequent topics",
       "hint": "Groups queries by detected topic. Helps understand which knowledge areas are consulted most and where to prioritize content improvements.",
-      "description": "Top topics by frequency"
+      "description": "Top topics by frequency",
+      "filters": {
+        "ariaLabel": "Filter top topics by language",
+        "placeholder": "Select language",
+        "loading": "Loading top topics",
+        "empty": "No top topics found for {language}",
+        "error": "Failed to load top topics. Please try again."
+      }
     }
   },
   "ChartHint": {
@@ -250,8 +270,6 @@
     }
   },
   "ChatPage": {
-    "shellTitle": "Enterprise chat",
-    "shellSubtitle": "Secure conversations connected to the ASM2 backend",
     "shell": {
       "dashboard": "Dashboard",
       "openSidebar": "Open conversations",
@@ -276,17 +294,24 @@
       "description": "Choose an existing conversation or start a new one to chat with the assistant.",
       "gatedTitle": "Connect and select at least one source",
       "gatedDescription": "Open the sources panel to start the source setup flow before starting the conversation.",
+      "indexingInactiveTitle": "Indexing is not enabled yet",
+      "indexingInactiveDescriptionAdmin": "Open the sources panel and start VDB indexing when your connected sources are selected for retrieval.",
+      "indexingInactiveDescriptionUser": "Open the sources panel and ask an administrator to start VDB indexing when your connected sources are ready.",
       "syncTitle": "Finish source setup before chatting",
       "syncDescription": "Stop the VDB update flow in the sources panel so the backend can finish preparing the RAG before you chat."
     },
     "composer": {
       "placeholder": "Ask a question about your documents, processes, or data...",
       "disabledHint": "Chat stays disabled until at least one connected source is selected for retrieval.",
+      "disabledHintIndexingInactiveAdmin": "Chat stays disabled until VDB indexing is started. Open the sources panel and start indexing when your sources are selected.",
+      "disabledHintIndexingInactiveUser": "Chat stays disabled until VDB indexing is started. Open the sources panel and ask an administrator to start indexing when your sources are ready.",
       "finishSetupHint": "Finish the source setup flow in the sources panel before chatting."
     },
     "messages": {
       "assistant": "Assistant",
       "openSource": "Open source",
+      "page": "Page",
+      "pages": "Pages",
       "sources": "Sources",
       "sending": "Generating response...",
       "user": "You"
@@ -318,6 +343,7 @@
         "activeDescription": "The backend is indexing connected sources. Stop VDB before connecting or refreshing providers.",
         "inactiveDescription": "Indexing is off. You can connect or refresh sources now.",
         "connectPrerequisite": "Stop VDB indexing before connecting or refreshing providers.",
+        "startRequiresSelection": "Select at least one connected source for chat retrieval before starting indexing.",
         "startUpdate": "Start indexing",
         "stopUpdate": "Stop indexing"
       },
@@ -340,7 +366,9 @@
       "callbackInvalidState": "Google Drive authorization state is invalid or expired.",
       "callbackExchangeFailed": "Unable to complete Google Drive connection.",
       "providers": {
-        "drive": { "description": "Connect your Google Drive files so the assistant can retrieve from them." }
+        "drive": {
+          "description": "Connect your Google Drive files so the assistant can retrieve from them."
+        }
       }
     }
   },

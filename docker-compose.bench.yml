@@ -1,0 +1,94 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.bench
+      args:
+        USE_LOCAL_MODEL: ${USE_LOCAL_MODEL:-false}
+        LOCAL_MODEL_REPO: ${LOCAL_MODEL_REPO}
+        LOCAL_MODEL_FILE: ${LOCAL_MODEL_FILE}
+        USE_LOCAL_EMB: ${USE_LOCAL_EMB:-false}
+        LOCAL_EMB_REPO: ${LOCAL_EMB_REPO}
+      secrets:
+        - hf_token
+    image: asm2-backend:latest
+    env_file:
+      - .env
+    environment:
+      CHAT_DB_PATH: /app/data/chat_history.sqlite3
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./secrets:/app/secrets:ro
+      - ./benchmark_data:/app/benchmark_data
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8001:8001"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8001/healthz || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrant_index:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  dashboard:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.caddy
+      args:
+        VITE_BACKEND_URL: /api
+        LOGTO_ENDPOINT: ${LOGTO_ENDPOINT}
+        LOGTO_APP_ID: ${LOGTO_APP_ID}
+        LOGTO_API_RESOURCE: ${LOGTO_API_RESOURCE}
+    image: asm2-dashboard:latest
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+        - "127.0.0.1:3001:80"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1/ >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  qdrant_index:
+
+secrets:
+  hf_token:
+    environment: HF_TOKEN

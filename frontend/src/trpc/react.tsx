@@ -1,5 +1,9 @@
 import { useLogto } from '@logto/react'
-import { keepPreviousData, useQuery, type UseQueryOptions } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useQuery,
+  type UseQueryOptions,
+} from '@tanstack/react-query'
 
 import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 
@@ -171,7 +175,10 @@ function buildMetricsQueryKey(input: MetricsQueryInput): string {
 function useAuthorizedFetch() {
   const { getAccessToken } = useLogto()
 
-  return async function authorizedFetch<T>(path: string, input: MetricsQueryInput): Promise<T> {
+  return async function authorizedFetch<T>(
+    path: string,
+    input: MetricsQueryInput,
+  ): Promise<T> {
     const token = await getAccessToken(API_RESOURCE)
     if (!token) {
       throw new Error('UNAUTHORIZED: missing access token')
@@ -193,8 +200,7 @@ function useAuthorizedFetch() {
       try {
         const payload = (await response.json()) as { detail?: string }
         detail = payload.detail || detail
-      } catch {
-      }
+      } catch {}
 
       throw new Error(`${response.status}: ${detail}`)
     }
@@ -205,13 +211,17 @@ function useAuthorizedFetch() {
 
 function useMetricsGetQuery(
   input: MetricsQueryInput,
-  options?: Omit<UseQueryOptions<DashboardMetrics, Error>, 'queryKey' | 'queryFn'>,
+  options?: Omit<
+    UseQueryOptions<DashboardMetrics, Error>,
+    'queryKey' | 'queryFn'
+  >,
 ) {
   const authorizedFetch = useAuthorizedFetch()
 
   return useQuery<DashboardMetrics, Error>({
     queryKey: ['metrics', 'dashboard', buildMetricsQueryKey(input)],
-    queryFn: () => authorizedFetch<DashboardMetrics>('/metrics/dashboard', input),
+    queryFn: () =>
+      authorizedFetch<DashboardMetrics>('/metrics/dashboard', input),
     placeholderData: keepPreviousData,
     ...options,
   })

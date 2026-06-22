@@ -90,7 +90,9 @@ export function EmptyState({
 
         {showTips && resolvedTips.length > 0 && (
           <div className="bg-card rounded-lg border p-4 sm:p-6">
-            <p className="mb-3 text-sm font-medium sm:text-base">{t('helpfulTips')}</p>
+            <p className="mb-3 text-sm font-medium sm:text-base">
+              {t('helpfulTips')}
+            </p>
             <ul className="text-muted-foreground space-y-2 text-sm sm:text-base">
               {resolvedTips.map((tip, index) => (
                 <li key={index} className="flex items-start gap-2">
@@ -152,7 +154,11 @@ export function NoNodesEmptyState({
       onAction={onRefresh}
       isActionLoading={isRefreshing}
       showTips={true}
-      tips={[t('tips.setupScript'), t('tips.logtoOrganizations'), t('tips.contactAdmin')]}
+      tips={[
+        t('tips.setupScript'),
+        t('tips.logtoOrganizations'),
+        t('tips.contactAdmin'),
+      ]}
     />
   )
 }

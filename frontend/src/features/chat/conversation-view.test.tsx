@@ -6,7 +6,7 @@ import type {
   ReactNode,
   TextareaHTMLAttributes,
 } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { ConversationView } from './conversation-view'
 import type { ChatDetail, ChatMessage } from './types'
 
@@ -43,6 +43,8 @@ vi.mock('lucide-react', () => ({
 const defaultLabels = {
   assistant: 'Assistant',
   openSource: 'Open source',
+  page: 'Page',
+  pages: 'Pages',
   sending: 'Sending',
   sources: 'Sources',
   user: 'User',
@@ -89,7 +91,6 @@ function renderConversation(messages: ChatMessage[]) {
       messageLabels={defaultLabels}
       onComposerChange={() => undefined}
       onSendMessage={() => undefined}
-      title="Markdown chat"
     />,
   )
 }
@@ -188,6 +189,7 @@ describe('ConversationView markdown rendering', () => {
           sources: [
             {
               link: 'https://docs.example.test/source',
+              pages: [2, 4],
               source_type: 'drive',
               title: 'Source document',
             },
@@ -200,10 +202,34 @@ describe('ConversationView markdown rendering', () => {
     expect(screen.getByText('formatting').tagName).toBe('STRONG')
     expect(screen.getByText('Sources')).toBeTruthy()
     expect(screen.getByText('Source document')).toBeTruthy()
+    expect(screen.getByText('Pages 2, 4')).toBeTruthy()
     expect(screen.getByRole('link', { name: /Open source/ })).toHaveProperty(
       'href',
       'https://docs.example.test/source',
     )
+  })
+
+  it('ignores invalid source page metadata', () => {
+    const invalidMetadata = {
+      sources: [
+        {
+          link: 'https://docs.example.test/source',
+          pages: ['2'],
+          source_type: 'drive',
+          title: 'Invalid source document',
+        },
+      ],
+    } as unknown as ChatMessage['metadata']
+
+    renderConversation([
+      createMessage({
+        content: 'Assistant response.',
+        metadata: invalidMetadata,
+        role: 'assistant',
+      }),
+    ])
+
+    expect(screen.queryByText('Invalid source document')).toBeNull()
   })
 
   it('uses scrollable containers for long code blocks and tables', () => {

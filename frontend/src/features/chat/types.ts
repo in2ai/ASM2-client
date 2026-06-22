@@ -4,6 +4,7 @@ export interface ChatSource {
   title: string
   source_type: string
   link: string | null
+  pages?: number[]
 }
 
 export interface ChatMessageMetadata {
@@ -59,6 +60,7 @@ export interface SourceLoginInfo {
 export interface SourcesStatus {
   connected_sources: SourceProviderKey[]
   selected_sources: SourceProviderKey[]
+  vdb_indexing_active: boolean
   can_chat: boolean
 }
 

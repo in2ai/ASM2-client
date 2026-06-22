@@ -20,7 +20,8 @@ CLIENT_SECRET_FILE = get_env(
 )
 # Google OAuth client JSON from env (same shape as secrets/client_secret.json). Overrides file when set and valid.
 CLIENT_SECRET = get_env("CLIENT_SECRET")
-GDRIVE_ROOT = get_env("GDRIVE_ROOT", get_env("FOLDER_ID", "")).strip()
+GDRIVE_ROOTS = set(i.strip() for i in get_env("GDRIVE_ROOTS", '').strip().split(',') if i)
+GDRIVE_EXCLUDE = set(i.strip() for i in get_env("GDRIVE_EXCLUDE", "").strip().split(',') if i)
 
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 

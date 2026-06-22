@@ -13,7 +13,8 @@ from google_auth_oauthlib.flow import Flow
 from src.config.config import (
     CLIENT_SECRET,
     CLIENT_SECRET_FILE,
-    GDRIVE_ROOT,
+    GDRIVE_ROOTS,
+    GDRIVE_EXCLUDE,
     SCOPES,
 )
 from src.connectors.source import DataSource
@@ -128,7 +129,7 @@ class GoogleDriveSource(DataSource):
 
 
     def __init__(self, raw_creds: str):
-        super().__init__(self.name, raw_creds, GDRIVE_ROOT)
+        super().__init__(self.name, raw_creds, GDRIVE_ROOTS)
 
     
     def login_info() -> dict[str, Any] | None:
@@ -332,12 +333,15 @@ class GoogleDriveSource(DataSource):
 
     def list_files(self):
         # Discover all files via BFS
-        queue = [(self.root, "")]
+        queue = [(i, "") for i in self.roots]
         files = []
 
         while queue:
             current, current_path = queue.pop(0)
             page_token = None
+
+            if current in GDRIVE_EXCLUDE:
+                continue
 
             while True:
                 resp = safe_execute(

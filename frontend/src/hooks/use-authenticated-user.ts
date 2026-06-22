@@ -1,6 +1,10 @@
 import { API_RESOURCE } from '@/lib/api'
 import type { LogtoUser } from '@/lib/auth'
-import { hasRoleInAccessToken, hasRoleInClaim, mapClaimsToUser } from '@/lib/auth'
+import {
+  hasRoleInAccessToken,
+  hasRoleInClaim,
+  mapClaimsToUser,
+} from '@/lib/auth'
 import { useLogto } from '@logto/react'
 import { useEffect, useState } from 'react'
 
@@ -40,11 +44,7 @@ export function useAuthenticatedUser() {
           'admin',
         ) || hasRoleInAccessToken(accessToken, 'admin')
 
-      setUser(
-        isAdmin
-          ? { ...nextUser, role: 'admin' }
-          : nextUser,
-      )
+      setUser(isAdmin ? { ...nextUser, role: 'admin' } : nextUser)
     }
 
     void loadUser()

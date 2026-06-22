@@ -11,6 +11,11 @@
     "dark": "Oscuro",
     "system": "Sistema"
   },
+  "AreaSwitcher": {
+    "label": "Cambiar de sección",
+    "chat": "Chat",
+    "dashboard": "Dashboard"
+  },
   "AppLayout": {
     "closeSidebarMenu": "Cerrar menu lateral",
     "closeNavigationMenu": "Cerrar menu de navegación",
@@ -171,12 +176,27 @@
     "topWords": {
       "title": "Palabras más buscadas",
       "hint": "Muestra las palabras clave que los usuarios mencionan con más frecuencia en sus consultas. Ayuda a identificar los temas de mayor interés y posibles lagunas de información.",
-      "description": "Top palabras por frecuencia"
+      "description": "Top palabras por frecuencia",
+      "filters": {
+        "ariaLabel": "Filtrar palabras más buscadas por idioma",
+        "placeholder": "Seleccionar idioma",
+        "allLanguages": "Todos los idiomas",
+        "loading": "Cargando palabras más buscadas",
+        "empty": "No se encontraron palabras más buscadas para {language}",
+        "error": "Error al cargar las palabras más buscadas. Por favor, intenta nuevamente."
+      }
     },
     "topTopics": {
       "title": "Temas más frecuentes",
       "hint": "Agrupa las consultas por temática detectada automáticamente. Permite entender que áreas del conocimiento son más consultadas y priorizar la mejora del contenido.",
-      "description": "Top temas por frecuencia"
+      "description": "Top temas por frecuencia",
+      "filters": {
+        "ariaLabel": "Filtrar temas más frecuentes por idioma",
+        "placeholder": "Seleccionar idioma",
+        "loading": "Cargando temas más frecuentes",
+        "empty": "No se encontraron temas más frecuentes para {language}",
+        "error": "Error al cargar los temas más frecuentes. Por favor, intenta nuevamente."
+      }
     }
   },
   "ChartHint": {
@@ -250,8 +270,6 @@
     }
   },
   "ChatPage": {
-    "shellTitle": "Chat empresarial",
-    "shellSubtitle": "Conversaciones seguras conectadas al backend de ASM2",
     "shell": {
       "dashboard": "Dashboard",
       "openSidebar": "Abrir conversaciones",
@@ -276,17 +294,24 @@
       "description": "Elige una conversación existente o inicia una nueva para hablar con el asistente.",
       "gatedTitle": "Conecta y selecciona al menos una fuente",
       "gatedDescription": "Abre el panel de fuentes para iniciar el flujo de preparación antes de empezar la conversación.",
+      "indexingInactiveTitle": "El indexado aún no está activo",
+      "indexingInactiveDescriptionAdmin": "Abre el panel de fuentes e inicia el indexado VDB cuando las fuentes conectadas estén seleccionadas para la recuperación.",
+      "indexingInactiveDescriptionUser": "Abre el panel de fuentes y pide a un administrador que inicie el indexado VDB cuando las fuentes conectadas estén listas.",
       "syncTitle": "Termina la preparación de fuentes antes de chatear",
       "syncDescription": "Detén el flujo de actualización de VDB en el panel de fuentes para que el backend termine de preparar el RAG antes de chatear."
     },
     "composer": {
       "placeholder": "Haz una pregunta sobre tus documentos, procesos o datos...",
       "disabledHint": "El chat permanece deshabilitado hasta que al menos una fuente conectada esté seleccionada para recuperación.",
+      "disabledHintIndexingInactiveAdmin": "El chat permanece deshabilitado hasta que se inicie el indexado VDB. Abre el panel de fuentes e inicia el indexado cuando tengas fuentes seleccionadas.",
+      "disabledHintIndexingInactiveUser": "El chat permanece deshabilitado hasta que el indexado VDB esté en marcha. Abre el panel de fuentes y pide a un administrador que inicie el indexado cuando las fuentes estén listas.",
       "finishSetupHint": "Termina el flujo de preparación de fuentes en el panel antes de chatear."
     },
     "messages": {
       "assistant": "Asistente",
       "openSource": "Abrir fuente",
+      "page": "Página",
+      "pages": "Páginas",
       "sources": "Fuentes",
       "sending": "Generando respuesta...",
       "user": "Tú"
@@ -318,6 +343,7 @@
         "activeDescription": "El backend está indexando las fuentes conectadas. Detén VDB antes de conectar o refrescar proveedores.",
         "inactiveDescription": "El indexado está desactivado. Ahora puedes conectar o refrescar fuentes.",
         "connectPrerequisite": "Detén el indexado VDB antes de conectar o refrescar proveedores.",
+        "startRequiresSelection": "Selecciona al menos una fuente conectada para la recuperación del chat antes de iniciar el indexado.",
         "startUpdate": "Iniciar indexado",
         "stopUpdate": "Detener indexado"
       },
@@ -340,7 +366,9 @@
       "callbackInvalidState": "El estado de autorización de Google Drive es inválido o ha expirado.",
       "callbackExchangeFailed": "No se pudo completar la conexión con Google Drive.",
       "providers": {
-        "drive": { "description": "Conecta tus archivos de Google Drive para que el asistente pueda recuperarlos." }
+        "drive": {
+          "description": "Conecta tus archivos de Google Drive para que el asistente pueda recuperarlos."
+        }
       }
     }
   },

@@ -356,7 +356,9 @@ export function RAGQualityMetrics({
                     <FileText size={16} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{t('docsPerQuery.title')}</p>
+                    <p className="text-sm font-medium">
+                      {t('docsPerQuery.title')}
+                    </p>
                     <p className="text-muted-foreground text-xs">
                       {t('docsPerQuery.description')}
                     </p>

@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { type AppLocale } from '@/i18n/config'
+import type { AppLocale } from '@/i18n/config'
 import { cn } from '@/lib/utils'
 import { MessageSquareText, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
@@ -118,7 +118,7 @@ export function ChatSidebar({
                   <button
                     type="button"
                     onClick={() => onSelectChat(chat.id)}
-                    className="min-w-0 flex-1 px-4 py-3 text-left"
+                    className="min-w-0 flex-1 cursor-pointer px-4 py-3 text-left"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <p className="line-clamp-1 font-semibold tracking-tight">

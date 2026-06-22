@@ -29,10 +29,11 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     reranker = configurable["reranker"]
     # pool = configurable.get("questdb_pool")
     pool = configurable.get("pg_pool")
+    metrics_actor = configurable.get("metrics_actor")
 
     # Perform VDB search
     try:
-        with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value):
+        with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value, actor=metrics_actor):
             chunks, lang_code = retrieve_and_rerank(
                 query, vectorstore, reranker, sources
             )
@@ -52,28 +53,31 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     available_sources = get_chunk_sources(chunks, sources)
 
     # Send usage metrics
-    try:
-        insert_metric(pool, Metrics.NUM_DOCS_RAG.value, len(chunks))
+    if pool is not None and metrics_actor is not None:
+        try:
+            insert_metric(
+                pool, Metrics.NUM_DOCS_RAG.value, len(chunks), actor=metrics_actor
+            )
 
-    except Exception:
-        logging.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
+        except Exception:
+            logging.warning("Failed to record NUM_DOCS_RAG metric", exc_info=True)
 
-    try:
-        search_terms = extract_search_terms(query, lang_code)
-        register_words(pool, search_terms, lang_code)
+        try:
+            search_terms = extract_search_terms(query, lang_code)
+            register_words(pool, search_terms, actor=metrics_actor, lang=lang_code)
 
-    except Exception:
-        logging.warning("Failed to record search terms", exc_info=True)
+        except Exception:
+            logging.warning("Failed to record search terms", exc_info=True)
 
-    try:
-        topic_indices = {t for c in chunks for t in c.metadata.get("topics", {})}
+        try:
+            topic_indices = {t for c in chunks for t in c.metadata.get("topics", {})}
 
-        if topic_indices:
-            topics = resolve_topic_names(topic_indices, lang_code, QDRANT_META_PATH)
-            register_topics(pool, topics)
+            if topic_indices:
+                topics = resolve_topic_names(topic_indices, lang_code, QDRANT_META_PATH)
+                register_topics(pool, topics, actor=metrics_actor)
 
-    except Exception:
-        logging.warning("Failed to record topics", exc_info=True)
+        except Exception:
+            logging.warning("Failed to record topics", exc_info=True)
 
     # Build response
     fallback_messages = {

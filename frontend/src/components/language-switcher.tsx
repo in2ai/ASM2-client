@@ -5,9 +5,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { type AppLocale } from '@/i18n/config'
+import type { AppLocale } from '@/i18n/config'
 import { useI18nContext } from '@/i18n/provider'
 import { useTranslations } from 'next-intl'
 
@@ -17,7 +20,7 @@ const languageOptions: ReadonlyArray<{ value: AppLocale }> = [
   { value: 'gl' },
 ]
 
-export function LanguageSwitcher() {
+function useLanguageOptions() {
   const t = useTranslations('LanguageSwitcher')
   const optionLabels: Record<AppLocale, string> = {
     es: t('spanish'),
@@ -35,6 +38,37 @@ export function LanguageSwitcher() {
     setLocale(nextLocale)
   }
 
+  return { t, optionLabels, locale, handleSelectLocale }
+}
+
+export function LanguageMenuSection() {
+  const { t, optionLabels, locale, handleSelectLocale } = useLanguageOptions()
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2">
+        <Languages className="h-4 w-4" />
+        <span>{t('ariaLabel')}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="min-w-40">
+        {languageOptions.map((option) => (
+          <DropdownMenuItem
+            key={option.value}
+            onClick={() => handleSelectLocale(option.value)}
+            className="flex cursor-pointer items-center gap-2"
+          >
+            <span>{optionLabels[option.value]}</span>
+            {locale === option.value && <Check className="ml-auto h-4 w-4" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
+
+export function LanguageSwitcher() {
+  const { t, optionLabels, locale, handleSelectLocale } = useLanguageOptions()
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -48,7 +82,7 @@ export function LanguageSwitcher() {
           <span className="sr-only">{t('ariaLabel')}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[140px]">
+      <DropdownMenuContent align="end" className="min-w-35">
         {languageOptions.map((option) => (
           <DropdownMenuItem
             key={option.value}

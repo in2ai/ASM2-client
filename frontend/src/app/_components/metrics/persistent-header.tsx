@@ -41,7 +41,10 @@ export function PersistentHeader({
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold tracking-tight">{t('title')}</h2>
             {isFetching && (
-              <Badge variant="secondary" className="animate-pulse gap-1 shadow-sm">
+              <Badge
+                variant="secondary"
+                className="animate-pulse gap-1 shadow-sm"
+              >
                 <Loader2 className="h-3 w-3 animate-spin" />
                 {t('updating')}
               </Badge>

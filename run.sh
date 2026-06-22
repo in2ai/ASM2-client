@@ -8,6 +8,7 @@ Usage: ./run.sh [up|down|build|config|logs|ps] [options] [-- extra docker compos
 Modes:
   --local           Include local QuestDB and Logto services (default)
   --remote          Use external QuestDB and Logto services
+  --bench           Just like --local, but changes entrypoint to a benchmark instead of the web server
 
 Networking:
   dashboard         Published on localhost:3001
@@ -32,6 +33,7 @@ Examples:
   ./run.sh up --gpu --qdrant nvidia
   ./run.sh up --remote --gpu
   ./run.sh config --gpu
+  ./run.sh up --bench
 EOF
 }
 
@@ -76,6 +78,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --remote)
       mode="remote"
+      shift
+      ;;
+    --bench)
+      mode="bench"
       shift
       ;;
     --gpu)
@@ -128,7 +134,13 @@ if [ "$action" = "up" ]; then
   ensure_gdrive_oauth_client_config
 fi
 
-compose_args=(-f docker-compose.yml)
+compose_args=()
+
+if [ "$mode" = "bench" ]; then
+  compose_args+=(-f docker-compose.bench.yml)
+else
+  compose_args+=(-f docker-compose.yml)
+fi
 
 if [ "$mode" = "local" ]; then
   compose_args+=(-f docker-compose.local.yml)

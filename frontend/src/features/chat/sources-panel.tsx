@@ -173,6 +173,7 @@ function VdbStatusBadge({
 
 function VdbActionButtons({
   actionPending,
+  canStartIndexing,
   isActive,
   onStart,
   onStop,
@@ -182,6 +183,7 @@ function VdbActionButtons({
   stopLabel,
 }: Readonly<{
   actionPending: boolean
+  canStartIndexing: boolean
   isActive: boolean
   onStart: () => void
   onStop: () => void
@@ -195,16 +197,18 @@ function VdbActionButtons({
         label: stopLabel,
         onClick: onStop,
         pending: stopPending,
+        disabled: actionPending,
       }
     : {
         label: startLabel,
         onClick: onStart,
         pending: startPending,
+        disabled: actionPending || !canStartIndexing,
       }
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Button disabled={actionPending} onClick={primaryAction.onClick}>
+      <Button disabled={primaryAction.disabled} onClick={primaryAction.onClick}>
         {primaryAction.pending ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : null}
@@ -345,15 +349,14 @@ function DriveSourceCard({
               {t('sources.connectDrive')}
             </Button>
           ) : (
-            <label className="border-border bg-background flex min-h-10 items-center gap-3 rounded-2xl border px-3 py-2 text-sm">
+            <label className="border-border bg-background flex min-h-10 cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2 text-sm">
               <input
                 type="checkbox"
+                className="cursor-pointer"
                 aria-label={t('sources.selectForChat')}
                 checked={optimisticSelected}
                 disabled={selectionPending}
-                onChange={(event) =>
-                  void toggleSelected(event.target.checked)
-                }
+                onChange={(event) => void toggleSelected(event.target.checked)}
               />
               <span>{t('sources.selectForChat')}</span>
               {selectionPending ? (
@@ -370,7 +373,10 @@ function DriveSourceCard({
   )
 }
 
-function VdbUpdateCard({ enabled }: Readonly<{ enabled: boolean }>) {
+function VdbUpdateCard({
+  canStartIndexing,
+  enabled,
+}: Readonly<{ canStartIndexing: boolean; enabled: boolean }>) {
   const t = useTranslations('ChatPage')
   const vdbStatusQuery = useVdbUpdateStatusQuery(enabled)
   const startVdbUpdateMutation = useStartVdbUpdateMutation()
@@ -417,10 +423,17 @@ function VdbUpdateCard({ enabled }: Readonly<{ enabled: boolean }>) {
             : t('sources.vdb.inactiveDescription')}
         </p>
 
+        {!vdbUpdateActive && !canStartIndexing ? (
+          <p className="text-muted-foreground text-sm">
+            {t('sources.vdb.startRequiresSelection')}
+          </p>
+        ) : null}
+
         {vdbError ? <p className="text-sm text-red-500">{vdbError}</p> : null}
 
         <VdbActionButtons
           actionPending={vdbActionPending}
+          canStartIndexing={canStartIndexing}
           isActive={vdbUpdateActive}
           onStart={() => startVdbUpdateMutation.mutate()}
           onStop={() => stopVdbUpdateMutation.mutate()}
@@ -452,6 +465,7 @@ export function SourcesPanel({
   const selectedSources = status?.selected_sources ?? []
   const driveConnected = connectedSources.has('drive')
   const driveSelected = selectedSources.includes('drive')
+  const hasSelectedSources = selectedSources.length > 0
   const vdbStatusQuery = useVdbUpdateStatusQuery(isAdmin && open)
   const vdbActive = vdbStatusQuery.data?.active ?? false
   const panelDescription = isAdmin
@@ -495,7 +509,12 @@ export function SourcesPanel({
             </CardContent>
           </Card>
 
-          {isAdmin ? <VdbUpdateCard enabled={open} /> : null}
+          {isAdmin ? (
+            <VdbUpdateCard
+              canStartIndexing={hasSelectedSources}
+              enabled={open}
+            />
+          ) : null}
 
           <DriveSourceCard
             connected={driveConnected}

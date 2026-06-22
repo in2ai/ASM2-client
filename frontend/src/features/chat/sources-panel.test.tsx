@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { SourcesPanel } from './sources-panel'
 
 const useSourceLoginInfoQueryMock = vi.fn()
@@ -129,6 +129,7 @@ describe('SourcesPanel', () => {
         onOpenChange={() => undefined}
         status={{
           can_chat: false,
+          vdb_indexing_active: false,
           connected_sources: [],
           selected_sources: [],
         }}
@@ -156,6 +157,7 @@ describe('SourcesPanel', () => {
         onOpenChange={() => undefined}
         status={{
           can_chat: false,
+          vdb_indexing_active: false,
           connected_sources: [],
           selected_sources: [],
         }}
@@ -184,6 +186,7 @@ describe('SourcesPanel', () => {
         onOpenChange={() => undefined}
         status={{
           can_chat: false,
+          vdb_indexing_active: false,
           connected_sources: [],
           selected_sources: [],
         }}
@@ -215,6 +218,7 @@ describe('SourcesPanel', () => {
         onOpenChange={() => undefined}
         status={{
           can_chat: false,
+          vdb_indexing_active: false,
           connected_sources: ['drive'],
           selected_sources: [],
         }}
@@ -229,5 +233,61 @@ describe('SourcesPanel', () => {
 
     expect(checkbox.checked).toBe(true)
     expect(screen.getByText('sources.selectionSaving')).toBeTruthy()
+  })
+
+  it('disables start indexing when no source is selected for retrieval', () => {
+    useVdbUpdateStatusQueryMock.mockReturnValue({
+      data: { active: false },
+      error: null,
+      isFetching: false,
+    })
+
+    render(
+      <SourcesPanel
+        isAdmin
+        open
+        onOpenChange={() => undefined}
+        status={{
+          can_chat: false,
+          vdb_indexing_active: false,
+          connected_sources: ['drive'],
+          selected_sources: [],
+        }}
+      />,
+    )
+
+    const startButton = screen.getByRole('button', {
+      name: 'sources.vdb.startUpdate',
+    }) as HTMLButtonElement
+
+    expect(startButton.disabled).toBe(true)
+  })
+
+  it('enables start indexing when at least one source is selected', () => {
+    useVdbUpdateStatusQueryMock.mockReturnValue({
+      data: { active: false },
+      error: null,
+      isFetching: false,
+    })
+
+    render(
+      <SourcesPanel
+        isAdmin
+        open
+        onOpenChange={() => undefined}
+        status={{
+          can_chat: false,
+          vdb_indexing_active: false,
+          connected_sources: ['drive'],
+          selected_sources: ['drive'],
+        }}
+      />,
+    )
+
+    const startButton = screen.getByRole('button', {
+      name: 'sources.vdb.startUpdate',
+    }) as HTMLButtonElement
+
+    expect(startButton.disabled).toBe(false)
   })
 })

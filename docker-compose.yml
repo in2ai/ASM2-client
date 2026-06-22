@@ -20,9 +20,11 @@ services:
       TRANSFORMERS_OFFLINE: "1"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Remove the following line when the project moves to use internal docker volumes
+    user: "0:0"
     volumes:
       - ./secrets:/app/secrets:ro
-      - ./backend-data:/app/data
+      - backend-data:/app/data
     depends_on:
       qdrant:
         condition: service_healthy
@@ -44,7 +46,7 @@ services:
     image: qdrant/qdrant:latest
     restart: unless-stopped
     volumes:
-      - ./qdrant_index:/qdrant/storage
+      - qdrant_index:/qdrant/storage
     healthcheck:
       test:
         [
@@ -84,6 +86,10 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+
+volumes:
+  qdrant_index:
+  backend-data:
 
 secrets:
   hf_token:

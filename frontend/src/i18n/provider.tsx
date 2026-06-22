@@ -28,7 +28,11 @@ const dictionaries: Record<AppLocale, TranslationDictionary> = {
 interface I18nContextValue {
   locale: AppLocale
   setLocale: (locale: AppLocale) => void
-  t: (namespace: string, key: string, values?: Record<string, string | number>) => string
+  t: (
+    namespace: string,
+    key: string,
+    values?: Record<string, string | number>,
+  ) => string
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null)
@@ -52,7 +56,10 @@ function getNestedValue(obj: unknown, path: string): string | undefined {
   return typeof current === 'string' ? current : undefined
 }
 
-function interpolate(template: string, values?: Record<string, string | number>): string {
+function interpolate(
+  template: string,
+  values?: Record<string, string | number>,
+): string {
   if (!values) {
     return template
   }
@@ -81,7 +88,11 @@ export function I18nProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [])
 
   const t = useCallback(
-    (namespace: string, key: string, values?: Record<string, string | number>) => {
+    (
+      namespace: string,
+      key: string,
+      values?: Record<string, string | number>,
+    ) => {
       const dictionary = dictionaries[locale]
       const fullPath = key.length > 0 ? `${namespace}.${key}` : namespace
       const message = getNestedValue(dictionary, fullPath)

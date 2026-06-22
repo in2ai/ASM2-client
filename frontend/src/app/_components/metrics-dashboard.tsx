@@ -1,11 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
-import { endOfDay, startOfDay } from 'date-fns'
-import { Loader2 } from 'lucide-react'
-import { type DateRange } from 'react-day-picker'
-import { useLocale, useTranslations } from 'next-intl'
-
-import { type DashboardView } from '@/app/_components/dashboard-views'
 import { AppLayout } from '@/app/_components/app-layout'
+import { type DashboardView } from '@/app/_components/dashboard-views'
 import { LoadingState } from '@/app/_components/metrics/loading-state'
 import { PersistentHeader } from '@/app/_components/metrics/persistent-header'
 import { type MetricsResponse } from '@/app/_components/metrics/types'
@@ -19,6 +13,18 @@ import { NoMetricsEmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { type LogtoUser } from '@/lib/auth'
 import { api } from '@/trpc/react'
+import { endOfDay, startOfDay } from 'date-fns'
+import { Loader2 } from 'lucide-react'
+import { useLocale, useTranslations } from 'next-intl'
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+import { type DateRange } from 'react-day-picker'
 
 interface MetricsDashboardProps {
   readonly user: LogtoUser
@@ -56,6 +62,7 @@ const QUERY_OPTIONS = {
 function renderMetricsView(
   view: DashboardView,
   userMetrics: MetricsResponse | undefined,
+  dateRange: DateRange | undefined,
 ) {
   if (!userMetrics) {
     return null
@@ -66,13 +73,14 @@ function renderMetricsView(
       {view === 'overview' && <OverviewHighlights metrics={userMetrics} />}
       {view === 'usage' && <UsageMetrics metrics={userMetrics} />}
       {view === 'rag-quality' && <RAGQualityMetrics metrics={userMetrics} />}
-      {view === 'insights' && <InsightsView metrics={userMetrics} />}
+      {view === 'insights' && <InsightsView dateRange={dateRange} />}
     </Suspense>
   )
 }
 
 function renderDashboardContent({
   data,
+  dateRange,
   errorCode,
   errorMessages,
   errorTitles,
@@ -86,6 +94,7 @@ function renderDashboardContent({
   headerT,
 }: {
   data: MetricsResponse | undefined
+  dateRange: DateRange | undefined
   errorCode: keyof typeof errorTitles
   errorMessages: Record<keyof typeof errorTitles, string>
   errorTitles: Record<string, string>
@@ -131,7 +140,7 @@ function renderDashboardContent({
           showUpdatingOverlay ? 'opacity-45' : 'opacity-100',
         ].join(' ')}
       >
-        {renderMetricsView(currentView, data)}
+        {renderMetricsView(currentView, data, dateRange)}
       </div>
 
       {showUpdatingOverlay ? (
@@ -263,6 +272,7 @@ export function MetricsDashboard({ user }: MetricsDashboardProps) {
 
         {renderDashboardContent({
           data,
+          dateRange,
           errorCode,
           errorMessages,
           errorTitles,
