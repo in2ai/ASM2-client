@@ -118,6 +118,7 @@
     "Topbar",
     "typesafety",
     "unrs",
+    "unstub",
     "userinfo",
     "uvicorn",
     "vectordb",
