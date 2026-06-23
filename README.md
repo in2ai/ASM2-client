@@ -58,6 +58,7 @@ cp .env.example .env
 | Variable | Descripción | Ejemplo |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | Clave de API para los modelos de OpenAI | `sk-...` |
+| `TOGETHER_API_KEY` | Clave de API de Together.ai (usada por el LLM evaluador del benchmark) | `tgp_v1_...` |
 | `FOLDER_ID` | ID de carpeta para almacenamiento (Google Drive) | `1ABC...` |
 | `CLIENT_SECRET` | JSON del cliente OAuth de Google (mismo contenido que `secrets/client_secret.json`; una sola línea en `.env`) | `{"web":{...}}` o `{"installed":{...}}` |
 | `GOOGLE_CLIENT_SECRET_FILE` | Ruta opcional al fichero JSON del cliente OAuth cuando se monta en Docker | `/app/secrets/client_secret.json` |
@@ -278,15 +279,16 @@ El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` po
 
 **Requisitos previos:**
 
-- `OPENAI_API_KEY` en `.env` (el evaluador usa `gpt-4o-mini` y `text-embedding-3-small`).
+- `TOGETHER_API_KEY` en `.env` (el LLM evaluador usa el modelo `Qwen/Qwen3-235B-A22B-Instruct-2507-tput` de Together.ai).
+- `OPENAI_API_KEY` en `.env` (los embeddings del evaluador usan `text-embedding-3-small` de OpenAI).
 - Un dataset de preguntas/respuestas en `benchmark_data/` (por defecto `dataset_wikipedia_qa_5_docs_200.csv`).
 
 **Resultados:** se escriben en `benchmark_data/` (montado como volumen), entre otros:
 
-- `rag_evaluation_results_attempt_N.csv` — resultados detallados por pregunta.
-- `rag_evaluation_summary.csv` — resumen agregado de métricas por ejecución.
-- `query_timings_attempt_N.csv` — tiempo total por evaluación (consulta + métricas).
-- `batch_timings_attempt_N.csv` — tiempo por lote.
+- `rag_evaluation_results_attempt_N.csv` — resultados de métricas por pregunta.
+- `query_timings_attempt_N.csv` — tiempo total por pregunta (consulta + métricas).
+- `batch_timings_attempt_N.csv` — tiempo total por lote.
+- `rag_evaluation_summary.csv` — resumen de métricas y tiempos por ejecución.
 
 Por defecto realiza 3 ejecuciones de evaluación (`NUM_EVALUATIONS`).
 

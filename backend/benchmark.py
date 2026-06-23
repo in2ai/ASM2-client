@@ -2,6 +2,7 @@ import asyncio
 import csv
 import json
 import math
+import os
 import time
 import traceback
 import pandas as pd
@@ -9,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 import openai
 from ragas.embeddings.base import embedding_factory
@@ -25,9 +27,21 @@ from src.metrics.connection import get_questdb_pool
 from src.utils.rag import get_reranker
 
 
+load_dotenv()
 init_nlp()
 
-client = openai.AsyncOpenAI(timeout=60.0)
+openai_api_key = os.getenv("OPENAI_API_KEY")
+together_api_key = os.getenv("TOGETHER_API_KEY")
+
+client_openai = openai.AsyncOpenAI(
+    api_key=openai_api_key,
+    timeout=60.0,
+)
+client_together = openai.AsyncOpenAI(
+    base_url="https://api.together.xyz/v1",
+    api_key=together_api_key,
+    timeout=60.0,
+)
 
 LLM = get_configured_llm()
 LLM_WITH_TOOLS = get_llm_with_tools(LLM)
@@ -38,14 +52,14 @@ QUESTDB_POOL = get_questdb_pool()
 ADMIN_SOURCES = {}
 
 # QA_CSV_PATH = Path("/app/benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv")
-QA_CSV_PATH = Path("/app/benchmark_data/dataset_wikipedia_qa_5_docs_200.csv")
+QA_CSV_PATH = Path("/app/benchmark_data/dataset_wikipedia_qa_5_docs_2.csv")
 RESULTS_CSV_PATH = Path("/app/benchmark_data/rag_evaluation_results.csv")
 QUERY_TIMING_CSV_PATH = Path("/app/benchmark_data/query_timings.csv")
 BATCH_TIMING_CSV_PATH = Path("/app/benchmark_data/batch_timings.csv")
 SUMMARY_CSV_PATH = Path("/app/benchmark_data/rag_evaluation_summary.csv")
 
-EVAL_LLM = llm_factory("gpt-4o-mini", client=client)
-EVAL_EMBEDDINGS = embedding_factory("openai", model="text-embedding-3-small", client=client)
+EVAL_LLM = llm_factory("Qwen/Qwen3-235B-A22B-Instruct-2507-tput", client=client_together)
+EVAL_EMBEDDINGS = embedding_factory("openai", model="text-embedding-3-small", client=client_openai)
 
 METRICS = {
     "context_precision": ContextPrecision(llm=EVAL_LLM),
