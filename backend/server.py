@@ -198,12 +198,13 @@ def run_vdb_update_once() -> None:
         return
 
     logging.info("Updating VDB...")
-    vectorstore = app.state.vectorstore
-    manifest = VDBManifest(QDRANT_META_PATH)
-    initial_build_in_progress = not manifest.is_initialized()
 
     try:
         start_time = time.time()
+
+        vectorstore = app.state.vectorstore
+        manifest = VDBManifest(QDRANT_META_PATH)
+        initial_build_in_progress = not manifest.is_initialized()
 
         questdb_pool = app.state.questdb_pool
         embeddings = vectorstore.embeddings
