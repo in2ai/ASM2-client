@@ -50,7 +50,7 @@ describe('AreaSwitcher', () => {
     cleanup()
   })
 
-  it('renders dashboard/chat navigation for admins only', () => {
+  it('renders dashboard/chat navigation for dashboard-capable roles only', () => {
     const { rerender } = render(
       <AreaSwitcher activeArea="chat" user={{ role: 'user', sub: 'user-1' }} />,
     )
@@ -60,7 +60,7 @@ describe('AreaSwitcher', () => {
     rerender(
       <AreaSwitcher
         activeArea="dashboard"
-        user={{ role: 'admin', sub: 'admin-1' }}
+        user={{ role: 'manager', sub: 'manager-1' }}
       />,
     )
 
@@ -79,5 +79,14 @@ describe('AreaSwitcher', () => {
         .closest('[aria-current]')
         ?.getAttribute('aria-current'),
     ).toBe('page')
+
+    rerender(
+      <AreaSwitcher
+        activeArea="chat"
+        user={{ role: 'admin', sub: 'admin-1' }}
+      />,
+    )
+
+    expect(screen.getByLabelText('Switch area')).toBeTruthy()
   })
 })

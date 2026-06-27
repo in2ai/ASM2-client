@@ -29,6 +29,7 @@
     "userFallbackName": "User",
     "openUserMenu": "Open user menu",
     "admin": "Admin",
+    "manager": "Manager",
     "user": "User",
     "fallbackEmail": "user@company.com",
     "views": {
