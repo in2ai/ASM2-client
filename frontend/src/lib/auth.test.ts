@@ -1,7 +1,11 @@
 import type { IdTokenClaims } from '@logto/react'
 import { describe, expect, it } from 'vite-plus/test'
-
-import { hasRoleInAccessToken, hasRoleInClaim, mapClaimsToUser } from './auth'
+import {
+  hasDashboardAccess,
+  hasRoleInAccessToken,
+  hasRoleInClaim,
+  mapClaimsToUser,
+} from './auth'
 
 function createAccessToken(payload: Record<string, unknown>) {
   const encodedPayload = Buffer.from(JSON.stringify(payload))
@@ -29,21 +33,27 @@ describe('auth helpers', () => {
     })
   })
 
-  it('prefers the admin role when multiple claim roles are present', () => {
-    const user = mapClaimsToUser({
+  it('prefers dashboard-capable roles when multiple claim roles are present', () => {
+    const admin = mapClaimsToUser({
       name: 'Grace Brewster Hopper',
       roles: ['user', 'admin'],
       sub: 'admin-1',
     } as IdTokenClaims)
+    const manager = mapClaimsToUser({
+      roles: ['user', 'manager'],
+      sub: 'manager-1',
+    } as IdTokenClaims)
 
-    expect(user.firstName).toBe('Grace')
-    expect(user.lastName).toBe('Brewster Hopper')
-    expect(user.role).toBe('admin')
+    expect(admin.firstName).toBe('Grace')
+    expect(admin.lastName).toBe('Brewster Hopper')
+    expect(admin.role).toBe('admin')
+    expect(manager.role).toBe('manager')
   })
 
   it('detects roles in claims and access tokens', () => {
     expect(hasRoleInClaim('admin', 'admin')).toBe(true)
     expect(hasRoleInClaim(['user', 'admin'], 'admin')).toBe(true)
+    expect(hasRoleInClaim(['manager'], 'manager')).toBe(true)
     expect(hasRoleInClaim(['user'], 'admin')).toBe(false)
 
     expect(
@@ -53,8 +63,18 @@ describe('auth helpers', () => {
       ),
     ).toBe(true)
     expect(
+      hasRoleInAccessToken(createAccessToken({ role: 'manager' }), 'manager'),
+    ).toBe(true)
+    expect(
       hasRoleInAccessToken(createAccessToken({ roles: 'user' }), 'admin'),
     ).toBe(false)
     expect(hasRoleInAccessToken('not-a-jwt', 'admin')).toBe(false)
+  })
+
+  it('allows admins and managers to access the dashboard', () => {
+    expect(hasDashboardAccess({ role: 'admin' })).toBe(true)
+    expect(hasDashboardAccess({ role: 'manager' })).toBe(true)
+    expect(hasDashboardAccess({ role: 'user' })).toBe(false)
+    expect(hasDashboardAccess(null)).toBe(false)
   })
 })

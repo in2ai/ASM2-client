@@ -7,6 +7,7 @@ from src.config.logto_auth import (
     AuthInfo,
     require_admin,
     require_auth,
+    require_dashboard_access,
 )
 
 
@@ -213,6 +214,7 @@ class SourceLoginPayloadModel(BaseModel):
     auth_token: str | None = None
     redirect_uri: str | None = None
 
+
 class SourceLoginRequestModel(BaseModel):
     source: str
     payload: SourceLoginPayloadModel
@@ -227,7 +229,7 @@ class SourceOperationResultModel(BaseModel):
     message: str
 
 
-MetricsReadAuth = Annotated[AuthInfo, Depends(require_admin())]
-MetricsExportAuth = Annotated[AuthInfo, Depends(require_admin())]
+MetricsReadAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]
+MetricsExportAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]
 AuthenticatedAuth = Annotated[AuthInfo, Depends(require_auth())]
 AdminAuth = Annotated[AuthInfo, Depends(require_admin())]
