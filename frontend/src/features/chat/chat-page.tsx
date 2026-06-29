@@ -95,12 +95,16 @@ export function ChatPage({
   const hasSelectedSource = (sourcesStatus?.selected_sources?.length ?? 0) > 0;
   const vdbIndexingActive = sourcesStatus?.vdb_indexing_active ?? false;
   const chatEnabled = sourcesStatus?.can_chat ?? false;
+  const setupInProgress =
+    hasSelectedSource && vdbIndexingActive && !chatEnabled;
   const composerDisabled = !chatEnabled;
 
   let composerHint: string | undefined;
   if (!chatEnabled && sourcesStatus) {
     if (!hasSelectedSource) {
       composerHint = t("composer.disabledHint");
+    } else if (setupInProgress) {
+      composerHint = t("composer.finishSetupHint");
     } else if (!vdbIndexingActive) {
       composerHint =
         user.role === "admin"
@@ -115,7 +119,10 @@ export function ChatPage({
 
   if (!chatEnabled) {
     emptyPrimaryActionLabel = t("sources.openPanel");
-    if (sourcesStatus && hasSelectedSource && !vdbIndexingActive) {
+    if (setupInProgress) {
+      emptyTitle = t("empty.syncTitle");
+      emptyDescription = t("empty.syncDescription");
+    } else if (sourcesStatus && hasSelectedSource && !vdbIndexingActive) {
       emptyTitle = t("empty.indexingInactiveTitle");
       emptyDescription =
         user.role === "admin"

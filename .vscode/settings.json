@@ -1,5 +1,6 @@
 {
   "cSpell.words": [
+    "Actívalo",
     "addgroup",
     "adduser",
     "ainvoke",
@@ -117,6 +118,7 @@
     "Topbar",
     "typesafety",
     "unrs",
+    "unstub",
     "userinfo",
     "uvicorn",
     "vectordb",

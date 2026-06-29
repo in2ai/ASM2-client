@@ -294,18 +294,18 @@
       "description": "Elige una conversación existente o inicia una nueva para hablar con el asistente.",
       "gatedTitle": "Conecta y selecciona al menos una fuente",
       "gatedDescription": "Abre el panel de fuentes para iniciar el flujo de preparación antes de empezar la conversación.",
-      "indexingInactiveTitle": "El indexado aún no está activo",
-      "indexingInactiveDescriptionAdmin": "Abre el panel de fuentes e inicia el indexado VDB cuando las fuentes conectadas estén seleccionadas para la recuperación.",
-      "indexingInactiveDescriptionUser": "Abre el panel de fuentes y pide a un administrador que inicie el indexado VDB cuando las fuentes conectadas estén listas.",
-      "syncTitle": "Termina la preparación de fuentes antes de chatear",
-      "syncDescription": "Detén el flujo de actualización de VDB en el panel de fuentes para que el backend termine de preparar el RAG antes de chatear."
+      "indexingInactiveTitle": "Inicia el primer indexado para habilitar el chat",
+      "indexingInactiveDescriptionAdmin": "Abre el panel de fuentes e inicia el primer indexado VDB cuando las fuentes conectadas estén seleccionadas para la recuperación. Cuando termine, el chat quedará habilitado y podrás seguir usándolo aunque haya nuevos indexados en marcha.",
+      "indexingInactiveDescriptionUser": "Abre el panel de fuentes y pide a un administrador que inicie el primer indexado VDB cuando las fuentes conectadas estén listas. Cuando termine, el chat quedará habilitado y podrás seguir usándolo aunque haya nuevos indexados en marcha.",
+      "syncTitle": "El primer indexado todavía está en curso",
+      "syncDescription": "El chat se habilitará automáticamente cuando termine este primer indexado. Después podrás seguir usando el chat aunque haya nuevos indexados en marcha."
     },
     "composer": {
       "placeholder": "Haz una pregunta sobre tus documentos, procesos o datos...",
       "disabledHint": "El chat permanece deshabilitado hasta que al menos una fuente conectada esté seleccionada para recuperación.",
-      "disabledHintIndexingInactiveAdmin": "El chat permanece deshabilitado hasta que se inicie el indexado VDB. Abre el panel de fuentes e inicia el indexado cuando tengas fuentes seleccionadas.",
-      "disabledHintIndexingInactiveUser": "El chat permanece deshabilitado hasta que el indexado VDB esté en marcha. Abre el panel de fuentes y pide a un administrador que inicie el indexado cuando las fuentes estén listas.",
-      "finishSetupHint": "Termina el flujo de preparación de fuentes en el panel antes de chatear."
+      "disabledHintIndexingInactiveAdmin": "El chat se habilitará después del primer indexado VDB. Abre el panel de fuentes e inicia ese primer indexado cuando tengas fuentes seleccionadas.",
+      "disabledHintIndexingInactiveUser": "El chat se habilitará después del primer indexado VDB. Abre el panel de fuentes y pide a un administrador que inicie ese primer indexado cuando las fuentes estén listas.",
+      "finishSetupHint": "El chat se habilitará automáticamente cuando termine el primer indexado VDB."
     },
     "messages": {
       "assistant": "Asistente",
