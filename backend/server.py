@@ -26,10 +26,13 @@ from src.config.logto_auth import AuthInfo, has_role
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import (
+    QDRANT_COL,
+    QDRANT_META_PATH,
     VDB_LOCK,
     build_vectordb_from_sources,
     get_vectordb,
 )
+from src.connectors.manifest import VDBManifest
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
@@ -199,8 +202,12 @@ def run_vdb_update_once() -> None:
     try:
         start_time = time.time()
 
+        vectorstore = app.state.vectorstore
+        manifest = VDBManifest(QDRANT_META_PATH)
+        initial_build_in_progress = not manifest.is_initialized()
+
         questdb_pool = app.state.questdb_pool
-        embeddings = app.state.vectorstore.embeddings
+        embeddings = vectorstore.embeddings
         llm = app.state.llm
 
         # Get admin authenticated sources and update DB
@@ -213,6 +220,11 @@ def run_vdb_update_once() -> None:
         )
 
         build_vectordb_from_sources(llm, embeddings, sources)
+
+        if initial_build_in_progress:
+            manifest = VDBManifest(QDRANT_META_PATH)
+            manifest.set_initialized()
+            manifest.save()
 
         elapsed = time.time() - start_time
 
@@ -334,12 +346,18 @@ def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
         source for source in selected_sources if source in connected_set
     )
     vdb_indexing_active = os.path.isfile(VDB_LOCK)
+    manifest = VDBManifest(QDRANT_META_PATH)
+
+    initial_build_completed = manifest.is_initialized()
 
     return {
         "connected_sources": connected_sources,
         "selected_sources": selected_connected_sources,
         "vdb_indexing_active": vdb_indexing_active,
-        "can_chat": len(selected_connected_sources) > 0 and vdb_indexing_active,
+        "can_chat": (
+            len(selected_connected_sources) > 0
+            and initial_build_completed
+        ),
     }
 
 
@@ -453,17 +471,19 @@ async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
 
 async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
     questdb_pool = app.state.questdb_pool
+    sources_status = build_sources_status(questdb_pool, auth.sub)
     sources = get_selected_authenticated_sources(questdb_pool, auth.sub)
-    if not sources:
+
+    if not sources_status["selected_sources"]:
         raise HTTPException(
             status_code=409,
             detail="Connect and select at least one source before chatting",
         )
 
-    if not os.path.isfile(VDB_LOCK):
+    if not sources_status["can_chat"]:
         raise HTTPException(
             status_code=409,
-            detail="VDB indexing is not enabled. Chat is unavailable until an administrator starts indexing.",
+            detail="Chat is unavailable until the initial source indexing finishes.",
         )
 
     metrics_actor = metrics_actor_from_auth(auth.sub, auth.role)
