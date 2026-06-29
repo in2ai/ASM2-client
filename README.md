@@ -271,7 +271,9 @@ El dashboard estará disponible en `http://localhost:3001`.
 
 ### Opción 6: Benchmark
 
-El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` por el script de evaluación [`benchmark.py`](backend/benchmark.py), que mide la calidad del pipeline RAG con métricas de **RAGAS** (`context_precision`, `context_recall`, `answer_relevancy`, `faithfulness`) además de los tiempos de cada evaluación (consulta RAG + cálculo de métricas) y de cada lote.
+El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` por el script de evaluación [`benchmark.py`](backend/benchmark.py), que mide la calidad del pipeline RAG con métricas de **RAGAS `0.4.3`** (`context_precision`, `context_recall`, `answer_relevancy`, `faithfulness`) además de los tiempos de cada evaluación (consulta RAG + cálculo de métricas) y de cada lote.
+
+> **Nota:** La versión de RAGAS (`0.4.3`) está fijada en [`backend/uv.lock`](backend/uv.lock) (specifier `ragas>=0.4.3`). El benchmark depende de la API `ragas.metrics.collections` de esa versión.
 
 ```bash
 ./run.sh up --bench

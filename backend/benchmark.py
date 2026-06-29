@@ -1,48 +1,47 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
 import json
-import math
 import os
+from pathlib import Path
 import time
 import traceback
-import numpy as np
-import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+import numpy as np
 import openai
+import pandas as pd
 from ragas.embeddings.base import embedding_factory
 from ragas.llms.base import llm_factory
 from ragas.metrics.collections import ContextPrecision, ContextRecall, AnswerRelevancy, Faithfulness
 from ragas.metrics.collections.answer_relevancy.util import AnswerRelevanceInput, AnswerRelevanceOutput
 from ragas.metrics.result import MetricResult
 
-from src.utils.nlp import init_nlp
 from graph.agent import build_graph, get_checkpointer
 from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
 from src.connectors.llms import get_configured_llm
 from src.connectors.store import get_vectordb
 from src.metrics.connection import get_questdb_pool
+from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
 
 
 load_dotenv()
 init_nlp()
 
-openai_api_key = os.getenv("OPENAI_API_KEY")
-together_api_key = os.getenv("TOGETHER_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 
-client_openai = openai.AsyncOpenAI(
-    api_key=openai_api_key,
+CLIENT_OPENAI = openai.AsyncOpenAI(
+    api_key=OPENAI_API_KEY,
     timeout=60.0,
 )
-client_together = openai.AsyncOpenAI(
+CLIENT_TOGETHER = openai.AsyncOpenAI(
     base_url="https://api.together.xyz/v1",
-    api_key=together_api_key,
+    api_key=TOGETHER_API_KEY,
     timeout=60.0,
 )
 
@@ -63,21 +62,29 @@ SUMMARY_CSV_PATH = Path("/app/benchmark_data/rag_evaluation_summary.csv")
 
 EVAL_LLM = llm_factory(
     "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    client=client_together,
+    client=CLIENT_TOGETHER,
     max_tokens=4096,
 )
-EVAL_EMBEDDINGS = embedding_factory("openai", model="text-embedding-3-small", client=client_openai)
+EVAL_EMBEDDINGS = embedding_factory("openai", model="text-embedding-3-small", client=CLIENT_OPENAI)
+
+MAX_RETRIES = 50
+BATCH_SIZE = 4
+RAG_EXECUTOR = ThreadPoolExecutor(max_workers=BATCH_SIZE)
+METRIC_EXECUTOR = ThreadPoolExecutor(max_workers=BATCH_SIZE * 4)
 
 
 class AnswerRelevancyWithFlag(AnswerRelevancy):
-    """AnswerRelevancy que además expone si la respuesta es noncommittal (evasiva).
+    """AnswerRelevancy that also exposes whether the answer was noncommittal.
 
-    Reimplementa ascore() igual que RAGAS 0.4.3, pero adjunta el flag
-    `noncommittal` al MetricResult en vez de descartarlo, para poder saber si el
-    modelo realmente respondió a la pregunta o dio un "no encontré info".
+    RAGAS computes a `noncommittal` flag (evasive answers such as "I couldn't find
+    info") to zero out the score, but then discards it. This subclass reimplements
+    ascore() identically to RAGAS 0.4.3 and attaches that flag to the MetricResult
+    (`result.noncommittal`), so callers can tell a real answer from a refusal
+    independently of the relevance score. Coupled to RAGAS 0.4.3 internals.
     """
 
     async def ascore(self, user_input: str, response: str) -> MetricResult:
+        """Score answer relevancy and attach the noncommittal flag to the result."""
         if not user_input:
             raise ValueError("user_input cannot be empty")
         if not response:
@@ -133,13 +140,20 @@ METRICS = {
     "faithfulness": Faithfulness(llm=EVAL_LLM),
 }
 
-MAX_RETRIES = 50
-BATCH_SIZE = 4
-RAG_EXECUTOR = ThreadPoolExecutor(max_workers=BATCH_SIZE)
-METRIC_EXECUTOR = ThreadPoolExecutor(max_workers=BATCH_SIZE * 4)
-
 
 def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> tuple[bool, Any | None]:
+    """Report the vectordb_search outcome of the latest conversation turn.
+
+    Scans the messages after the last HumanMessage for a vectordb_search tool call
+    and its matching ToolMessage. Returns (retrieval_done, search_output):
+    - retrieval_done: True if the tool was called this turn, regardless of result.
+    - search_output: the parsed tool result (a dict with "chunks") when chunks were
+      returned; None when the tool returned a fallback/error string or no search ran.
+
+    The two together separate "no retrieval" (False, None) from "retrieval with no
+    relevant chunks" (True, None).
+    """
+
     last_human_index = next(
         (
             i
@@ -171,13 +185,15 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> tuple[bool
                 if isinstance(followup, ToolMessage) and followup.tool_call_id == call_id:
                     try:
                         return True, json.loads(followup.content)
+
                     except (json.JSONDecodeError, TypeError):
                         return True, None
 
     return retrieval_done, None
 
 
-def call_rag(query: str, thread_id: str):
+def call_rag(query: str, thread_id: str) -> tuple[str, bool, Any | None]:
+    """Run the RAG graph for a query."""
     config: dict[str, Any] = {
         "configurable": {
             "thread_id": thread_id,
@@ -201,19 +217,30 @@ def call_rag(query: str, thread_id: str):
     return answer, retrieval_done, search_results
 
 
-def eval_dataset(query, relevant_docs, answer, reference_answer, eval_id):
+def eval_dataset(
+    query: str,
+    relevant_docs: list[Any],
+    answer: str,
+    reference_answer: str,
+    eval_id: int,
+) -> dict[str, Any]:
+    """Score the answer with RAGAS metrics."""
     print(f"[BENCHMARK][eval_id={eval_id}] Evaluating all metrics in parallel...")
 
     def run_metric(args):
+        """Run one metric with up to 3 retries; return (name, result) or (name, exception)."""
         name, fn, kwargs = args
+
         for attempt in range(3):
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 return name, fn(**kwargs)
+
             except Exception as e:
                 if attempt == 2:
                     return name, e
+
             finally:
                 loop.close()
 
@@ -223,50 +250,68 @@ def eval_dataset(query, relevant_docs, answer, reference_answer, eval_id):
 
     if relevant_docs:
         tasks += [
-            ("context_precision", METRICS["context_precision"].score, {"user_input": query, "retrieved_contexts": relevant_docs, "reference": reference_answer}),
-            ("context_recall", METRICS["context_recall"].score, {"user_input": query, "retrieved_contexts": relevant_docs, "reference": reference_answer}),
-            ("faithfulness", METRICS["faithfulness"].score, {"user_input": query, "response": answer, "retrieved_contexts": relevant_docs}),
+            (
+                "context_precision",
+                METRICS["context_precision"].score,
+                {"user_input": query, "retrieved_contexts": relevant_docs, "reference": reference_answer},
+            ),
+            (
+                "context_recall",
+                METRICS["context_recall"].score,
+                {"user_input": query, "retrieved_contexts": relevant_docs, "reference": reference_answer},
+            ),
+            (
+                "faithfulness",
+                METRICS["faithfulness"].score,
+                {"user_input": query, "response": answer, "retrieved_contexts": relevant_docs},
+            ),
         ]
 
     futures = [METRIC_EXECUTOR.submit(run_metric, task) for task in tasks]
     results = dict(f.result(timeout=180) for f in futures)
 
     print(f"[BENCHMARK][eval_id={eval_id}] Evaluation Results:")
+
     for name, result in results.items():
         if isinstance(result, Exception):
             print(f"[BENCHMARK][eval_id={eval_id}] {name}: ERROR -> {type(result).__name__}: {result}")
+
         else:
             print(f"[BENCHMARK][eval_id={eval_id}] {name}: {result.value}")
 
     return results
 
 
-def metric_value_or_none(result):
+def metric_value_or_none(result: MetricResult | Exception | None) -> float | None:
+    """Return the metric's value, or None if it errored or is missing."""
     if result is None or isinstance(result, Exception):
         return None
     return result.value
 
 
-def answered_flag(result):
-    """1 si la respuesta es committal (respondió), 0 si es evasiva/noncommittal,
-    None si no se pudo determinar (la métrica falló o no generó preguntas)."""
+def answered_flag(result: MetricResult | Exception | None) -> int | None:
+    """Return 1 if the answer was committal, 0 if noncommittal (evasive), None if unknown."""
     if result is None or isinstance(result, Exception):
         return None
     noncommittal = getattr(result, "noncommittal", None)
     return None if noncommittal is None else int(not noncommittal)
 
 
-def context_metric_value(results, key, retrieval):
-    """Valor de una métrica de contexto:
-    - Si se calculó (había chunks): su valor (o None si la métrica falló).
-    - Si no se calculó y hubo retrieval: 0.0.
-    - Si no se calculó y no hubo retrieval: None (no aplica)."""
+def context_metric_value(results: dict[str, Any], key: str, retrieval: int) -> float | None:
+    """Return the metric value when computed; 0.0 if retrieval ran without chunks; None if no retrieval."""
     if key in results:
         return metric_value_or_none(results[key])
     return 0.0 if retrieval else None
 
 
-def append_result_row(output_path: Path, evaluation_id: int, results: dict[str, Any] | None, answer: str, retrieval: int):
+def append_result_row(
+    output_path: Path,
+    evaluation_id: int,
+    results: dict[str, Any] | None,
+    answer: str,
+    retrieval: int,
+):
+    """Append one evaluation row to the results CSV."""
     file_exists = output_path.exists()
 
     with open(output_path, "a", newline="", encoding="utf-8") as f:
@@ -286,6 +331,7 @@ def append_result_row(output_path: Path, evaluation_id: int, results: dict[str, 
 
         if results is None:
             writer.writerow([evaluation_id, None, None, None, None, None, retrieval, answer])
+
         else:
             writer.writerow([
                 evaluation_id,
@@ -304,11 +350,14 @@ def append_result_row(output_path: Path, evaluation_id: int, results: dict[str, 
 
 
 def append_query_timing(evaluation_id: int, batch_id: int, start: float, query_timing_path: Path):
+    """Append the elapsed time of a single query to the query-timing CSV."""
     elapsed_seconds = time.perf_counter() - start
 
     file_exists = query_timing_path.exists()
+
     with open(query_timing_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
+
         if not file_exists:
             writer.writerow(["evaluation_id", "batch_id", "elapsed_seconds"])
         writer.writerow([evaluation_id, batch_id, round(elapsed_seconds, 3)])
@@ -318,11 +367,14 @@ def append_query_timing(evaluation_id: int, batch_id: int, start: float, query_t
 
 
 def append_batch_timing(batch_id: int, num_rows: int, batch_start: float, batch_timing_path: Path):
+    """Append the elapsed time of a batch to the batch-timing CSV."""
     elapsed_seconds = time.perf_counter() - batch_start
 
     file_exists = batch_timing_path.exists()
+
     with open(batch_timing_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
+
         if not file_exists:
             writer.writerow(["batch_id", "num_rows", "batch_elapsed_seconds"])
         writer.writerow([batch_id, num_rows, round(elapsed_seconds, 3)])
@@ -332,13 +384,15 @@ def append_batch_timing(batch_id: int, num_rows: int, batch_start: float, batch_
 
 
 def sort_csv(path: Path, column_name: str):
+    """Sort a CSV in place by the given column."""
     df = pd.read_csv(path)
     df = df.sort_values(column_name, ascending=True)
     df.to_csv(path, index=False)
     print(f"[BENCHMARK] Sorted {path.name} by {column_name}.")
 
 
-def process_row(row, run_attempt):
+def process_row(row: Any, run_attempt: int) -> tuple[Any, dict[str, Any] | None, str, bool, float]:
+    """Evaluate one dataset row, retrying on failure."""
     attempt = 0
     results = None
     answer = ""
@@ -353,22 +407,33 @@ def process_row(row, run_attempt):
 
     while attempt < MAX_RETRIES:
         try:
-
             if chunks is None:
                 print(f"\n[BENCHMARK][eval_id={eval_id}] Document ID:\t {doc_id}")
                 print(f"[BENCHMARK][eval_id={eval_id}] Query:\t\t {query}")
                 print(f"[BENCHMARK][eval_id={eval_id}] Reference Answer:\t {reference_answer}")
 
-                answer, retrieval_done, search_results = call_rag(query, thread_id=f"benchmark-{run_attempt}-{eval_id}-{attempt}")
+                answer, retrieval_done, search_results = call_rag(
+                    query,
+                    thread_id=f"benchmark-{run_attempt}-{eval_id}-{attempt}",
+                )
 
                 print(f"[BENCHMARK][eval_id={eval_id}] Generated Answer:\t {answer}")
 
                 chunks = search_results.get("chunks", []) if search_results else []
 
                 if not retrieval_done:
-                    print(f"\n[BENCHMARK][eval_id={eval_id}] No retrieval for query={query} on document={doc_id}. Only answer_relevancy will be computed.")
+                    print(
+                        f"\n[BENCHMARK][eval_id={eval_id}] No retrieval for query={query} "
+                        f"on document={doc_id}. Only answer_relevancy will be computed."
+                    )
+
                 elif not chunks:
-                    print(f"\n[BENCHMARK][eval_id={eval_id}] Retrieval done but no relevant chunks for query={query} on document={doc_id}. Only answer_relevancy will be computed.")
+                    print(
+                        f"\n[BENCHMARK][eval_id={eval_id}] Retrieval done but no relevant chunks "
+                        f"for query={query} on document={doc_id}. "
+                        f"Only answer_relevancy will be computed."
+                    )
+
                 else:
                     print(f"[BENCHMARK][eval_id={eval_id}] Search Results:\t {len(chunks)}")
 
@@ -381,16 +446,20 @@ def process_row(row, run_attempt):
             print(f"\n[BENCHMARK][eval_id={eval_id}] Error processing document={doc_id}: {type(e).__name__}: {e}")
             print(tb)
             attempt += 1
-            
+
             if attempt < MAX_RETRIES:
                 backoff = min(30.0, 2.0 ** attempt)
-                print(f"[BENCHMARK][eval_id={eval_id}] Retrying in {backoff:.0f}s... (attempt {attempt + 1}/{MAX_RETRIES})")
+                print(
+                    f"[BENCHMARK][eval_id={eval_id}] Retrying in {backoff:.0f}s... "
+                    f"(attempt {attempt + 1}/{MAX_RETRIES})"
+                )
                 time.sleep(backoff)
 
     return eval_id, results, answer, retrieval_done, start
 
 
 def benchmark_rag(run_attempt: int, results_path: Path, query_timing_path: Path, batch_timing_path: Path):
+    """Run the benchmark over the dataset in batches, writing per-row results and timings."""
     qa_df = pd.read_csv(QA_CSV_PATH)
     rows = list(qa_df.itertuples(index=False))
 
@@ -420,10 +489,10 @@ def benchmark_rag(run_attempt: int, results_path: Path, query_timing_path: Path,
 
 
 def summarize_evaluation(attempt: int, results_path: Path, query_timing_path: Path, batch_timing_path: Path):
+    """Aggregate the results CSV into mean metrics per retrieval group and append the summary."""
     df_results = pd.read_csv(results_path)
     df_query_timings = pd.read_csv(query_timing_path)
     df_batch_timings = pd.read_csv(batch_timing_path)
-
 
     df_retrieval = df_results[df_results["retrieval"] == 1]
     df_no_retrieval = df_results[df_results["retrieval"] == 0]
@@ -453,6 +522,7 @@ def summarize_evaluation(attempt: int, results_path: Path, query_timing_path: Pa
 
 
 def run_evaluation(attempt: int):
+    """Run one benchmark attempt (with per-attempt output files) and write its summary."""
     suffix = f"_attempt_{attempt}"
     results_path = RESULTS_CSV_PATH.with_stem(f"{RESULTS_CSV_PATH.stem}{suffix}")
     query_timing_path = QUERY_TIMING_CSV_PATH.with_stem(f"{QUERY_TIMING_CSV_PATH.stem}{suffix}")
@@ -463,13 +533,13 @@ def run_evaluation(attempt: int):
 
 
 def main():
-    NUM_EVALUATIONS = 3
+    """Entry point: run the configured number of evaluation attempts."""
+    num_evaluations = 3
 
-    for attempt in range(1, NUM_EVALUATIONS + 1):
-        print(f"\n[BENCHMARK] ===== RAG evaluation run {attempt}/{NUM_EVALUATIONS} =====")
+    for attempt in range(1, num_evaluations + 1):
+        print(f"\n[BENCHMARK] ===== RAG evaluation run {attempt}/{num_evaluations} =====")
         run_evaluation(attempt)
 
 
 if __name__ == "__main__":
     main()
-
