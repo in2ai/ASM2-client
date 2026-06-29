@@ -279,7 +279,7 @@ El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` po
 
 **Requisitos previos:**
 
-- `TOGETHER_API_KEY` en `.env` (el LLM evaluador usa el modelo `Qwen/Qwen3-235B-A22B-Instruct-2507-tput` de Together.ai).
+- `TOGETHER_API_KEY` en `.env` (el LLM evaluador usa el modelo `meta-llama/Llama-3.3-70B-Instruct-Turbo` de Together.ai).
 - `OPENAI_API_KEY` en `.env` (los embeddings del evaluador usan `text-embedding-3-small` de OpenAI).
 - Un dataset de preguntas/respuestas en `benchmark_data/` (por defecto `dataset_wikipedia_qa_5_docs_200.csv`).
 
