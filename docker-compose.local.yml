@@ -1,11 +1,7 @@
 services:
   backend:
-    environment:
-      QUESTDB_HOST: questdb
     depends_on:
       qdrant:
-        condition: service_started
-      questdb:
         condition: service_started
       timescaledb:
         condition: service_healthy
@@ -41,39 +37,6 @@ services:
       - .env
     working_dir: /init
     entrypoint: ["sh", "/init/init_tsdb.sh"]
-
-
-
-  questdb:
-    image: questdb/questdb:latest
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:9000:9000"
-    environment:
-      - QDB_HTTP_BIND_TO=0.0.0.0:9000
-      - QDB_PG_ENABLED=true
-      - QDB_HTTP_USER=${QUESTDB_HTTP_USER}
-      - QDB_HTTP_PASSWORD=${QUESTDB_HTTP_PASSWORD}
-      - QDB_PG_USER=${QUESTDB_USER}
-      - QDB_PG_PASSWORD=${QUESTDB_PASSWORD}
-    volumes:
-      - ./questdb:/root/.questdb:rw
-    env_file:
-      - .env
-
-  questdb-init:
-    image: postgres:15-alpine
-    restart: "no"
-    depends_on:
-      questdb:
-        condition: service_started
-    volumes:
-      - ./sql/init.sql:/init/init.sql:ro
-      - ./sql/init.sh:/init/init.sh:ro
-    env_file:
-      - .env
-    working_dir: /init
-    entrypoint: ["sh", "/init/init.sh"]
 
   logto:
     image: ghcr.io/logto-io/logto:1.36.0

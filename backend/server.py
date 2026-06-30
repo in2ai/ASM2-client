@@ -37,7 +37,7 @@ from src.connectors.manifest import VDBManifest
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
-from src.metrics.connection import get_pg_pool, get_questdb_pool
+from src.metrics.connection import get_pg_pool
 from src.metrics.context import metrics_actor_from_auth
 from src.metrics.metrics import (
     Metrics,
@@ -64,7 +64,7 @@ from src.metrics.dashboard_queries import (
     top_k_search_terms,
     top_k_topics,
 )
-from src.chat.store import ChatNotFoundError, ChatStore, PostgresChatStore
+from src.chat.store import ChatNotFoundError, PostgresChatStore
 from src.tracing import get_langfuse_handler
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
@@ -87,7 +87,6 @@ async def lifespan(app: FastAPI):
     app.state.llm_with_tools = get_llm_with_tools(app.state.llm)
     app.state.vectorstore = get_vectordb(get_configured_embeddings())
     app.state.reranker = get_reranker()
-    # app.state.questdb_pool = get_questdb_pool()
     app.state.pg_pool = get_pg_pool()
 
     DATABASE_URL = os.getenv("DATABASE_URL")
@@ -132,7 +131,6 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
 
-        # app.state.questdb_pool.closeall()
         app.state.pg_pool.closeall()
         await app.state.async_pg_pool.close()
 
@@ -165,7 +163,6 @@ app.add_middleware(
     responses={503: {"description": "Service not ready"}},
 )
 async def healthcheck():
-    # questdb_pool = getattr(app.state, "questdb_pool", None)
     pg_pool = getattr(app.state, "pg_pool", None)
     graph = getattr(app.state, "graph", None)
 
@@ -183,7 +180,6 @@ def refresh_tokens():
         if os.path.isfile(VDB_LOCK):
             logging.info("Refreshing access tokens...")
 
-            # questdb_pool = app.state.questdb_pool
             pg_pool = app.state.pg_pool
 
             # Get admin authenticated sources and update DB
@@ -266,7 +262,6 @@ def extract_usage_metrics():
     def calc():
         logging.info("Collecting hardware usage metrics...")
 
-        # questdb_pool = app.state.questdb_pool
         pg_pool = app.state.pg_pool
 
         # CPU
@@ -339,7 +334,6 @@ async def login_source(
         raise HTTPException(500, detail=f"Authentication failed for source {source}")
 
     # Store credentials in database
-    # questdb_pool = app.state.questdb_pool
     pg_pool = app.state.pg_pool
     user_id = auth.sub
     is_admin = has_role(auth, "admin")
@@ -381,7 +375,6 @@ def build_sources_status(pg_pool, user_id: str) -> dict[str, Any]:
 
 @app.get("/sources/status", response_model=SourcesStatusModel, status_code=200)
 async def get_sources_status(auth: AuthenticatedAuth):
-    # questdb_pool = app.state.questdb_pool
     pg_pool = app.state.pg_pool
     return build_sources_status(pg_pool, auth.sub)
 
@@ -391,7 +384,6 @@ async def update_sources_selection(
     auth: AuthenticatedAuth,
     body: SourceSelectionRequestModel,
 ):
-    # questdb_pool = app.state.questdb_pool
     pg_pool = app.state.pg_pool
     connected_sources = sorted(get_authenticated_sources(pg_pool, auth.sub).keys())
     connected_set = set(connected_sources)
@@ -412,7 +404,6 @@ async def update_sources_selection(
 
 @app.get("/authenticated-sources", status_code=200)
 async def get_auth_sources(auth: AuthenticatedAuth):
-    # questdb_pool = app.state.questdb_pool
     pg_pool = app.state.pg_pool
     return build_sources_status(pg_pool, auth.sub)
 
@@ -517,7 +508,6 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "llm_with_tools": app.state.llm_with_tools,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
-            # "questdb_pool": questdb_pool,
             "pg_pool": pg_pool,
             "sources": sources,
             "metrics_actor": metrics_actor,
@@ -695,7 +685,6 @@ async def metrics_dashboard(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    # questdb_pool = app.state.questdb_pool
     pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
     shared = _fetch_shared_metrics_data(pg_pool, params, 10, 10)
@@ -742,7 +731,6 @@ async def metrics_stats(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    # questdb_pool = app.state.questdb_pool
     pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
 
@@ -772,7 +760,6 @@ async def metrics_export(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    # questdb_pool = app.state.questdb_pool
     pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
     shared = _fetch_shared_metrics_data(pg_pool, params, 100, 100)
