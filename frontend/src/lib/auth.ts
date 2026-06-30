@@ -55,7 +55,7 @@ function normalizeRoles(rawRoles: unknown): string[] {
 function extractRole(roles: string[]): string {
   const priorityRole = ROLE_PRIORITY.find((role) => roles.includes(role))
 
-  return priorityRole ?? roles[0] ?? USER_ROLE
+  return priorityRole ?? USER_ROLE
 }
 
 export function hasRoleInAccessToken(
