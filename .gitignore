@@ -237,3 +237,4 @@ benchmark_data/*
 !benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv
 
 .dev
+.env.remote
