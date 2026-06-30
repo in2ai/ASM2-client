@@ -43,11 +43,16 @@ describe('auth helpers', () => {
       roles: ['user', 'manager'],
       sub: 'manager-1',
     } as IdTokenClaims)
+    const adminWinsPriority = mapClaimsToUser({
+      roles: ['manager', 'admin'],
+      sub: 'priority-1',
+    } as IdTokenClaims)
 
     expect(admin.firstName).toBe('Grace')
     expect(admin.lastName).toBe('Brewster Hopper')
     expect(admin.role).toBe('admin')
     expect(manager.role).toBe('manager')
+    expect(adminWinsPriority.role).toBe('admin')
   })
 
   it('detects roles in claims and access tokens', () => {
