@@ -238,3 +238,4 @@ benchmark_data/*
 
 .dev
 .env.remote
+!benchmark_data/dataset_wikipedia_qa_5_docs_200.csv
