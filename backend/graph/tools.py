@@ -44,6 +44,11 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         logging.exception("vectordb_search failed")
         return "[Search error: the document search is temporarily unavailable.]"
     
+    USE_LONG_CONTEXT_BEFORE = get_bool_env('LONG_CONTEXT_BEFORE_FILTER')
+
+    if USE_LONG_CONTEXT_BEFORE:
+        long_context_sources = get_chunk_sources(chunks, sources)
+
     # Filter sources with LLM
     def check_chunk(c):
         return is_relevant_source(llm, query, c.page_content).is_relevant
@@ -54,6 +59,9 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     chunks = [c for c, ok in zip(chunks, relevance) if ok]
     available_sources = get_chunk_sources(chunks, sources)
 
+    if not USE_LONG_CONTEXT_BEFORE:
+        long_context_sources = available_sources
+
     USE_LONG_CONTEXT = get_bool_env('LONG_CONTEXT')
     long_context = []
 
@@ -63,17 +71,16 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
             model=get_env('OPENAI_MODEL')
         )
 
-        for source in available_sources:
+        for source in long_context_sources:
             treedex_path = QDRANT_META_PATH + f'/treedex/{source["id"]}.json'
 
             if os.path.isfile(treedex_path):
-                print(f"Checking long context for {source['title']}")
+                logging.info(f"Checking long context for {source['title']}")
                 index = TreeDex.load(treedex_path, llm=llm)
                 result = index.query(query, agentic=True)
-                print(result.answer)
-                print(result.page_ranges)
 
-                long_context.append(result)
+                header = f'[Long context summary for {source["title"]}]'
+                long_context.append(f'{header}\n\n{result}')
 
     # Send usage metrics
     if pool is not None and metrics_actor is not None:

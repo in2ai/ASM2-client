@@ -374,7 +374,7 @@ def generate_treedex_index(file: VDBFile):
             with DOWNLOAD_LOCK:
                 file_path = file.download(temp_path)
 
-            index = TreeDex.from_file(str(file_path), llm=llm)
+            index = TreeDex.from_file(str(file_path), llm=llm, extract_images=get_bool_env('LONG_CONTEXT_IMGS'))
             index.save(index_path)
 
             os.remove(file_path)
