@@ -350,9 +350,9 @@ El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` po
 
 - `TOGETHER_API_KEY` en `.env` (el LLM evaluador usa el modelo `meta-llama/Llama-3.3-70B-Instruct-Turbo` de Together.ai).
 - `OPENAI_API_KEY` en `.env` (los embeddings del evaluador usan `text-embedding-3-small` de OpenAI).
-- Un dataset de preguntas/respuestas en `benchmark_data/` (por defecto `dataset_wikipedia_qa_5_docs_200.csv`).
+- Un dataset de preguntas/respuestas en `benchmark/data/` (por defecto `dataset_asm2.csv`).
 
-**Resultados:** se escriben en `benchmark_data/` (montado como volumen), entre otros:
+**Resultados:** se escriben en `benchmark/results/` (montado como volumen), entre otros:
 
 - `rag_evaluation_results_attempt_N.csv` — resultados de métricas por pregunta.
 - `query_timings_attempt_N.csv` — tiempo total por pregunta (consulta + métricas).
@@ -372,7 +372,8 @@ ASM2-client/
 ├── secrets/                # Credenciales y ficheros sensibles
 ├── img/                    # Imágenes y assets
 ├── qdrant_index/           # Estado auxiliar y manifest del índice vectorial
-├── benchmark_data/         # Datasets QA de entrada y resultados del benchmark de RAG
+├── questdb/               # Datos persistentes de QuestDB (generado)
+├── benchmark/              # Datasets QA de entrada y resultados del benchmark de RAG
 ├── docker-compose.yml     # Stack base backend + SPA + qdrant con solo dashboard publicado en localhost
 ├── docker-compose.local.yml    # Infraestructura local (TimescaleDB + Logto) con Logto publicado en localhost
 ├── docker-compose.gpu.yml # Override para soporte GPU (backend)

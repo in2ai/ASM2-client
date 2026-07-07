@@ -19,7 +19,8 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./secrets:/app/secrets:ro
-      - ./benchmark_data:/app/benchmark_data
+      - ./benchmark/data:/app/benchmark/data
+      - ./benchmark/results:/app/benchmark/results
     depends_on:
       qdrant:
         condition: service_healthy

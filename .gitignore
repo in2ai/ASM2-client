@@ -233,9 +233,19 @@ skills/
 backend-data
 
 # benchmark
-benchmark_data/*
-!benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv
+benchmark/data/*
+!benchmark/data/dataset_asm2.csv
 
-.dev
-.env.remote
-!benchmark_data/dataset_wikipedia_qa_5_docs_200.csv
+benchmark/results/
+
+benchmark/dataset_generation/*
+!benchmark/dataset_generation/merge_datasets.py
+
+!benchmark/dataset_generation/narrativeqa/
+benchmark/dataset_generation/narrativeqa/*
+!benchmark/dataset_generation/narrativeqa/dataset_generation_narrativeqa.py
+!benchmark/dataset_generation/narrativeqa/download_stories.sh
+
+!benchmark/dataset_generation/squad2.0/
+benchmark/dataset_generation/squad2.0/*
+!benchmark/dataset_generation/squad2.0/dataset_generation_squad2.0.py

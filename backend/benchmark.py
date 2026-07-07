@@ -90,13 +90,13 @@ async def lifespan():
 LLM, LLM_WITH_TOOLS, VDB, RERANKER, PG_POOL, GRAPH = asyncio.run(lifespan())
 ADMIN_SOURCES = {}
 
-print("STARTING 5")
-# QA_CSV_PATH = Path("/app/benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv")
-QA_CSV_PATH = Path("/app/benchmark_data/dataset_wikipedia_qa_5_docs_200.csv")
-RESULTS_CSV_PATH = Path("/app/benchmark_data/rag_evaluation_results.csv")
-QUERY_TIMING_CSV_PATH = Path("/app/benchmark_data/query_timings.csv")
-BATCH_TIMING_CSV_PATH = Path("/app/benchmark_data/batch_timings.csv")
-SUMMARY_CSV_PATH = Path("/app/benchmark_data/rag_evaluation_summary.csv")
+QA_CSV_PATH = Path("/app/benchmark/data/dataset_asm2.csv")
+RESULTS_CSV_PATH = Path("/app/benchmark/results/rag_evaluation_results.csv")
+QUERY_TIMING_CSV_PATH = Path("/app/benchmark/results/query_timings.csv")
+BATCH_TIMING_CSV_PATH = Path("/app/benchmark/results/batch_timings.csv")
+SUMMARY_CSV_PATH = Path("/app/benchmark/results/rag_evaluation_summary.csv")
+
+BENCHMARK_SOURCES: list[str] = ["squad2.0"]
 
 EVAL_LLM = llm_factory(
     "gpt-4o-mini",
@@ -345,6 +345,7 @@ def context_metric_value(results: dict[str, Any], key: str, retrieval: int) -> f
 def append_result_row(
     output_path: Path,
     evaluation_id: int,
+    source: str,
     results: dict[str, Any] | None,
     answer: str,
     retrieval: int,
@@ -358,6 +359,7 @@ def append_result_row(
         if not file_exists:
             writer.writerow([
                 "evaluation_id",
+                "source",
                 "context_precision",
                 "context_recall",
                 "answer_relevancy",
@@ -368,11 +370,12 @@ def append_result_row(
             ])
 
         if results is None:
-            writer.writerow([evaluation_id, None, None, None, None, None, retrieval, answer])
+            writer.writerow([evaluation_id, source, None, None, None, None, None, retrieval, answer])
 
         else:
             writer.writerow([
                 evaluation_id,
+                source,
                 context_metric_value(results, "context_precision", retrieval),
                 context_metric_value(results, "context_recall", retrieval),
                 metric_value_or_none(results.get("answer_relevancy")),
@@ -387,7 +390,7 @@ def append_result_row(
     print(f"[BENCHMARK][eval_id={evaluation_id}] Saved results to CSV.")
 
 
-def append_query_timing(evaluation_id: int, batch_id: int, start: float, query_timing_path: Path):
+def append_query_timing(evaluation_id: int, source: str, batch_id: int, start: float, query_timing_path: Path):
     """Append the elapsed time of a single query to the query-timing CSV."""
     elapsed_seconds = time.perf_counter() - start
 
@@ -397,8 +400,8 @@ def append_query_timing(evaluation_id: int, batch_id: int, start: float, query_t
         writer = csv.writer(f)
 
         if not file_exists:
-            writer.writerow(["evaluation_id", "batch_id", "elapsed_seconds"])
-        writer.writerow([evaluation_id, batch_id, round(elapsed_seconds, 3)])
+            writer.writerow(["evaluation_id", "source", "batch_id", "elapsed_seconds"])
+        writer.writerow([evaluation_id, source, batch_id, round(elapsed_seconds, 3)])
         f.flush()
 
     print(f"[BENCHMARK][eval_id={evaluation_id}] Total query time:\t{elapsed_seconds:.3f}s")
@@ -429,7 +432,7 @@ def sort_csv(path: Path, column_name: str):
     print(f"[BENCHMARK] Sorted {path.name} by {column_name}.")
 
 
-def process_row(row: Any, run_attempt: int) -> tuple[Any, dict[str, Any] | None, str, bool, float]:
+def process_row(row: Any, run_attempt: int) -> tuple[Any, str, dict[str, Any] | None, str, bool, float]:
     """Evaluate one dataset row, retrying on failure."""
     attempt = 0
     results = None
@@ -439,6 +442,7 @@ def process_row(row: Any, run_attempt: int) -> tuple[Any, dict[str, Any] | None,
     start = time.perf_counter()
 
     eval_id = row.evaluation_id
+    source = row.source
     doc_id = row.document_id
     query = row.question
     reference_answer = row.answer1
@@ -493,12 +497,27 @@ def process_row(row: Any, run_attempt: int) -> tuple[Any, dict[str, Any] | None,
                 )
                 time.sleep(backoff)
 
-    return eval_id, results, answer, retrieval_done, start
+    return eval_id, source, results, answer, retrieval_done, start
 
 
 def benchmark_rag(run_attempt: int, results_path: Path, query_timing_path: Path, batch_timing_path: Path):
     """Run the benchmark over the dataset in batches, writing per-row results and timings."""
     qa_df = pd.read_csv(QA_CSV_PATH)
+
+    if BENCHMARK_SOURCES:
+        available = set(qa_df["source"].unique())
+        unknown = set(BENCHMARK_SOURCES) - available
+        if unknown:
+            raise ValueError(
+                f"Sources not found in the dataset: {sorted(unknown)}. "
+                f"Available: {sorted(available)}."
+            )
+        qa_df = qa_df[qa_df["source"].isin(BENCHMARK_SOURCES)]
+        print(
+            f"[BENCHMARK] Filtered dataset to sources={BENCHMARK_SOURCES}: "
+            f"{len(qa_df)} questions."
+        )
+
     rows = list(qa_df.itertuples(index=False))
 
     for i in range(0, len(rows), BATCH_SIZE):
@@ -512,9 +531,9 @@ def benchmark_rag(run_attempt: int, results_path: Path, query_timing_path: Path,
 
         for future in as_completed(futures):
             try:
-                eval_id, results, answer, retrieval_done, start = future.result()
-                append_result_row(results_path, eval_id, results, answer, 1 if retrieval_done else 0)
-                append_query_timing(eval_id, batch_id, start, query_timing_path)
+                eval_id, source, results, answer, retrieval_done, start = future.result()
+                append_result_row(results_path, eval_id, source, results, answer, 1 if retrieval_done else 0)
+                append_query_timing(eval_id, source, batch_id, start, query_timing_path)
 
             except Exception as e:
                 print(f"[BENCHMARK] Fatal error in row: {type(e).__name__}: {e}")
@@ -526,53 +545,71 @@ def benchmark_rag(run_attempt: int, results_path: Path, query_timing_path: Path,
     sort_csv(query_timing_path, "evaluation_id")
 
 
-def summarize_evaluation(attempt: int, results_path: Path, query_timing_path: Path, batch_timing_path: Path):
-    """Aggregate the results CSV into mean metrics per retrieval group and append the summary."""
+def summarize_evaluation(
+    attempt: int,
+    results_path: Path,
+    query_timing_path: Path,
+    batch_timing_path: Path,
+    summary_path: Path,
+):
+    """Aggregate the results CSV into mean metrics per source and append the summary."""
     df_results = pd.read_csv(results_path)
     df_query_timings = pd.read_csv(query_timing_path)
     df_batch_timings = pd.read_csv(batch_timing_path)
 
-    df_retrieval = df_results[df_results["retrieval"] == 1]
-    df_no_retrieval = df_results[df_results["retrieval"] == 0]
-    answered_counts = df_results["answered"].value_counts()
-
-    mean_query_time = df_query_timings["elapsed_seconds"].mean()
     mean_batch_time = df_batch_timings["batch_elapsed_seconds"].mean()
+    mean_query_time_by_source = df_query_timings.groupby("source")["elapsed_seconds"].mean()
 
-    df_summary = pd.DataFrame([{
-        "attempt": attempt,
-        "num_retrieval": len(df_retrieval),
-        "num_no_retrieval": len(df_no_retrieval),
-        "mean_context_precision": df_retrieval["context_precision"].mean(),
-        "mean_context_recall": df_retrieval["context_recall"].mean(),
-        "mean_faithfulness": df_retrieval["faithfulness"].mean(),
-        "mean_answer_relevancy_retrieval": df_retrieval["answer_relevancy"].mean(),
-        "mean_answer_relevancy_no_retrieval": df_no_retrieval["answer_relevancy"].mean(),
-        "num_answered": answered_counts.get(1, 0),
-        "num_not_answered": answered_counts.get(0, 0),
-        "mean_query_time_seconds": mean_query_time,
-        "mean_batch_time_seconds": mean_batch_time,
-    }])
+    summary_rows = []
+    for source, df_source in df_results.groupby("source"):
+        df_retrieval = df_source[df_source["retrieval"] == 1]
+        df_no_retrieval = df_source[df_source["retrieval"] == 0]
+        answered_counts = df_source["answered"].value_counts()
 
-    file_exists = SUMMARY_CSV_PATH.exists()
-    df_summary.to_csv(SUMMARY_CSV_PATH, mode="a", header=not file_exists, index=False)
-    print(f"[BENCHMARK] Appended evaluation summary for attempt {attempt} to {SUMMARY_CSV_PATH}.")
+        summary_rows.append({
+            "attempt": attempt,
+            "source": source,
+            "num_retrieval": len(df_retrieval),
+            "num_no_retrieval": len(df_no_retrieval),
+            "mean_context_precision": df_retrieval["context_precision"].mean(),
+            "mean_context_recall": df_retrieval["context_recall"].mean(),
+            "mean_faithfulness": df_retrieval["faithfulness"].mean(),
+            "mean_answer_relevancy_retrieval": df_retrieval["answer_relevancy"].mean(),
+            "mean_answer_relevancy_no_retrieval": df_no_retrieval["answer_relevancy"].mean(),
+            "num_answered": answered_counts.get(1, 0),
+            "num_not_answered": answered_counts.get(0, 0),
+            "mean_query_time_seconds": mean_query_time_by_source.get(source, float("nan")),
+            "mean_batch_time_seconds": mean_batch_time,
+        })
+
+    df_summary = pd.DataFrame(summary_rows)
+
+    file_exists = summary_path.exists()
+    df_summary.to_csv(summary_path, mode="a", header=not file_exists, index=False)
+    print(
+        f"[BENCHMARK] Appended evaluation summary for attempt {attempt} "
+        f"({len(summary_rows)} source(s)) to {summary_path}."
+    )
 
 
 def run_evaluation(attempt: int):
     """Run one benchmark attempt (with per-attempt output files) and write its summary."""
-    suffix = f"_attempt_{attempt}"
+    token = "-".join(sorted(BENCHMARK_SOURCES)) if BENCHMARK_SOURCES else "all"
+    suffix = f"_{token}_attempt_{attempt}"
     results_path = RESULTS_CSV_PATH.with_stem(f"{RESULTS_CSV_PATH.stem}{suffix}")
     query_timing_path = QUERY_TIMING_CSV_PATH.with_stem(f"{QUERY_TIMING_CSV_PATH.stem}{suffix}")
     batch_timing_path = BATCH_TIMING_CSV_PATH.with_stem(f"{BATCH_TIMING_CSV_PATH.stem}{suffix}")
+    summary_path = SUMMARY_CSV_PATH.with_stem(f"{SUMMARY_CSV_PATH.stem}_{token}")
 
     benchmark_rag(attempt, results_path, query_timing_path, batch_timing_path)
-    summarize_evaluation(attempt, results_path, query_timing_path, batch_timing_path)
+    summarize_evaluation(attempt, results_path, query_timing_path, batch_timing_path, summary_path)
 
 
 def main():
     """Entry point: run the configured number of evaluation attempts."""
     num_evaluations = 3
+
+    RESULTS_CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     for attempt in range(1, num_evaluations + 1):
         print(f"\n[BENCHMARK] ===== RAG evaluation run {attempt}/{num_evaluations} =====")
