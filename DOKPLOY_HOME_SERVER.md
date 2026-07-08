@@ -59,7 +59,7 @@ Notes:
 - `LOGTO_APP_ID` is not known until after Logto is running and you create the SPA application in Logto.
 - For the first deployment, set `LOGTO_APP_ID=bootstrap-placeholder`.
 - After Logto is up, create the SPA application, replace that value with the real app id, and redeploy.
-- Set strong TimescaleDB credentials (`PG_USER` / `PG_PASSWORD`) and a matching `DATABASE_URL`.
+- Set strong TimescaleDB credentials (`PG_USER` / `PG_PASSWORD`).
 - If you use the Google Drive connector, prefer setting `CLIENT_SECRET` as inline JSON in Dokploy instead of mounting a secret file.
 - Only a small set of environment entries remain inline in the compose file. Those are service-local overrides such as internal hostnames, container paths, GPU flags, build-time mappings, translated variable names, or computed values.
 - The dashboard build reads the shared `LOGTO_ENDPOINT`, `LOGTO_APP_ID`, and `LOGTO_API_RESOURCE` values, and Vite exposes them as `VITE_*` values for browser code.

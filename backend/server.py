@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import json
+from urllib.parse import quote_plus
 
 from contextlib import asynccontextmanager
 from datetime import date, datetime
@@ -37,7 +38,14 @@ from src.connectors.manifest import VDBManifest
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
-from src.metrics.connection import get_pg_pool
+from src.metrics.connection import (
+    PG_DB,
+    PG_HOST,
+    PG_PASSWORD,
+    PG_PORT,
+    PG_USER,
+    get_pg_pool,
+)
 from src.metrics.context import metrics_actor_from_auth
 from src.metrics.metrics import (
     Metrics,
@@ -89,7 +97,10 @@ async def lifespan(app: FastAPI):
     app.state.reranker = get_reranker()
     app.state.pg_pool = get_pg_pool()
 
-    DATABASE_URL = os.getenv("DATABASE_URL")
+    DATABASE_URL = (
+        f"postgresql://{quote_plus(PG_USER)}:{quote_plus(PG_PASSWORD)}"
+        f"@{PG_HOST}:{PG_PORT}/{PG_DB}"
+    )
     app.state.async_pg_pool = AsyncConnectionPool(
         DATABASE_URL,
         open=False,

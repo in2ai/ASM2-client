@@ -73,7 +73,6 @@ cp .env.example .env
 | `PG_USER` | Usuario de base de datos | `postgres` |
 | `PG_PASSWORD` | Contraseña de PostgreSQL usada por backend e init SQL | `change_me_for_local_pg` |
 | `PG_DB` | Nombre de la base de datos | `tsdb` |
-| `DATABASE_URL` | URL de conexión usada por el checkpointer y store async de LangGraph | `postgresql://postgres:...@timescaledb:5432/tsdb` |
 
 #### Logto (Autenticación Dashboard)
 
@@ -181,7 +180,6 @@ Si TimescaleDB y Logto ya están desplegados fuera de Docker, ejecuta solo `back
     PG_USER=postgres
     PG_PASSWORD=tu_contraseña
     PG_DB=tsdb
-    DATABASE_URL=postgresql://postgres:tu_contraseña@tu-ip-o-hostname-vps:5432/tsdb
     LOGTO_ENDPOINT=https://tu-logto-remoto
     LOGTO_APP_ID=tu_spa_app_id
     LOGTO_API_RESOURCE=https://tu-api-resource
