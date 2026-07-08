@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import type { LogtoUser } from '@/lib/auth'
+import { hasDashboardAccess, type LogtoUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { Link } from '@tanstack/react-router'
 import type { LucideIcon } from 'lucide-react'
@@ -19,7 +19,7 @@ export function AreaSwitcher({
 }: Readonly<AreaSwitcherProps>) {
   const t = useTranslations('AreaSwitcher')
 
-  if (user?.role !== 'admin') {
+  if (!hasDashboardAccess(user)) {
     return null
   }
 
@@ -68,7 +68,7 @@ function AreaSwitcherItem({
           : 'text-muted-foreground hover:text-foreground',
       )}
     >
-      <Link to={to}>
+      <Link to={to} aria-label={label}>
         <Icon className="h-4 w-4 shrink-0" />
         <span className="hidden sm:inline">{label}</span>
       </Link>

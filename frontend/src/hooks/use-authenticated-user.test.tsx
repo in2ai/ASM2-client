@@ -101,4 +101,42 @@ describe('useAuthenticatedUser', () => {
       expect(result.current.user?.role).toBe('admin')
     })
   })
+
+  it('promotes manager role from the access token when user info is unavailable', async () => {
+    mocks.isAuthenticated = true
+    mocks.getIdTokenClaims.mockResolvedValue({
+      email: 'marie@example.test',
+      name: 'Marie Curie',
+      roles: ['user'],
+      sub: 'user-3',
+    })
+    mocks.getAccessToken.mockResolvedValue(
+      createAccessToken({ roles: ['manager'] }),
+    )
+
+    const { result } = renderHook(() => useAuthenticatedUser())
+
+    await waitFor(() => {
+      expect(result.current.user?.role).toBe('manager')
+    })
+  })
+
+  it('keeps admin priority when another source only has manager', async () => {
+    mocks.isAuthenticated = true
+    mocks.getIdTokenClaims.mockResolvedValue({
+      email: 'katherine@example.test',
+      name: 'Katherine Johnson',
+      roles: ['admin'],
+      sub: 'admin-2',
+    })
+    mocks.getAccessToken.mockResolvedValue(
+      createAccessToken({ roles: ['manager'] }),
+    )
+
+    const { result } = renderHook(() => useAuthenticatedUser())
+
+    await waitFor(() => {
+      expect(result.current.user?.role).toBe('admin')
+    })
+  })
 })

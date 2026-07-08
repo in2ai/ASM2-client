@@ -1,6 +1,7 @@
 import { API_RESOURCE } from '@/lib/api'
 import type { LogtoUser } from '@/lib/auth'
 import {
+  DASHBOARD_ACCESS_ROLES,
   hasRoleInAccessToken,
   hasRoleInClaim,
   mapClaimsToUser,
@@ -38,13 +39,16 @@ export function useAuthenticatedUser() {
       }
 
       const nextUser = mapClaimsToUser(claims)
-      const isAdmin =
-        hasRoleInClaim(
-          (userInfo as Record<string, unknown> | null)?.roles,
-          'admin',
-        ) || hasRoleInAccessToken(accessToken, 'admin')
+      const userInfoRecord = userInfo as Record<string, unknown> | null
+      const elevatedRole = DASHBOARD_ACCESS_ROLES.find(
+        (role) =>
+          nextUser.role === role ||
+          hasRoleInClaim(userInfoRecord?.roles, role) ||
+          hasRoleInClaim(userInfoRecord?.role, role) ||
+          hasRoleInAccessToken(accessToken, role),
+      )
 
-      setUser(isAdmin ? { ...nextUser, role: 'admin' } : nextUser)
+      setUser(elevatedRole ? { ...nextUser, role: elevatedRole } : nextUser)
     }
 
     void loadUser()

@@ -1,5 +1,13 @@
 import type { IdTokenClaims } from '@logto/react'
 
+export const ADMIN_ROLE = 'admin'
+export const MANAGER_ROLE = 'manager'
+export const USER_ROLE = 'user'
+
+export const DASHBOARD_ACCESS_ROLES = [ADMIN_ROLE, MANAGER_ROLE] as const
+
+const ROLE_PRIORITY = [ADMIN_ROLE, MANAGER_ROLE] as const
+
 export interface LogtoUser {
   sub: string
   firstName?: string | null
@@ -45,11 +53,9 @@ function normalizeRoles(rawRoles: unknown): string[] {
 }
 
 function extractRole(roles: string[]): string {
-  if (roles.includes('admin')) {
-    return 'admin'
-  }
+  const priorityRole = ROLE_PRIORITY.find((role) => roles.includes(role))
 
-  return roles[0] ?? 'user'
+  return priorityRole ?? USER_ROLE
 }
 
 export function hasRoleInAccessToken(
@@ -61,11 +67,22 @@ export function hasRoleInAccessToken(
   }
 
   const payload = parseJwtPayload(token)
-  return normalizeRoles(payload?.roles).includes(role)
+  const roles = [
+    ...normalizeRoles(payload?.roles),
+    ...normalizeRoles(payload?.role),
+  ]
+
+  return roles.includes(role)
 }
 
 export function hasRoleInClaim(rawRoles: unknown, role: string): boolean {
   return normalizeRoles(rawRoles).includes(role)
+}
+
+export function hasDashboardAccess(
+  user: Pick<LogtoUser, 'role'> | null | undefined,
+): boolean {
+  return DASHBOARD_ACCESS_ROLES.some((role) => user?.role === role)
 }
 
 function extractGlobalRole(claims: IdTokenClaims): string {

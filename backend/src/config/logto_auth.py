@@ -22,6 +22,12 @@ security = HTTPBearer(auto_error=False)
 
 _SUPPORTED_JWT_ALGORITHMS = ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"]
 
+ADMIN_ROLE = "admin"
+MANAGER_ROLE = "manager"
+USER_ROLE = "user"
+DASHBOARD_ACCESS_ROLES = (ADMIN_ROLE, MANAGER_ROLE)
+_ROLE_PRIORITY = (ADMIN_ROLE, MANAGER_ROLE)
+
 
 @dataclass(frozen=True)
 class AuthInfo:
@@ -99,24 +105,19 @@ def _extract_roles(payload: dict[str, Any]) -> list[str]:
     )
 
 
-def _extract_role(payload: dict[str, Any]) -> str:
-    roles = _extract_roles(payload)
-
-    return _extract_role_from_names(roles)
-
-
 def _extract_role_from_names(roles: list[str]) -> str:
-
-    if "admin" in roles:
-        return "admin"
-    if roles:
-        return roles[0]
-
-    return "user"
+    return next(
+        (role for role in _ROLE_PRIORITY if role in roles),
+        USER_ROLE,
+    )
 
 
 def has_role(auth_info: AuthInfo, required_role: str) -> bool:
     return required_role == auth_info.role or required_role in auth_info.roles
+
+
+def has_any_role(auth_info: AuthInfo, required_roles: tuple[str, ...]) -> bool:
+    return any(has_role(auth_info, role) for role in required_roles)
 
 
 def _get_allowed_jwt_algorithms(signing_key: jwt.PyJWK) -> list[str]:
@@ -204,14 +205,24 @@ def require_auth():
     return _dependency
 
 
-def require_admin():
+def require_roles(*required_roles: str):
+    required_role_names = tuple(role for role in required_roles if role)
+
     def _dependency(auth_info: AuthInfo = Depends(require_auth())) -> AuthInfo:
-        if not has_role(auth_info, "admin"):
+        if not has_any_role(auth_info, required_role_names):
             raise HTTPException(
                 status_code=403,
-                detail="Missing required role: admin",
+                detail=f"Missing required role: {' or '.join(required_role_names)}",
             )
 
         return auth_info
 
     return _dependency
+
+
+def require_admin():
+    return require_roles(ADMIN_ROLE)
+
+
+def require_dashboard_access():
+    return require_roles(*DASHBOARD_ACCESS_ROLES)

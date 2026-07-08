@@ -1,6 +1,3 @@
-import type { ReactNode } from 'react'
-import { useState } from 'react'
-
 import { AreaSwitcher } from '@/app/_components/area-switcher'
 import type { DashboardView } from '@/app/_components/dashboard-views'
 import { DASHBOARD_VIEWS } from '@/app/_components/dashboard-views'
@@ -24,6 +21,8 @@ import { useLogto } from '@logto/react'
 import type { LucideIcon } from 'lucide-react'
 import { BarChart3, Loader2, LogOut, Menu, Shield, User, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import type { ReactNode } from 'react'
+import { useState } from 'react'
 
 interface AppLayoutProps {
   readonly children: ReactNode
@@ -193,6 +192,7 @@ function NavItem({
     <Button
       variant={active ? 'default' : 'ghost'}
       onClick={onClick}
+      aria-label={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'group relative flex h-11 w-full items-center justify-start gap-4 px-3 py-2 text-sm font-semibold transition-all',
@@ -279,6 +279,11 @@ export function UserMenu({
                 <Badge variant="default" className="ml-2 gap-1">
                   <Shield className="h-3 w-3" />
                   {t('admin')}
+                </Badge>
+              ) : user?.role === 'manager' ? (
+                <Badge variant="secondary" className="ml-2 gap-1">
+                  <User className="h-3 w-3" />
+                  {t('manager')}
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="ml-2 gap-1">
