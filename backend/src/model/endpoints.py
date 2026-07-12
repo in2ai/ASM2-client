@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Annotated, Any
 
 from fastapi import Depends
@@ -231,7 +231,26 @@ class SourceOperationResultModel(BaseModel):
     message: str
 
 
+class DeletionGuardConfigModel(BaseModel):
+    threshold_percentage: float | None
+
+
+class DeletionGuardUpdateModel(BaseModel):
+    threshold_percentage: float = Field(ge=1, le=100)
+
+
+class IndexingAlertModel(BaseModel):
+    id: int
+    source: str
+    deleted_documents: int
+    total_documents: int
+    percentage: float
+    threshold_percentage: float
+    created_at: datetime
+
+
 MetricsReadAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]
 MetricsExportAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]
 AuthenticatedAuth = Annotated[AuthInfo, Depends(require_auth())]
 AdminAuth = Annotated[AuthInfo, Depends(require_admin())]
+IndexingManagementAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]

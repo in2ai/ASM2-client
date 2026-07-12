@@ -15,6 +15,7 @@ from src.config.env import get_bool_env, get_env, get_int_env
 from src.connectors.source import DataSource
 from src.connectors.manifest import VDBManifest
 from src.connectors.vdb_file import VDBFile
+from src.indexing.deletion_guard import enforce_sources_deletion_guard
 from src.utils.topic import assign_topics, extract_initial_topics
 
 QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
@@ -80,7 +81,12 @@ def get_vectordb(embeddings) -> Qdrant:
     return vectorstore
 
 
-def build_vectordb_from_sources(llm, embeddings, sources: List[DataSource]):
+def build_vectordb_from_sources(
+    llm,
+    embeddings,
+    sources: List[DataSource],
+    deletion_threshold_percentage: float | None,
+):
     # Group sources by name
     grouped_sources = {}
 
@@ -98,6 +104,22 @@ def build_vectordb_from_sources(llm, embeddings, sources: List[DataSource]):
             source_files = source.list_files()
             files.extend(f for f in source_files if f.metadata['id'] not in seen)
             seen.update(f.metadata['id'] for f in source_files)
+
+    # Preflight every source before any Qdrant or manifest mutation. This keeps an
+    # alert in a later source from leaving earlier sources partially updated.
+    if deletion_threshold_percentage is not None:
+        manifest = VDBManifest(QDRANT_META_PATH)
+        enforce_sources_deletion_guard(
+            (
+                (
+                    name,
+                    manifest.get_processed_ids(name).keys(),
+                    (file.metadata["id"] for file in files),
+                )
+                for name, files in grouped_files.items()
+            ),
+            threshold_percentage=deletion_threshold_percentage,
+        )
 
     # Build for each grouped source
     vectordb = None

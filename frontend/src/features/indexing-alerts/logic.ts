@@ -1,0 +1,32 @@
+import type { IndexingDeletionAlert } from './types'
+
+export function parseDeletionThreshold(value: string): number | null {
+  if (!value.trim()) {
+    return null
+  }
+
+  const threshold = Number(value.replace(',', '.'))
+  if (!Number.isFinite(threshold) || threshold < 1 || threshold > 100) {
+    return null
+  }
+
+  return threshold
+}
+
+export function selectAlertsToNotify(
+  alerts: IndexingDeletionAlert[],
+  lastNotifiedAlertId: number | null,
+): IndexingDeletionAlert[] {
+  const chronologicalAlerts = [...alerts].sort(
+    (left, right) => left.id - right.id,
+  )
+  if (chronologicalAlerts.length === 0) {
+    return []
+  }
+
+  if (lastNotifiedAlertId === null) {
+    return [chronologicalAlerts.at(-1)!]
+  }
+
+  return chronologicalAlerts.filter((alert) => alert.id > lastNotifiedAlertId)
+}
