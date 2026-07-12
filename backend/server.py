@@ -25,6 +25,12 @@ from src.config.auth import (
     set_selected_sources,
 )
 from src.config.logto_auth import AuthInfo, has_role
+from src.config.indexing import (
+    create_indexing_alert,
+    get_deletion_threshold_percentage,
+    list_indexing_alerts,
+    set_deletion_threshold_percentage,
+)
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import (
@@ -35,6 +41,7 @@ from src.connectors.store import (
     get_vectordb,
 )
 from src.connectors.manifest import VDBManifest
+from src.indexing.deletion_guard import DeletionThresholdExceeded
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
@@ -244,7 +251,13 @@ def run_vdb_update_once() -> None:
             [source.name for source in sources],
         )
 
-        build_vectordb_from_sources(llm, embeddings, sources)
+        deletion_threshold_percentage = get_deletion_threshold_percentage(pg_pool)
+        build_vectordb_from_sources(
+            llm,
+            embeddings,
+            sources,
+            deletion_threshold_percentage=deletion_threshold_percentage,
+        )
 
         if initial_build_in_progress:
             manifest = VDBManifest(QDRANT_META_PATH)
@@ -254,6 +267,27 @@ def run_vdb_update_once() -> None:
         elapsed = time.time() - start_time
 
         logging.info(f"VDB update job finished in {elapsed} seconds")
+
+    except DeletionThresholdExceeded as exc:
+        try:
+            os.remove(VDB_LOCK)
+        except FileNotFoundError:
+            pass
+
+        try:
+            create_indexing_alert(app.state.pg_pool, exc.impact)
+        except Exception:
+            logging.exception("Unable to persist indexing deletion alert")
+
+        logging.warning(
+            "VDB indexing stopped by deletion guard for source %s: "
+            "%s of %s documents (%.2f%%, threshold %.2f%%)",
+            exc.impact.source,
+            exc.impact.deleted_documents,
+            exc.impact.total_documents,
+            exc.impact.percentage,
+            exc.impact.threshold_percentage,
+        )
 
     except Exception:
         logging.exception("VDB update job failed")
@@ -319,6 +353,44 @@ async def stop_vdb_update(auth: AdminAuth):
 @app.get("/vdb-update-status", status_code=200)
 async def is_vdb_update_active(auth: AdminAuth):
     return {"active": os.path.isfile(VDB_LOCK)}
+
+
+@app.get(
+    "/indexing/deletion-guard",
+    response_model=DeletionGuardConfigModel,
+    status_code=200,
+)
+async def get_indexing_deletion_guard(auth: IndexingManagementAuth):
+    threshold_percentage = get_deletion_threshold_percentage(app.state.pg_pool)
+    return {"threshold_percentage": threshold_percentage}
+
+
+@app.put(
+    "/indexing/deletion-guard",
+    response_model=DeletionGuardConfigModel,
+    status_code=200,
+)
+async def update_indexing_deletion_guard(
+    auth: IndexingManagementAuth,
+    body: DeletionGuardUpdateModel,
+):
+    threshold_percentage = set_deletion_threshold_percentage(
+        app.state.pg_pool,
+        body.threshold_percentage,
+    )
+    return {"threshold_percentage": threshold_percentage}
+
+
+@app.get(
+    "/indexing/alerts",
+    response_model=list[IndexingAlertModel],
+    status_code=200,
+)
+async def get_indexing_alerts(
+    auth: IndexingManagementAuth,
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    return list_indexing_alerts(app.state.pg_pool, limit=limit)
 
 
 @app.get("/sources/login-info", response_model=SourceLoginInfoModel, status_code=200)

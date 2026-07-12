@@ -373,6 +373,33 @@
       }
     }
   },
+  "IndexingAlerts": {
+    "open": "Open indexing alerts and protection",
+    "title": "Indexing protection",
+    "description": "Configure the safe deletion limit and browser alerts.",
+    "alertTitle": "Indexing stopped for safety",
+    "alertDescription": "Indexing stopped before deleting {deleted} of {total} documents ({percentage}%). The configured threshold is {threshold}%.",
+    "alertsLoadFailed": "Indexing alerts could not be checked.",
+    "config": {
+      "title": "Deletion threshold",
+      "description": "The guard is enabled after saving a percentage and stops indexing when the documents that would disappear from Qdrant reach that value.",
+      "label": "Blocking threshold",
+      "help": "Enter a value from 1 to 100. Without a saved value, the guard remains disabled.",
+      "save": "Save threshold",
+      "validation": "Enter a valid percentage from 1 to 100.",
+      "saved": "Deletion threshold updated.",
+      "saveFailed": "The deletion threshold could not be saved."
+    },
+    "browser": {
+      "title": "Browser notifications",
+      "default": "Enable them to receive the warning while this tab is in the background.",
+      "granted": "Browser notifications are enabled.",
+      "denied": "The browser blocked notifications. You can enable them in the site permissions.",
+      "unsupported": "This browser does not support web notifications.",
+      "enable": "Enable alerts",
+      "enabled": "Browser notifications enabled."
+    }
+  },
   "SignInPage": {
     "description": "Sign in to access the metrics dashboard",
     "signInButton": "Sign in"

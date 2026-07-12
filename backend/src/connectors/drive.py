@@ -381,26 +381,22 @@ class GoogleDriveSource(DataSource):
         res = []
 
         for f in files:
-            try:
-                res.append(
-                    {
-                        "id": f["id"],
-                        "name": f["name"],
-                        "path": f["path"],
-                        "authors": [
-                            owner.get("displayName")
-                            for owner in f.get("owners", [])
-                            if owner.get("displayName")
-                        ],
-                        "mimeType": f["mimeType"],
-                        "modifiedTime": f["modifiedTime"],
-                        "webViewLink": f.get("webViewLink"),
-                        "permissions": self.get_file_principals(f["id"]),
-                    }
-                )
-
-            except:
-                pass
+            res.append(
+                {
+                    "id": f["id"],
+                    "name": f["name"],
+                    "path": f["path"],
+                    "authors": [
+                        owner.get("displayName")
+                        for owner in f.get("owners", [])
+                        if owner.get("displayName")
+                    ],
+                    "mimeType": f["mimeType"],
+                    "modifiedTime": f["modifiedTime"],
+                    "webViewLink": f.get("webViewLink"),
+                    "permissions": self.get_file_principals(f["id"]),
+                }
+            )
 
         # Transform to file model
         res = [GoogleDriveFile(f, self.service) for f in res]

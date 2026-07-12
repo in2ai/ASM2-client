@@ -373,6 +373,33 @@
       }
     }
   },
+  "IndexingAlerts": {
+    "open": "Abrir alertas y protección del indexado",
+    "title": "Protección del indexado",
+    "description": "Configura el límite de borrado seguro y los avisos del navegador.",
+    "alertTitle": "Indexado detenido por seguridad",
+    "alertDescription": "Se detuvo el indexado antes de eliminar {deleted} de {total} documentos ({percentage} %). El umbral configurado es {threshold} %.",
+    "alertsLoadFailed": "No se pudieron comprobar las alertas de indexado.",
+    "config": {
+      "title": "Umbral de borrado",
+      "description": "La protección se activa al guardar un porcentaje y detiene el indexado cuando los documentos que desaparecerían de Qdrant alcanzan ese valor.",
+      "label": "Umbral de bloqueo",
+      "help": "Introduce un valor entre 1 y 100. Sin un valor guardado, la protección permanece desactivada.",
+      "save": "Guardar umbral",
+      "validation": "Introduce un porcentaje válido entre 1 y 100.",
+      "saved": "Umbral de borrado actualizado.",
+      "saveFailed": "No se pudo guardar el umbral de borrado."
+    },
+    "browser": {
+      "title": "Notificaciones del navegador",
+      "default": "Actívalas para recibir el aviso aunque esta pestaña esté en segundo plano.",
+      "granted": "Las notificaciones del navegador están activadas.",
+      "denied": "El navegador las ha bloqueado. Puedes habilitarlas desde los permisos del sitio.",
+      "unsupported": "Este navegador no admite notificaciones web.",
+      "enable": "Activar avisos",
+      "enabled": "Notificaciones del navegador activadas."
+    }
+  },
   "SignInPage": {
     "description": "Inicia sesión para acceder al dashboard de métricas",
     "signInButton": "Iniciar sesión"

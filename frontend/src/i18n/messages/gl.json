@@ -373,6 +373,33 @@
       }
     }
   },
+  "IndexingAlerts": {
+    "open": "Abrir alertas e protección do indexado",
+    "title": "Protección do indexado",
+    "description": "Configura o límite de borrado seguro e os avisos do navegador.",
+    "alertTitle": "Indexado detido por seguridade",
+    "alertDescription": "Detívose o indexado antes de eliminar {deleted} de {total} documentos ({percentage} %). O limiar configurado é {threshold} %.",
+    "alertsLoadFailed": "Non se puideron comprobar as alertas de indexado.",
+    "config": {
+      "title": "Limiar de borrado",
+      "description": "A protección actívase ao gardar unha porcentaxe e detén o indexado cando os documentos que desaparecerían de Qdrant acadan ese valor.",
+      "label": "Limiar de bloqueo",
+      "help": "Introduce un valor entre 1 e 100. Sen un valor gardado, a protección permanece desactivada.",
+      "save": "Gardar limiar",
+      "validation": "Introduce unha porcentaxe válida entre 1 e 100.",
+      "saved": "Limiar de borrado actualizado.",
+      "saveFailed": "Non se puido gardar o limiar de borrado."
+    },
+    "browser": {
+      "title": "Notificacións do navegador",
+      "default": "Actívaas para recibir o aviso aínda que esta lapela estea en segundo plano.",
+      "granted": "As notificacións do navegador están activadas.",
+      "denied": "O navegador bloqueounas. Podes habilitalas nos permisos do sitio.",
+      "unsupported": "Este navegador non admite notificacións web.",
+      "enable": "Activar avisos",
+      "enabled": "Notificacións do navegador activadas."
+    }
+  },
   "SignInPage": {
     "description": "Inicia sesión para acceder ao dashboard de métricas",
     "signInButton": "Iniciar sesión"
