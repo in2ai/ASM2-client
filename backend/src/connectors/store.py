@@ -113,8 +113,8 @@ def build_vectordb_from_sources(
             files.extend(f for f in source_files if f.metadata['id'] not in seen)
             seen.update(f.metadata['id'] for f in source_files)
 
-    # Preflight every source before any Qdrant or manifest mutation. This keeps an
-    # alert in a later source from leaving earlier sources partially updated.
+    # Preflight the aggregate snapshot before any Qdrant or manifest mutation.
+    # Counts remain namespaced per source, then are summed for the global ratio.
     if deletion_threshold_percentage is not None:
         manifest = VDBManifest(QDRANT_META_PATH)
         enforce_sources_deletion_guard(

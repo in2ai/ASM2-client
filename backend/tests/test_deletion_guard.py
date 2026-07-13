@@ -64,19 +64,37 @@ class DeletionGuardTests(unittest.TestCase):
         self.assertEqual(raised.exception.impact.deleted_documents, 1)
         self.assertEqual(raised.exception.impact.percentage, 50)
 
-    def test_multisource_guard_reports_the_blocked_source(self):
+    def test_multisource_guard_allows_high_percentage_in_small_source(self):
         source_snapshots = [
-            ("drive", {"d1", "d2"}, {"d1", "d2"}),
-            ("second-source", {"x1", "x2"}, {"x2"}),
+            ("small", {"s1", "s2"}, {"s2"}),
+            ("large", {f"l{i}" for i in range(8)}, {f"l{i}" for i in range(8)}),
+        ]
+
+        enforce_sources_deletion_guard(
+            source_snapshots,
+            threshold_percentage=40,
+        )
+
+    def test_multisource_guard_blocks_at_aggregate_threshold(self):
+        source_snapshots = [
+            ("first", {"a", "b"}, {"b"}),
+            (
+                "second",
+                {f"s{i}" for i in range(8)},
+                {f"s{i}" for i in range(3, 8)},
+            ),
         ]
 
         with self.assertRaises(DeletionThresholdExceeded) as raised:
             enforce_sources_deletion_guard(
                 source_snapshots,
-                threshold_percentage=50,
+                threshold_percentage=40,
             )
 
-        self.assertEqual(raised.exception.impact.source, "second-source")
+        impact = raised.exception.impact
+        self.assertEqual(impact.deleted_documents, 4)
+        self.assertEqual(impact.total_documents, 10)
+        self.assertEqual(impact.percentage, 40)
 
 
 if __name__ == "__main__":
