@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-El sistema evita que una sincronización elimine de Qdrant un porcentaje peligroso de los documentos previamente indexados.
+El sistema evita que una sincronización elimine de Qdrant un porcentaje peligroso del conjunto total de documentos previamente indexados en todas las fuentes que participan en la ejecución.
 
 Managers y administradores pueden guardar un umbral entre el 1 % y el 100 %. Si los documentos que han desaparecido de la nube alcanzan o superan ese porcentaje, la ejecución se detiene antes de modificar Qdrant o el manifiesto y se registra una alerta.
 
@@ -13,10 +13,15 @@ No se configura un porcentaje inicial por defecto. El 40 % mencionado en el requ
 El cálculo se hace con IDs de documentos del manifiesto, no con puntos o chunks de Qdrant:
 
 ```text
-documentos_eliminados = ids_indexados - ids_encontrados_en_la_nube
+documentos_eliminados_totales =
+    suma(ids_indexados_por_fuente - ids_encontrados_en_la_nube_por_fuente)
+
+documentos_indexados_previamente_totales =
+    suma(documentos_indexados_previamente_por_fuente)
 
 porcentaje =
-    documentos_eliminados / documentos_indexados_previamente * 100
+    documentos_eliminados_totales /
+    documentos_indexados_previamente_totales * 100
 ```
 
 La comparación es inclusiva:
@@ -25,7 +30,10 @@ La comparación es inclusiva:
 porcentaje >= umbral
 ```
 
-Por tanto, 40 documentos ausentes de 100 bloquean con un umbral del 40 %.
+Por tanto, 40 documentos ausentes de 100 entre todas las fuentes bloquean con un umbral del 40 %.
+
+El umbral no se aplica por separado a cada fuente. Por ejemplo, si una fuente pequeña pierde 1 de 2 documentos y otra conserva sus 8 documentos, el impacto global es 1 de 10 (10 %), no 50 %, y no bloquea con un umbral del 40 %.
+
 
 Un documento modificado mantiene su ID y no pertenece a la diferencia de conjuntos. Aunque después se reemplacen sus chunks, no cuenta como documento eliminado de la nube.
 
@@ -35,11 +43,12 @@ Un documento modificado mantiene su ID y no pertenece a la diferencia de conjunt
 
 Contiene la lógica pura de detección:
 
-- `DeletionImpact` transporta la fuente, la cantidad de documentos ausentes, el total previo, el porcentaje y el umbral usado.
+- `DeletionImpact` transporta el ámbito evaluado, la cantidad total de documentos ausentes, el total previo agregado, el porcentaje y el umbral usado. Para las evaluaciones agregadas el ámbito es `all_sources`.
 - `DeletionThresholdExceeded` identifica específicamente un bloqueo por borrado masivo.
 - `assess_cloud_deletions()` calcula el impacto.
 - `enforce_deletion_guard()` lanza la excepción cuando corresponde.
-- `enforce_sources_deletion_guard()` comprueba todos los snapshots antes de que empiece la fase de escritura.
+- `assess_sources_cloud_deletions()` suma los ausentes y los totales de todos los snapshots y calcula un único porcentaje global.
+- `enforce_sources_deletion_guard()` comprueba ese impacto agregado antes de que empiece la fase de escritura.
 
 Casos especiales:
 
@@ -72,8 +81,8 @@ Después de listar y agrupar las fuentes:
 
 1. Si el umbral es `None`, continúa el flujo existente sin ejecutar el guard.
 2. Si hay umbral, lee del manifiesto los IDs previamente procesados.
-3. Compara esos IDs con los encontrados en la nube.
-4. Evalúa todas las fuentes antes de llamar a `build_vectorstore()`.
+3. Compara esos IDs con los encontrados en la nube dentro de cada fuente.
+4. Suma los documentos ausentes y los totales previos de todas las fuentes y evalúa una sola vez el porcentaje global antes de llamar a `build_vectorstore()`.
 5. Si todas pasan, continúa el indexado original sin otros cambios.
 
 No se añadió una segunda comprobación dentro de `build_vectorstore()`: no existen llamadas directas que justifiquen duplicar el guard.
@@ -85,6 +94,8 @@ Tampoco se modificaron los filtros de Qdrant, la extracción de temas ni otros c
 Se eliminó el `try/except: pass` que descartaba silenciosamente un archivo cuando fallaba la lectura de sus permisos.
 
 Este cambio se mantiene porque el detector usa directamente la lista devuelta por Drive: descartar un archivo existente lo convertiría en un falso borrado. Al propagar el error, la ejecución aborta antes del preflight y no confunde un fallo de lectura con una eliminación real.
+
+
 
 ### `backend/server.py`
 
@@ -142,9 +153,9 @@ El script inserta únicamente la fila `id = 1` con `ON CONFLICT DO NOTHING`. Est
 Guarda:
 
 - ID autoincremental;
-- fuente;
-- documentos ausentes;
-- total previo;
+- ámbito (`all_sources` para las nuevas alertas agregadas; las alertas históricas pueden conservar una fuente concreta);
+- documentos ausentes totales;
+- total previo agregado;
 - porcentaje;
 - umbral usado;
 - fecha de creación.
@@ -162,7 +173,8 @@ Comprueba:
 - exclusión de documentos modificados;
 - primera indexación sin documentos previos;
 - contenido de la excepción;
-- detección de la fuente que bloquea en una evaluación múltiple.
+- una fuente pequeña por encima del umbral individual que no alcanza el umbral global;
+- bloqueo al alcanzar el umbral agregado.
 
 Se retiraron pruebas duplicadas y una comprobación tautológica que no probaba una llamada real al builder.
 
@@ -259,7 +271,7 @@ Backend lee el umbral
       Se listan y agrupan las fuentes
               |
               v
-      Preflight por IDs de documentos
+      Preflight agregado por IDs de documentos
               |
               +-- porcentaje < umbral --> indexado normal
               |
@@ -283,9 +295,9 @@ El backend y PostgreSQL vuelven a validar el intervalo; no se confía únicament
 
 ### Detección
 
-En el siguiente indexado protegido se comparan los IDs del manifiesto con los IDs actuales de cada fuente.
+En el siguiente indexado protegido se comparan los IDs del manifiesto con los IDs actuales dentro de cada fuente. Después se suman los ausentes y los totales previos de todas las fuentes para obtener un único porcentaje global.
 
-Los documentos nuevos no reducen el porcentaje: el denominador es el corpus anterior, porque se mide cuánto contenido previamente indexado desaparecería.
+Los documentos nuevos no reducen el porcentaje: el denominador es la suma del corpus anterior de todas las fuentes evaluadas, porque se mide cuánto contenido previamente indexado desaparecería.
 
 ### Bloqueo
 

@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from typing import Iterable
 
 
+AGGREGATED_SOURCE = "all_sources"
+
+
 @dataclass(frozen=True)
 class DeletionImpact:
     source: str
@@ -72,6 +75,42 @@ def enforce_deletion_guard(
         raise DeletionThresholdExceeded(impact)
 
 
+def assess_sources_cloud_deletions(
+    source_snapshots: Iterable[
+        tuple[str, Iterable[str], Iterable[str]]
+    ],
+    *,
+    threshold_percentage: float,
+) -> DeletionImpact | None:
+    """Return the aggregate blocking impact across all source snapshots.
+
+    Counts are calculated independently per source and then summed. This keeps
+    documents distinct when two source types happen to use the same document ID.
+    """
+    deleted_documents = 0
+    total_documents = 0
+
+    for _, indexed_document_ids, cloud_document_ids in source_snapshots:
+        indexed_ids = frozenset(indexed_document_ids)
+        total_documents += len(indexed_ids)
+        deleted_documents += len(indexed_ids.difference(cloud_document_ids))
+
+    if total_documents == 0 or deleted_documents == 0:
+        return None
+
+    percentage = deleted_documents * 100.0 / total_documents
+    if percentage < threshold_percentage:
+        return None
+
+    return DeletionImpact(
+        source=AGGREGATED_SOURCE,
+        deleted_documents=deleted_documents,
+        total_documents=total_documents,
+        percentage=percentage,
+        threshold_percentage=threshold_percentage,
+    )
+
+
 def enforce_sources_deletion_guard(
     source_snapshots: Iterable[
         tuple[str, Iterable[str], Iterable[str]]
@@ -79,11 +118,10 @@ def enforce_sources_deletion_guard(
     *,
     threshold_percentage: float,
 ) -> None:
-    """Validate every source snapshot before the caller starts any mutation."""
-    for source, indexed_document_ids, cloud_document_ids in source_snapshots:
-        enforce_deletion_guard(
-            source=source,
-            indexed_document_ids=indexed_document_ids,
-            cloud_document_ids=cloud_document_ids,
-            threshold_percentage=threshold_percentage,
-        )
+    """Validate the aggregate snapshot before the caller starts any mutation."""
+    impact = assess_sources_cloud_deletions(
+        source_snapshots,
+        threshold_percentage=threshold_percentage,
+    )
+    if impact is not None:
+        raise DeletionThresholdExceeded(impact)
