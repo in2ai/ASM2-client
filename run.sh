@@ -17,7 +17,7 @@ Networking:
   timescaledb       Internal Docker network only in --local mode
 
 Accelerators:
-  --gpu             Enable NVIDIA GPU for the backend service
+  --gpu [nvidia|amd] Enable backend GPU (bare --gpu keeps NVIDIA compatibility)
   --qdrant cpu      Use CPU Qdrant (default)
   --qdrant nvidia   Enable NVIDIA GPU Qdrant image
   --qdrant amd      Enable AMD GPU Qdrant image
@@ -31,8 +31,9 @@ Examples:
   ./run.sh up
   ./run.sh up --remote
   ./run.sh up --gpu --qdrant nvidia
-  ./run.sh up --remote --gpu
-  ./run.sh config --gpu
+  ./run.sh up --gpu amd --qdrant amd
+  ./run.sh up --remote --gpu nvidia
+  ./run.sh config --gpu amd
   ./run.sh up --bench
 EOF
 }
@@ -60,7 +61,7 @@ ensure_gdrive_oauth_client_config() {
 
 action="up"
 mode="local"
-backend_gpu=0
+backend_accelerator="cpu"
 qdrant_accelerator="cpu"
 detach=0
 build_on_up=1
@@ -85,8 +86,30 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --gpu)
-      backend_gpu=1
-      shift
+      if [ "$#" -ge 2 ]; then
+        case "$2" in
+          cpu|none)
+            backend_accelerator="cpu"
+            shift 2
+            ;;
+          nvidia|amd)
+            backend_accelerator="$2"
+            shift 2
+            ;;
+          --*|up|down|build|config|logs|ps)
+            # Preserve the original bare --gpu behavior.
+            backend_accelerator="nvidia"
+            shift
+            ;;
+          *)
+            echo "ERROR: --gpu requires one of: nvidia, amd" >&2
+            exit 1
+            ;;
+        esac
+      else
+        backend_accelerator="nvidia"
+        shift
+      fi
       ;;
     --qdrant)
       if [ "$#" -lt 2 ]; then
@@ -120,6 +143,15 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+case "$backend_accelerator" in
+  cpu|nvidia|amd)
+    ;;
+  *)
+    echo "ERROR: unsupported backend accelerator '$backend_accelerator'" >&2
+    exit 1
+    ;;
+esac
+
 case "$qdrant_accelerator" in
   cpu|nvidia|amd)
     ;;
@@ -146,9 +178,14 @@ if [ "$mode" = "local" ]; then
   compose_args+=(-f docker-compose.local.yml)
 fi
 
-if [ "$backend_gpu" -eq 1 ]; then
-  compose_args+=(-f docker-compose.gpu.yml)
-fi
+case "$backend_accelerator" in
+  nvidia)
+    compose_args+=(-f docker-compose.gpu.yml)
+    ;;
+  amd)
+    compose_args+=(-f docker-compose.gpu-amd.yml)
+    ;;
+esac
 
 case "$qdrant_accelerator" in
   nvidia)
