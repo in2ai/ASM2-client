@@ -233,6 +233,7 @@ dependencies = [
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "langsmith" },
+    { name = "llama-cpp-python" },
     { name = "logto" },
     { name = "lxml" },
     { name = "markupsafe" },
@@ -400,6 +401,7 @@ requires-dist = [
     { name = "langgraph", specifier = "==1.1.2" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0" },
     { name = "langsmith", specifier = "==0.4.46" },
+    { name = "llama-cpp-python", specifier = ">=0.3.34" },
     { name = "logto", specifier = "==0.2.1" },
     { name = "lxml", specifier = "==6.0.2" },
     { name = "markupsafe", specifier = "==3.0.3" },
@@ -1804,6 +1806,18 @@ sdist = { url = "https://files.pythonhosted.org/packages/03/e8/c91f5e34aa0e7cba9
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d6/cb/02610a918e7630687d7fae0f668035b92def7ba0e1a7956bdf1f7098a32c/langsmith-0.4.46-py3-none-any.whl", hash = "sha256:783c16ef108c42a16ec2d8bc68067b969f3652e2fe82ca1289007baf947e4500", size = 411938, upload-time = "2025-11-21T23:00:03.514Z" },
 ]
+
+[[package]]
+name = "llama-cpp-python"
+version = "0.3.34"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "diskcache" },
+    { name = "jinja2" },
+    { name = "numpy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c1/2f/46487e949da42b31847853793ddbfd44c7414e94d4364c9a41f91f30af27/llama_cpp_python-0.3.34.tar.gz", hash = "sha256:d849d286d808284f1d3ec1bd6875572430d29d1f9574a010232caa4e9cef0e35", size = 71617302, upload-time = "2026-07-12T04:33:41.928Z" }
 
 [[package]]
 name = "logto"

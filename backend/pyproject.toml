@@ -166,6 +166,7 @@ dependencies = [
     "treedex>=0.1.5",
     "ragas>=0.4.3",
     "pandas>=2.3.3",
+    "llama-cpp-python>=0.3.34",
 ]
 
 [tool.uv]
