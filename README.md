@@ -138,7 +138,8 @@ El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el bu
 | --- | --- |
 | `docker-compose.yml` | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) con `backend` y `qdrant` solo en red interna Docker |
 | `docker-compose.local.yml` | Override para infraestructura local (`timescaledb`, `timescaledb-init`, `logto`) con Logto publicado en `localhost` |
-| `docker-compose.gpu.yml` | Override para habilitar soporte GPU en `backend` |
+| `docker-compose.gpu.yml` | Override para habilitar GPU NVIDIA en `backend` |
+| `docker-compose.gpu-amd.yml` | Override para habilitar GPU AMD (ROCm) en `backend` |
 | `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA |
 | `docker-compose.qdrant-amd.yml` | Override para Qdrant con GPU AMD (ROCm) |
 | `docker-compose.bench.yml` | Stack para benchmark: reemplaza el web server del `backend` por el evaluador ([`benchmark.py`](backend/benchmark.py)) |
@@ -196,19 +197,43 @@ Servicios internos en este modo:
 
 ### Opción 3: Docker con Soporte GPU (Backend)
 
-El servicio `backend` puede utilizar GPU para acelerar el procesamiento. Para habilitar GPU:
+El servicio `backend` puede utilizar GPU para acelerar el procesamiento local. Sin argumentos, `--gpu` mantiene la compatibilidad anterior y selecciona NVIDIA.
+
+#### Backend con GPU NVIDIA
 
 ```bash
 ./run.sh up --gpu
+# Equivalente explícito:
+./run.sh up --gpu nvidia
 
 # Con servicios remotos:
-./run.sh up --remote --gpu
+./run.sh up --remote --gpu nvidia
 ```
 
-**Requisitos para GPU:**
+**Requisitos NVIDIA:**
 
 - Drivers NVIDIA instalados
 - [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+
+#### Backend con GPU AMD (ROCm)
+
+```bash
+./run.sh up --gpu amd
+
+# AMD tanto en backend como en Qdrant:
+./run.sh up --gpu amd --qdrant amd
+```
+
+El backend AMD utiliza por defecto la imagen validada `rocm/pytorch:rocm7.2.4_ubuntu22.04_py3.10_pytorch_release_2.9.1`. Se puede cambiar con `ROCM_PYTORCH_IMAGE` si el modelo de GPU requiere otra versión compatible.
+
+**Requisitos AMD:**
+
+- Linux y una GPU incluida en la [matriz de compatibilidad ROCm](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html)
+- Drivers AMD ROCm compatibles instalados
+- Dispositivos `/dev/kfd` y `/dev/dri` accesibles
+- Usuario en los grupos `video` y `render`
+
+> La GPU del backend acelera principalmente el reranker y los embeddings locales (`USE_LOCAL_EMB=true`). Las llamadas a modelos OpenAI se ejecutan de forma remota.
 
 ### Opción 4: Qdrant con Aceleración GPU
 
