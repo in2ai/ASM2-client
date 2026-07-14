@@ -210,20 +210,20 @@ Good:
 
 ```env
 LOGTO_ENDPOINT=https://logto.example.com
-QUESTDB_PORT=8812
+PG_PORT=5432
 ```
 
 Problematic in this repo's backend runtime if the literal quotes are preserved:
 
 ```env
 LOGTO_ENDPOINT="https://logto.example.com"
-QUESTDB_PORT="8812"
+PG_PORT="5432"
 ```
 
 Quoted values previously caused:
 
 - OpenID discovery URL failures for `LOGTO_ENDPOINT`
-- integer parsing failures for `QUESTDB_PORT`
+- integer parsing failures for `PG_PORT`
 
 If authentication suddenly fails with malformed discovery URLs, check the effective backend value of `LOGTO_ENDPOINT` first.
 

@@ -114,6 +114,8 @@
     "streamlit",
     "sysctls",
     "testid",
+    "timescaledb",
+    "TIMESCALEDB",
     "timespec",
     "Topbar",
     "typesafety",

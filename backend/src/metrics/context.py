@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class MetricsActor:
-    """Authenticated user identity stored with QuestDB metrics."""
+    """Authenticated user identity stored with TimescaleDB metrics."""
 
     user_id: str
     user_role: str

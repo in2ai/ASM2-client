@@ -24,8 +24,10 @@ from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
 from src.connectors.llms import get_configured_llm
 from src.connectors.store import get_vectordb
-from src.metrics.connection import get_questdb_pool
+
+from src.metrics.connection import get_pg_pool
 from src.utils.nlp import init_nlp
+
 from src.utils.rag import get_reranker
 
 
@@ -50,7 +52,7 @@ LLM_WITH_TOOLS = get_llm_with_tools(LLM)
 VDB = get_vectordb(get_configured_embeddings())
 RERANKER = get_reranker()
 GRAPH = build_graph(get_checkpointer())
-QUESTDB_POOL = get_questdb_pool()
+PG_POOL = get_pg_pool()
 ADMIN_SOURCES = {}
 
 # QA_CSV_PATH = Path("/app/benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv")
@@ -201,7 +203,7 @@ def call_rag(query: str, thread_id: str) -> tuple[str, bool, Any | None]:
             "llm_with_tools": LLM_WITH_TOOLS,
             "vectorstore": VDB,
             "reranker": RERANKER,
-            "questdb_pool": QUESTDB_POOL,
+            "pg_pool": PG_POOL,
             "sources": ADMIN_SOURCES,
         }
     }

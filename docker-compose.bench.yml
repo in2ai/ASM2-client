@@ -15,7 +15,6 @@ services:
     env_file:
       - .env
     environment:
-      CHAT_DB_PATH: /app/data/chat_history.sqlite3
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
       BENCHMARK: true

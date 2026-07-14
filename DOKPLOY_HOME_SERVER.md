@@ -7,8 +7,7 @@ Use it when you want to deploy the full stack on a single Dokploy host:
 - `dashboard` public on your main app domain
 - `logto` public on a dedicated auth domain
 - `logto` admin console public on a dedicated admin domain
-- `questdb` web console public on a dedicated QuestDB domain
-- `backend`, `qdrant`, QuestDB PostgreSQL wire, `questdb-init`, and `logto-postgres` internal only
+- `backend`, `qdrant`, `timescaledb`, `timescaledb-init`, and `logto-postgres` internal only
 - NVIDIA GPU enabled for `backend` and `qdrant`
 
 ## Important: Use a Docker Compose App
@@ -36,7 +35,6 @@ Use these subdomains:
 - app domain: `app.example.com`
 - Logto public domain: `auth.example.com`
 - Logto admin domain: `admin-auth.example.com`
-- QuestDB web domain: `questdb.example.com`
 
 The admin domain is public in this setup because Logto needs an admin console during configuration. Protect it with a strong password, MFA, and preferably an additional access restriction once setup is complete.
 
@@ -61,7 +59,7 @@ Notes:
 - `LOGTO_APP_ID` is not known until after Logto is running and you create the SPA application in Logto.
 - For the first deployment, set `LOGTO_APP_ID=bootstrap-placeholder`.
 - After Logto is up, create the SPA application, replace that value with the real app id, and redeploy.
-- Set strong QuestDB credentials for both PostgreSQL wire access and the HTTP web console.
+- Set strong TimescaleDB credentials (`PG_USER` / `PG_PASSWORD`).
 - If you use the Google Drive connector, prefer setting `CLIENT_SECRET` as inline JSON in Dokploy instead of mounting a secret file.
 - Only a small set of environment entries remain inline in the compose file. Those are service-local overrides such as internal hostnames, container paths, GPU flags, build-time mappings, translated variable names, or computed values.
 - The dashboard build reads the shared `LOGTO_ENDPOINT`, `LOGTO_APP_ID`, and `LOGTO_API_RESOURCE` values, and Vite exposes them as `VITE_*` values for browser code.
@@ -74,9 +72,8 @@ In Dokploy, add these domain mappings:
 1. Service `dashboard`, port `80` -> `app.example.com`
 2. Service `logto`, port `3001` -> `auth.example.com`
 3. Service `logto`, port `3002` -> `admin-auth.example.com`
-4. Service `questdb`, port `9000` -> `questdb.example.com`
 
-Do not expose `backend`, `qdrant`, QuestDB PostgreSQL wire, or `logto-postgres` publicly.
+Do not expose `backend`, `qdrant`, `timescaledb`, or `logto-postgres` publicly.
 
 ## 6. First Deployment Order
 
@@ -148,14 +145,14 @@ This deployment persists data in named Docker volumes:
 
 - `backend-data`
 - `qdrant-data`
-- `questdb-data`
+- `timescaledb-data`
 - `logto-connectors`
 - `logto-postgres-data`
 
 Use Dokploy volume backup features for at least:
 
 - `qdrant-data`
-- `questdb-data`
+- `timescaledb-data`
 - `logto-postgres-data`
 - `backend-data`
 
@@ -166,16 +163,16 @@ Public:
 - `dashboard`
 - `logto` main endpoint
 - `logto` admin console
-- `questdb` web console on port `9000`
 
 Internal only:
 
 - `backend`
 - `qdrant`
-- `questdb-init`
+- `timescaledb`
+- `timescaledb-init`
 - `logto-postgres`
 
-QuestDB PostgreSQL wire remains internal for backend and init SQL usage. Only the QuestDB HTTP web console is intended to be exposed publicly, and it should be protected with `QUESTDB_HTTP_USER` / `QUESTDB_HTTP_PASSWORD`.
+TimescaleDB remains internal, used by the `backend` and init SQL over the PostgreSQL protocol. It is not exposed publicly.
 
 The dashboard proxies `/api/*` to `backend:8001`, so the backend should not get its own public domain.
 
@@ -194,5 +191,5 @@ After the final redeploy, verify:
 
 - Do not use the standard Dokploy build-type app for this repository.
 - Do not expose `backend` directly to the internet.
-- Do not expose QuestDB PostgreSQL wire publicly; only expose the HTTP web console on port `9000`.
+- Do not expose TimescaleDB publicly; it is internal-only.
 - Do not leave `LOGTO_APP_ID=bootstrap-placeholder` after Logto setup.

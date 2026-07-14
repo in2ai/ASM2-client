@@ -214,6 +214,7 @@ secrets/
 qdrant_index/
 bm25_index/
 questdb/
+timescaledb/
 
 node_modules/
 
@@ -234,4 +235,7 @@ backend-data
 # benchmark
 benchmark_data/*
 !benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv
+
+.dev
+.env.remote
 !benchmark_data/dataset_wikipedia_qa_5_docs_200.csv

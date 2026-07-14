@@ -155,28 +155,6 @@ def register_user_activity(pool: ThreadedConnectionPool, *, actor: MetricsActor)
     execute_query(pool, query, (actor.user_id, actor.user_role))
 
 
-def log_request(
-    pool: ThreadedConnectionPool,
-    endpoint: str,
-    method: str,
-    status: int,
-    latency: float,
-    *,
-    actor: MetricsActor,
-):
-    return
-
-    query = """
-    INSERT INTO requests (ts, user_id, user_role, endpoint, method, status, latency)
-    VALUES (NOW(), %s, %s, %s, %s, %s, %s)
-    """
-
-    execute_query(
-        pool,
-        query,
-        (actor.user_id, actor.user_role, endpoint, method, status, latency),
-    )
-
 # ---------------------------------
 # Helpers
 # ---------------------------------

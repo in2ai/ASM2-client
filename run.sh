@@ -6,15 +6,15 @@ usage() {
 Usage: ./run.sh [up|down|build|config|logs|ps] [options] [-- extra docker compose args]
 
 Modes:
-  --local           Include local QuestDB and Logto services (default)
-  --remote          Use external QuestDB and Logto services
+  --local           Include local TimescaleDB and Logto services (default)
+  --remote          Use external TimescaleDB and Logto services
   --bench           Just like --local, but changes entrypoint to a benchmark instead of the web server
 
 Networking:
   dashboard         Published on localhost:3001
   logto             Published on localhost:3011 and localhost:3002 in --local mode
   backend/qdrant    Internal Docker network only
-  questdb           Internal Docker network only in --local mode
+  timescaledb       Internal Docker network only in --local mode
 
 Accelerators:
   --gpu             Enable NVIDIA GPU for the backend service

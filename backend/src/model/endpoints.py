@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 from typing import Annotated, Any
 
@@ -7,6 +9,7 @@ from src.config.logto_auth import (
     AuthInfo,
     require_admin,
     require_auth,
+    require_dashboard_access,
 )
 
 
@@ -155,7 +158,7 @@ class ChatMessageModel(BaseModel):
     chat_id: str
     role: str
     content: str
-    created_at: str
+    created_at: datetime
     status: str | None = None
     metadata: dict[str, Any] | None = None
 
@@ -163,8 +166,8 @@ class ChatMessageModel(BaseModel):
 class ChatSummaryModel(BaseModel):
     id: str
     title: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
     last_message_preview: str | None = None
 
 
@@ -213,6 +216,7 @@ class SourceLoginPayloadModel(BaseModel):
     auth_token: str | None = None
     redirect_uri: str | None = None
 
+
 class SourceLoginRequestModel(BaseModel):
     source: str
     payload: SourceLoginPayloadModel
@@ -227,7 +231,7 @@ class SourceOperationResultModel(BaseModel):
     message: str
 
 
-MetricsReadAuth = Annotated[AuthInfo, Depends(require_admin())]
-MetricsExportAuth = Annotated[AuthInfo, Depends(require_admin())]
+MetricsReadAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]
+MetricsExportAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]
 AuthenticatedAuth = Annotated[AuthInfo, Depends(require_auth())]
 AdminAuth = Annotated[AuthInfo, Depends(require_admin())]
