@@ -93,3 +93,34 @@ export function useIndexingAlertsQuery(enabled: boolean) {
     refetchIntervalInBackground: true,
   })
 }
+
+export function useDeleteIndexingAlertMutation() {
+  const request = useAuthorizedIndexingRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (alertId: number) =>
+      request<void>(`/indexing/alerts/${alertId}`, { method: 'DELETE' }),
+    onSuccess: (_, alertId) => {
+      queryClient.setQueryData<IndexingDeletionAlert[]>(
+        indexingAlertQueryKeys.alerts,
+        (alerts) => alerts?.filter((alert) => alert.id !== alertId),
+      )
+    },
+  })
+}
+
+export function useClearIndexingAlertsMutation() {
+  const request = useAuthorizedIndexingRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => request<void>('/indexing/alerts', { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.setQueryData<IndexingDeletionAlert[]>(
+        indexingAlertQueryKeys.alerts,
+        [],
+      )
+    },
+  })
+}

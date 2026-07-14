@@ -71,6 +71,32 @@ def create_indexing_alert(
     )
 
 
+def delete_indexing_alert(
+    pool: ThreadedConnectionPool,
+    alert_id: int,
+) -> bool:
+    rows = execute_query(
+        pool,
+        """
+        DELETE FROM indexing_alerts
+        WHERE id = %s
+        RETURNING id
+        """,
+        (alert_id,),
+    ) or []
+
+    return bool(rows)
+
+
+def delete_all_indexing_alerts(pool: ThreadedConnectionPool) -> None:
+    execute_query(
+        pool,
+        """
+        DELETE FROM indexing_alerts
+        """,
+    )
+
+
 def list_indexing_alerts(
     pool: ThreadedConnectionPool,
     *,

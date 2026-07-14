@@ -375,11 +375,23 @@
   },
   "IndexingAlerts": {
     "open": "Abrir alertas y protección del indexado",
+    "openWithUnseen": "Abrir alertas y protección del indexado ({count} sin leer)",
     "title": "Protección del indexado",
     "description": "Configura el límite de borrado seguro y los avisos del navegador.",
     "alertTitle": "Indexado detenido por seguridad",
     "alertDescription": "Se detuvo el indexado antes de eliminar {deleted} de {total} documentos ({percentage} %). El umbral configurado es {threshold} %.",
     "alertsLoadFailed": "No se pudieron comprobar las alertas de indexado.",
+    "history": {
+      "title": "Alertas recientes",
+      "description": "Historial de las veces que la protección detuvo el indexado.",
+      "itemTitle": "Indexado detenido · {source}",
+      "loading": "Cargando alertas…",
+      "empty": "Todavía no hay alertas. Aparecerán aquí cuando la protección detenga el indexado.",
+      "clearAll": "Borrar todas",
+      "delete": "Eliminar alerta",
+      "deleteFailed": "No se pudo eliminar la alerta.",
+      "clearFailed": "No se pudieron borrar las alertas."
+    },
     "config": {
       "title": "Umbral de borrado",
       "description": "La protección se activa al guardar un porcentaje y detiene el indexado cuando los documentos que desaparecerían de Qdrant alcanzan ese valor.",

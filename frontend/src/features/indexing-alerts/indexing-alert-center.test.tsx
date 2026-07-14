@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { IndexingAlertCenter } from './indexing-alert-center'
 
 const mocks = vi.hoisted(() => ({
+  useClearIndexingAlertsMutation: vi.fn(),
+  useDeleteIndexingAlertMutation: vi.fn(),
   useDeletionGuardQuery: vi.fn(),
   useIndexingAlertsQuery: vi.fn(),
   useUpdateDeletionGuardMutation: vi.fn(),
@@ -16,6 +18,10 @@ vi.mock('next-intl', () => ({
 }))
 
 vi.mock('./api', () => ({
+  useClearIndexingAlertsMutation: (...args: unknown[]) =>
+    mocks.useClearIndexingAlertsMutation(...args),
+  useDeleteIndexingAlertMutation: (...args: unknown[]) =>
+    mocks.useDeleteIndexingAlertMutation(...args),
   useDeletionGuardQuery: (...args: unknown[]) =>
     mocks.useDeletionGuardQuery(...args),
   useIndexingAlertsQuery: (...args: unknown[]) =>
@@ -39,6 +45,14 @@ describe('IndexingAlertCenter role access', () => {
       refetch: vi.fn(),
     })
     mocks.useUpdateDeletionGuardMutation.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+    })
+    mocks.useDeleteIndexingAlertMutation.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+    })
+    mocks.useClearIndexingAlertsMutation.mockReturnValue({
       isPending: false,
       mutateAsync: vi.fn(),
     })

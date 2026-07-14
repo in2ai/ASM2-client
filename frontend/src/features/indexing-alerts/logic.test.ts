@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { parseDeletionThreshold, selectAlertsToNotify } from './logic'
+import {
+  countUnseenAlerts,
+  parseDeletionThreshold,
+  selectAlertsToNotify,
+} from './logic'
 import type { IndexingDeletionAlert } from './types'
 
 function deletionAlert(id: number): IndexingDeletionAlert {
@@ -45,5 +49,19 @@ describe('indexing alert logic', () => {
       deletionAlert(2),
       deletionAlert(3),
     ])
+  })
+
+  it('counts every alert as unseen before the user opens the center', () => {
+    const alerts = [deletionAlert(1), deletionAlert(2)]
+
+    expect(countUnseenAlerts(alerts, null)).toBe(2)
+  })
+
+  it('counts only alerts newer than the last seen ID', () => {
+    const alerts = [deletionAlert(1), deletionAlert(2), deletionAlert(3)]
+
+    expect(countUnseenAlerts(alerts, 2)).toBe(1)
+    expect(countUnseenAlerts(alerts, 3)).toBe(0)
+    expect(countUnseenAlerts([], 3)).toBe(0)
   })
 })

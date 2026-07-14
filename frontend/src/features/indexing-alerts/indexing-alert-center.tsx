@@ -11,19 +11,34 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toIntlLocale, type AppLocale } from '@/i18n/config'
 import { hasDashboardAccess, type LogtoUser } from '@/lib/auth'
-import { Bell, BellRing, Loader2, Save, ShieldAlert } from 'lucide-react'
+import {
+  Bell,
+  BellRing,
+  Loader2,
+  Save,
+  ShieldAlert,
+  Trash2,
+} from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
+  useClearIndexingAlertsMutation,
+  useDeleteIndexingAlertMutation,
   useDeletionGuardQuery,
   useIndexingAlertsQuery,
   useUpdateDeletionGuardMutation,
 } from './api'
-import { parseDeletionThreshold, selectAlertsToNotify } from './logic'
+import {
+  countUnseenAlerts,
+  parseDeletionThreshold,
+  selectAlertsToNotify,
+} from './logic'
 import {
   readLastNotifiedAlertId,
+  readLastSeenAlertId,
   rememberLastNotifiedAlertId,
+  rememberLastSeenAlertId,
 } from './notification-storage'
 
 type BrowserNotificationState = NotificationPermission | 'unsupported'
@@ -56,6 +71,26 @@ function rememberStoredAlertId(userId: string, alertId: number): void {
   }
 }
 
+function readStoredSeenAlertId(userId: string | undefined): number | null {
+  if (!userId) {
+    return null
+  }
+
+  try {
+    return readLastSeenAlertId(globalThis.localStorage, userId)
+  } catch {
+    return null
+  }
+}
+
+function rememberStoredSeenAlertId(userId: string, alertId: number): void {
+  try {
+    rememberLastSeenAlertId(globalThis.localStorage, userId, alertId)
+  } catch {
+    // localStorage is not guaranteed to be available in every browser context.
+  }
+}
+
 function notificationStatusKey(permission: BrowserNotificationState): string {
   if (permission === 'granted') return 'browser.granted'
   if (permission === 'denied') return 'browser.denied'
@@ -72,16 +107,28 @@ export function IndexingAlertCenter({
   const deletionGuardQuery = useDeletionGuardQuery(enabled)
   const alertsQuery = useIndexingAlertsQuery(enabled)
   const updateDeletionGuardMutation = useUpdateDeletionGuardMutation()
+  const deleteAlertMutation = useDeleteIndexingAlertMutation()
+  const clearAlertsMutation = useClearIndexingAlertsMutation()
   const [thresholdInput, setThresholdInput] = useState('')
   const [thresholdDirty, setThresholdDirty] = useState(false)
   const [formError, setFormError] = useState<string>()
   const [browserNotificationState, setBrowserNotificationState] =
     useState<BrowserNotificationState>(getBrowserNotificationState)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [lastSeenAlertId, setLastSeenAlertId] = useState<number | null>(null)
   const lastNotifiedAlertIdRef = useRef<number | null>(null)
   const percentageFormatter = useMemo(
     () =>
       new Intl.NumberFormat(toIntlLocale(locale), {
         maximumFractionDigits: 2,
+      }),
+    [locale],
+  )
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(toIntlLocale(locale), {
+        dateStyle: 'medium',
+        timeStyle: 'short',
       }),
     [locale],
   )
@@ -95,7 +142,29 @@ export function IndexingAlertCenter({
 
   useEffect(() => {
     lastNotifiedAlertIdRef.current = readStoredAlertId(user?.sub)
+    setLastSeenAlertId(readStoredSeenAlertId(user?.sub))
   }, [user?.sub])
+
+  useEffect(() => {
+    if (
+      !dialogOpen ||
+      !user ||
+      !alertsQuery.data ||
+      alertsQuery.data.length === 0
+    ) {
+      return
+    }
+
+    const latestAlertId = Math.max(...alertsQuery.data.map((alert) => alert.id))
+    setLastSeenAlertId((seenAlertId) => {
+      if (seenAlertId !== null && latestAlertId <= seenAlertId) {
+        return seenAlertId
+      }
+
+      rememberStoredSeenAlertId(user.sub, latestAlertId)
+      return latestAlertId
+    })
+  }, [alertsQuery.data, dialogOpen, user])
 
   useEffect(() => {
     if (!enabled || !alertsQuery.data || alertsQuery.data.length === 0) {
@@ -203,20 +272,55 @@ export function IndexingAlertCenter({
     }
   }
 
+  const alerts = alertsQuery.data ?? []
+  const unseenCount = countUnseenAlerts(alerts, lastSeenAlertId)
+
+  const removeAlert = async (alertId: number) => {
+    try {
+      await deleteAlertMutation.mutateAsync(alertId)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t('history.deleteFailed'),
+      )
+    }
+  }
+
+  const clearAlerts = async () => {
+    try {
+      await clearAlertsMutation.mutateAsync()
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t('history.clearFailed'),
+      )
+    }
+  }
+
   return (
-    <Dialog>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
-          className="min-h-11 min-w-11 rounded-xl"
-          aria-label={t('open')}
+          className="relative min-h-11 min-w-11 rounded-xl"
+          aria-label={
+            unseenCount > 0
+              ? t('openWithUnseen', { count: unseenCount })
+              : t('open')
+          }
         >
           <Bell className="h-5 w-5" />
+          {unseenCount > 0 ? (
+            <span
+              aria-hidden="true"
+              className="bg-destructive text-destructive-foreground absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold"
+            >
+              {unseenCount > 9 ? '9+' : unseenCount}
+            </span>
+          ) : null}
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-amber-500" />
@@ -224,6 +328,98 @@ export function IndexingAlertCenter({
           </DialogTitle>
           <DialogDescription>{t('description')}</DialogDescription>
         </DialogHeader>
+
+        <section className="space-y-3 rounded-2xl border p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">{t('history.title')}</h3>
+              <p className="text-muted-foreground text-sm">
+                {t('history.description')}
+              </p>
+            </div>
+            {alerts.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={clearAlertsMutation.isPending}
+                onClick={() => void clearAlerts()}
+              >
+                {clearAlertsMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                {t('history.clearAll')}
+              </Button>
+            ) : null}
+          </div>
+
+          {alertsQuery.error instanceof Error ? (
+            <p role="alert" className="text-destructive text-sm">
+              {t('alertsLoadFailed')}
+            </p>
+          ) : null}
+
+          {alertsQuery.isLoading ? (
+            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t('history.loading')}
+            </div>
+          ) : null}
+
+          {!alertsQuery.isLoading &&
+          !(alertsQuery.error instanceof Error) &&
+          alerts.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {t('history.empty')}
+            </p>
+          ) : null}
+
+          {alerts.length > 0 ? (
+            <ul className="max-h-64 space-y-2 overflow-y-auto">
+              {alerts.map((alert) => (
+                <li
+                  key={alert.id}
+                  className="flex items-start justify-between gap-2 rounded-xl border p-3"
+                >
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      {t('history.itemTitle', { source: alert.source })}
+                    </p>
+                    <p className="text-muted-foreground text-sm">
+                      {t('alertDescription', {
+                        deleted: alert.deleted_documents,
+                        percentage: percentageFormatter.format(
+                          alert.percentage,
+                        ),
+                        threshold: percentageFormatter.format(
+                          alert.threshold_percentage,
+                        ),
+                        total: alert.total_documents,
+                      })}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {dateFormatter.format(new Date(alert.created_at))}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive h-8 w-8 shrink-0"
+                    aria-label={t('history.delete')}
+                    disabled={
+                      deleteAlertMutation.isPending ||
+                      clearAlertsMutation.isPending
+                    }
+                    onClick={() => void removeAlert(alert.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
 
         <section className="space-y-4 rounded-2xl border p-4">
           <div>
@@ -317,11 +513,6 @@ export function IndexingAlertCenter({
             </Button>
           ) : null}
         </section>
-        {alertsQuery.error instanceof Error ? (
-          <p role="alert" className="text-destructive text-sm">
-            {t('alertsLoadFailed')}
-          </p>
-        ) : null}
       </DialogContent>
     </Dialog>
   )
