@@ -13,6 +13,17 @@ export function parseDeletionThreshold(value: string): number | null {
   return threshold
 }
 
+export function countUnseenAlerts(
+  alerts: IndexingDeletionAlert[],
+  lastSeenAlertId: number | null,
+): number {
+  if (lastSeenAlertId === null) {
+    return alerts.length
+  }
+
+  return alerts.filter((alert) => alert.id > lastSeenAlertId).length
+}
+
 export function selectAlertsToNotify(
   alerts: IndexingDeletionAlert[],
   lastNotifiedAlertId: number | null,

@@ -375,11 +375,23 @@
   },
   "IndexingAlerts": {
     "open": "Open indexing alerts and protection",
+    "openWithUnseen": "Open indexing alerts and protection ({count} unread)",
     "title": "Indexing protection",
     "description": "Configure the safe deletion limit and browser alerts.",
     "alertTitle": "Indexing stopped for safety",
     "alertDescription": "Indexing stopped before deleting {deleted} of {total} documents ({percentage}%). The configured threshold is {threshold}%.",
     "alertsLoadFailed": "Indexing alerts could not be checked.",
+    "history": {
+      "title": "Recent alerts",
+      "description": "History of the times indexing was stopped by the guard.",
+      "itemTitle": "Indexing stopped · {source}",
+      "loading": "Loading alerts…",
+      "empty": "No alerts yet. They will appear here when the guard stops indexing.",
+      "clearAll": "Clear all",
+      "delete": "Delete alert",
+      "deleteFailed": "The alert could not be deleted.",
+      "clearFailed": "The alerts could not be cleared."
+    },
     "config": {
       "title": "Deletion threshold",
       "description": "The guard is enabled after saving a percentage and stops indexing when the documents that would disappear from Qdrant reach that value.",

@@ -27,6 +27,8 @@ from src.config.auth import (
 from src.config.logto_auth import AuthInfo, has_role
 from src.config.indexing import (
     create_indexing_alert,
+    delete_all_indexing_alerts,
+    delete_indexing_alert,
     get_deletion_threshold_percentage,
     list_indexing_alerts,
     set_deletion_threshold_percentage,
@@ -391,6 +393,20 @@ async def get_indexing_alerts(
     limit: int = Query(default=50, ge=1, le=100),
 ):
     return list_indexing_alerts(app.state.pg_pool, limit=limit)
+
+
+@app.delete("/indexing/alerts", status_code=204)
+async def clear_indexing_alerts(auth: IndexingManagementAuth):
+    delete_all_indexing_alerts(app.state.pg_pool)
+
+
+@app.delete("/indexing/alerts/{alert_id}", status_code=204)
+async def remove_indexing_alert(
+    auth: IndexingManagementAuth,
+    alert_id: int,
+):
+    if not delete_indexing_alert(app.state.pg_pool, alert_id):
+        raise HTTPException(status_code=404, detail="Indexing alert not found")
 
 
 @app.get("/sources/login-info", response_model=SourceLoginInfoModel, status_code=200)
