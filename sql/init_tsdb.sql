@@ -113,7 +113,8 @@ CREATE INDEX IF NOT EXISTS idx_source_preferences_user_updated
 CREATE TABLE IF NOT EXISTS indexing_deletion_guard (
     id SMALLINT PRIMARY KEY CHECK (id = 1),
     threshold_percentage DOUBLE PRECISION
-        CHECK (threshold_percentage >= 1 AND threshold_percentage <= 100)
+        CHECK (threshold_percentage >= 1 AND threshold_percentage <= 100),
+    override_pending BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 INSERT INTO indexing_deletion_guard (
@@ -130,5 +131,14 @@ CREATE TABLE IF NOT EXISTS indexing_alerts (
     percentage DOUBLE PRECISION NOT NULL CHECK (percentage > 0 AND percentage <= 100),
     threshold_percentage DOUBLE PRECISION NOT NULL
         CHECK (threshold_percentage >= 1 AND threshold_percentage <= 100),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source_breakdown JSONB
+);
+
+-- Alerts are dismissed per user instead of deleted globally.
+CREATE TABLE IF NOT EXISTS indexing_alert_dismissals (
+    user_id TEXT NOT NULL,
+    alert_id BIGINT NOT NULL REFERENCES indexing_alerts(id) ON DELETE CASCADE,
+    dismissed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, alert_id)
 );

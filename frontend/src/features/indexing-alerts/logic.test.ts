@@ -15,6 +15,9 @@ function deletionAlert(id: number): IndexingDeletionAlert {
     percentage: 40,
     threshold_percentage: 40,
     created_at: '2026-07-01T10:00:00.000Z',
+    source_breakdown: [
+      { source: 'drive', deleted_documents: 40, total_documents: 100 },
+    ],
   }
 }
 

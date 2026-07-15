@@ -233,10 +233,21 @@ class SourceOperationResultModel(BaseModel):
 
 class DeletionGuardConfigModel(BaseModel):
     threshold_percentage: float | None
+    override_pending: bool
 
 
 class DeletionGuardUpdateModel(BaseModel):
-    threshold_percentage: float = Field(ge=1, le=100)
+    threshold_percentage: float | None = Field(ge=1, le=100)
+
+
+class DeletionGuardOverrideModel(BaseModel):
+    override_pending: bool
+
+
+class IndexingAlertSourceImpactModel(BaseModel):
+    source: str
+    deleted_documents: int
+    total_documents: int
 
 
 class IndexingAlertModel(BaseModel):
@@ -247,6 +258,7 @@ class IndexingAlertModel(BaseModel):
     percentage: float
     threshold_percentage: float
     created_at: datetime
+    source_breakdown: list[IndexingAlertSourceImpactModel] | None
 
 
 MetricsReadAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]

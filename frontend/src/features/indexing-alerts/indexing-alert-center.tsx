@@ -1,3 +1,14 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,17 +28,21 @@ import {
   Loader2,
   Save,
   ShieldAlert,
+  ShieldOff,
+  SkipForward,
   Trash2,
+  Undo2,
 } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  useClearIndexingAlertsMutation,
-  useDeleteIndexingAlertMutation,
   useDeletionGuardQuery,
+  useDismissAllIndexingAlertsMutation,
+  useDismissIndexingAlertMutation,
   useIndexingAlertsQuery,
   useUpdateDeletionGuardMutation,
+  useUpdateDeletionGuardOverrideMutation,
 } from './api'
 import {
   countUnseenAlerts,
@@ -107,8 +122,9 @@ export function IndexingAlertCenter({
   const deletionGuardQuery = useDeletionGuardQuery(enabled)
   const alertsQuery = useIndexingAlertsQuery(enabled)
   const updateDeletionGuardMutation = useUpdateDeletionGuardMutation()
-  const deleteAlertMutation = useDeleteIndexingAlertMutation()
-  const clearAlertsMutation = useClearIndexingAlertsMutation()
+  const updateOverrideMutation = useUpdateDeletionGuardOverrideMutation()
+  const dismissAlertMutation = useDismissIndexingAlertMutation()
+  const dismissAllAlertsMutation = useDismissAllIndexingAlertsMutation()
   const [thresholdInput, setThresholdInput] = useState('')
   const [thresholdDirty, setThresholdDirty] = useState(false)
   const [formError, setFormError] = useState<string>()
@@ -255,6 +271,37 @@ export function IndexingAlertCenter({
     }
   }
 
+  const disableProtection = async () => {
+    setFormError(undefined)
+
+    try {
+      await updateDeletionGuardMutation.mutateAsync({
+        threshold_percentage: null,
+      })
+      setThresholdDirty(false)
+      toast.success(t('config.disabled'))
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : t('config.disableFailed'),
+      )
+    }
+  }
+
+  const setOverridePending = async (overridePending: boolean) => {
+    try {
+      await updateOverrideMutation.mutateAsync({
+        override_pending: overridePending,
+      })
+      toast.success(
+        overridePending ? t('override.armed') : t('override.cancelled'),
+      )
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t('override.updateFailed'),
+      )
+    }
+  }
+
   const enableBrowserNotifications = async () => {
     if (globalThis.Notification === undefined) {
       setBrowserNotificationState('unsupported')
@@ -274,23 +321,26 @@ export function IndexingAlertCenter({
 
   const alerts = alertsQuery.data ?? []
   const unseenCount = countUnseenAlerts(alerts, lastSeenAlertId)
+  const thresholdConfigured =
+    deletionGuardQuery.data?.threshold_percentage != null
+  const overridePending = deletionGuardQuery.data?.override_pending ?? false
 
-  const removeAlert = async (alertId: number) => {
+  const dismissAlert = async (alertId: number) => {
     try {
-      await deleteAlertMutation.mutateAsync(alertId)
+      await dismissAlertMutation.mutateAsync(alertId)
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t('history.deleteFailed'),
+        error instanceof Error ? error.message : t('history.dismissFailed'),
       )
     }
   }
 
-  const clearAlerts = async () => {
+  const dismissAllAlerts = async () => {
     try {
-      await clearAlertsMutation.mutateAsync()
+      await dismissAllAlertsMutation.mutateAsync()
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : t('history.clearFailed'),
+        error instanceof Error ? error.message : t('history.dismissAllFailed'),
       )
     }
   }
@@ -338,19 +388,40 @@ export function IndexingAlertCenter({
               </p>
             </div>
             {alerts.length > 0 ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={clearAlertsMutation.isPending}
-                onClick={() => void clearAlerts()}
-              >
-                {clearAlertsMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                {t('history.clearAll')}
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={dismissAllAlertsMutation.isPending}
+                  >
+                    {dismissAllAlertsMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    {t('history.dismissAll')}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t('history.dismissAllConfirmTitle')}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t('history.dismissAllConfirmDescription')}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>
+                      {t('history.dismissAllCancel')}
+                    </AlertDialogCancel>
+                    <AlertDialogAction onClick={() => void dismissAllAlerts()}>
+                      {t('history.dismissAllConfirm')}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             ) : null}
           </div>
 
@@ -398,6 +469,20 @@ export function IndexingAlertCenter({
                         total: alert.total_documents,
                       })}
                     </p>
+                    {alert.source_breakdown &&
+                    alert.source_breakdown.length > 0 ? (
+                      <ul className="text-muted-foreground list-inside list-disc text-xs">
+                        {alert.source_breakdown.map((sourceImpact) => (
+                          <li key={sourceImpact.source}>
+                            {t('history.breakdownItem', {
+                              source: sourceImpact.source,
+                              deleted: sourceImpact.deleted_documents,
+                              total: sourceImpact.total_documents,
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                     <p className="text-muted-foreground text-xs">
                       {dateFormatter.format(new Date(alert.created_at))}
                     </p>
@@ -406,12 +491,12 @@ export function IndexingAlertCenter({
                     variant="ghost"
                     size="icon"
                     className="text-muted-foreground hover:text-destructive h-8 w-8 shrink-0"
-                    aria-label={t('history.delete')}
+                    aria-label={t('history.dismiss')}
                     disabled={
-                      deleteAlertMutation.isPending ||
-                      clearAlertsMutation.isPending
+                      dismissAlertMutation.isPending ||
+                      dismissAllAlertsMutation.isPending
                     }
-                    onClick={() => void removeAlert(alert.id)}
+                    onClick={() => void dismissAlert(alert.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -494,7 +579,59 @@ export function IndexingAlertCenter({
               </p>
             ) : null}
           </form>
+
+          {thresholdConfigured ? (
+            <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-muted-foreground text-sm">
+                {t('config.disableHelp')}
+              </p>
+              <Button
+                variant="outline"
+                disabled={updateDeletionGuardMutation.isPending}
+                onClick={() => void disableProtection()}
+              >
+                <ShieldOff className="h-4 w-4" />
+                {t('config.disable')}
+              </Button>
+            </div>
+          ) : null}
         </section>
+
+        {thresholdConfigured ? (
+          <section className="space-y-3 rounded-2xl border p-4">
+            <div>
+              <h3 className="font-semibold">{t('override.title')}</h3>
+              <p className="text-muted-foreground text-sm">
+                {t('override.description')}
+              </p>
+            </div>
+
+            {overridePending ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-medium text-amber-600">
+                  {t('override.pending')}
+                </p>
+                <Button
+                  variant="outline"
+                  disabled={updateOverrideMutation.isPending}
+                  onClick={() => void setOverridePending(false)}
+                >
+                  <Undo2 className="h-4 w-4" />
+                  {t('override.cancel')}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                disabled={updateOverrideMutation.isPending}
+                onClick={() => void setOverridePending(true)}
+              >
+                <SkipForward className="h-4 w-4" />
+                {t('override.arm')}
+              </Button>
+            )}
+          </section>
+        ) : null}
 
         <section className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

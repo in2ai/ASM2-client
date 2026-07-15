@@ -26,17 +26,18 @@ from src.config.auth import (
 )
 from src.config.logto_auth import AuthInfo, has_role
 from src.config.indexing import (
+    consume_deletion_guard_override,
     create_indexing_alert,
-    delete_all_indexing_alerts,
-    delete_indexing_alert,
-    get_deletion_threshold_percentage,
+    dismiss_all_indexing_alerts,
+    dismiss_indexing_alert,
+    get_deletion_guard_config,
     list_indexing_alerts,
+    set_deletion_guard_override,
     set_deletion_threshold_percentage,
 )
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import (
-    QDRANT_COL,
     QDRANT_META_PATH,
     VDB_LOCK,
     build_vectordb_from_sources,
@@ -253,7 +254,17 @@ def run_vdb_update_once() -> None:
             [source.name for source in sources],
         )
 
-        deletion_threshold_percentage = get_deletion_threshold_percentage(pg_pool)
+        deletion_threshold_percentage = get_deletion_guard_config(pg_pool)[
+            "threshold_percentage"
+        ]
+        if deletion_threshold_percentage is not None and consume_deletion_guard_override(
+            pg_pool
+        ):
+            logging.warning(
+                "Deletion guard override consumed: this indexing run skips the guard"
+            )
+            deletion_threshold_percentage = None
+
         build_vectordb_from_sources(
             llm,
             embeddings,
@@ -363,8 +374,7 @@ async def is_vdb_update_active(auth: AdminAuth):
     status_code=200,
 )
 async def get_indexing_deletion_guard(auth: IndexingManagementAuth):
-    threshold_percentage = get_deletion_threshold_percentage(app.state.pg_pool)
-    return {"threshold_percentage": threshold_percentage}
+    return get_deletion_guard_config(app.state.pg_pool)
 
 
 @app.put(
@@ -376,11 +386,30 @@ async def update_indexing_deletion_guard(
     auth: IndexingManagementAuth,
     body: DeletionGuardUpdateModel,
 ):
-    threshold_percentage = set_deletion_threshold_percentage(
+    return set_deletion_threshold_percentage(
         app.state.pg_pool,
         body.threshold_percentage,
     )
-    return {"threshold_percentage": threshold_percentage}
+
+
+@app.put(
+    "/indexing/deletion-guard/override",
+    response_model=DeletionGuardConfigModel,
+    status_code=200,
+)
+async def update_indexing_deletion_guard_override(
+    auth: IndexingManagementAuth,
+    body: DeletionGuardOverrideModel,
+):
+    if body.override_pending:
+        config = get_deletion_guard_config(app.state.pg_pool)
+        if config["threshold_percentage"] is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Deletion guard is not configured",
+            )
+
+    return set_deletion_guard_override(app.state.pg_pool, body.override_pending)
 
 
 @app.get(
@@ -392,12 +421,12 @@ async def get_indexing_alerts(
     auth: IndexingManagementAuth,
     limit: int = Query(default=50, ge=1, le=100),
 ):
-    return list_indexing_alerts(app.state.pg_pool, limit=limit)
+    return list_indexing_alerts(app.state.pg_pool, auth.sub, limit=limit)
 
 
 @app.delete("/indexing/alerts", status_code=204)
 async def clear_indexing_alerts(auth: IndexingManagementAuth):
-    delete_all_indexing_alerts(app.state.pg_pool)
+    dismiss_all_indexing_alerts(app.state.pg_pool, auth.sub)
 
 
 @app.delete("/indexing/alerts/{alert_id}", status_code=204)
@@ -405,7 +434,7 @@ async def remove_indexing_alert(
     auth: IndexingManagementAuth,
     alert_id: int,
 ):
-    if not delete_indexing_alert(app.state.pg_pool, alert_id):
+    if not dismiss_indexing_alert(app.state.pg_pool, auth.sub, alert_id):
         raise HTTPException(status_code=404, detail="Indexing alert not found")
 
 
