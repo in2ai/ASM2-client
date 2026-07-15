@@ -239,6 +239,7 @@ benchmark/results/
 
 benchmark/dataset_generation/*
 !benchmark/dataset_generation/merge_datasets.py
+!benchmark/dataset_generation/README.md
 
 !benchmark/dataset_generation/narrativeqa/
 benchmark/dataset_generation/narrativeqa/*
