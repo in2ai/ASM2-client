@@ -5,11 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { IndexingAlertCenter } from './indexing-alert-center'
 
 const mocks = vi.hoisted(() => ({
-  useClearIndexingAlertsMutation: vi.fn(),
-  useDeleteIndexingAlertMutation: vi.fn(),
   useDeletionGuardQuery: vi.fn(),
+  useDismissAllIndexingAlertsMutation: vi.fn(),
+  useDismissIndexingAlertMutation: vi.fn(),
   useIndexingAlertsQuery: vi.fn(),
   useUpdateDeletionGuardMutation: vi.fn(),
+  useUpdateDeletionGuardOverrideMutation: vi.fn(),
 }))
 
 vi.mock('next-intl', () => ({
@@ -18,22 +19,24 @@ vi.mock('next-intl', () => ({
 }))
 
 vi.mock('./api', () => ({
-  useClearIndexingAlertsMutation: (...args: unknown[]) =>
-    mocks.useClearIndexingAlertsMutation(...args),
-  useDeleteIndexingAlertMutation: (...args: unknown[]) =>
-    mocks.useDeleteIndexingAlertMutation(...args),
   useDeletionGuardQuery: (...args: unknown[]) =>
     mocks.useDeletionGuardQuery(...args),
+  useDismissAllIndexingAlertsMutation: (...args: unknown[]) =>
+    mocks.useDismissAllIndexingAlertsMutation(...args),
+  useDismissIndexingAlertMutation: (...args: unknown[]) =>
+    mocks.useDismissIndexingAlertMutation(...args),
   useIndexingAlertsQuery: (...args: unknown[]) =>
     mocks.useIndexingAlertsQuery(...args),
   useUpdateDeletionGuardMutation: (...args: unknown[]) =>
     mocks.useUpdateDeletionGuardMutation(...args),
+  useUpdateDeletionGuardOverrideMutation: (...args: unknown[]) =>
+    mocks.useUpdateDeletionGuardOverrideMutation(...args),
 }))
 
 describe('IndexingAlertCenter role access', () => {
   beforeEach(() => {
     mocks.useDeletionGuardQuery.mockReturnValue({
-      data: { threshold_percentage: null },
+      data: { override_pending: false, threshold_percentage: null },
       error: null,
       isLoading: false,
     })
@@ -48,11 +51,15 @@ describe('IndexingAlertCenter role access', () => {
       isPending: false,
       mutateAsync: vi.fn(),
     })
-    mocks.useDeleteIndexingAlertMutation.mockReturnValue({
+    mocks.useUpdateDeletionGuardOverrideMutation.mockReturnValue({
       isPending: false,
       mutateAsync: vi.fn(),
     })
-    mocks.useClearIndexingAlertsMutation.mockReturnValue({
+    mocks.useDismissIndexingAlertMutation.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+    })
+    mocks.useDismissAllIndexingAlertsMutation.mockReturnValue({
       isPending: false,
       mutateAsync: vi.fn(),
     })

@@ -8,6 +8,7 @@ import {
   useDeletionGuardQuery,
   useIndexingAlertsQuery,
   useUpdateDeletionGuardMutation,
+  useUpdateDeletionGuardOverrideMutation,
 } from './api'
 
 const mocks = vi.hoisted(() => ({
@@ -65,7 +66,10 @@ describe('indexing alerts API', () => {
               ? input.toString()
               : input.url
         if (requestUrl.endsWith('/indexing/deletion-guard')) {
-          return jsonResponse({ threshold_percentage: null })
+          return jsonResponse({
+            override_pending: false,
+            threshold_percentage: null,
+          })
         }
         if (requestUrl.endsWith('/indexing/alerts?limit=50')) {
           return jsonResponse([])
@@ -89,7 +93,10 @@ describe('indexing alerts API', () => {
       expect(result.current.config.isSuccess).toBe(true)
     })
 
-    expect(result.current.config.data).toEqual({ threshold_percentage: null })
+    expect(result.current.config.data).toEqual({
+      override_pending: false,
+      threshold_percentage: null,
+    })
     expect(result.current.alerts.data).toEqual([])
     for (const [, init] of fetchMock.mock.calls) {
       const headers = init?.headers as Headers
@@ -122,7 +129,7 @@ describe('indexing alerts API', () => {
 
   it('updates the deletion threshold with the backend contract', async () => {
     const fetchMock = vi.fn(async () =>
-      jsonResponse({ threshold_percentage: 42.5 }),
+      jsonResponse({ override_pending: false, threshold_percentage: 42.5 }),
     )
     vi.stubGlobal('fetch', fetchMock)
     const { Wrapper, queryClient } = createQueryWrapper()
@@ -141,6 +148,52 @@ describe('indexing alerts API', () => {
     expect(requestUrl).toMatch(/\/indexing\/deletion-guard$/)
     expect(init.method).toBe('PUT')
     expect(init.body).toBe(JSON.stringify({ threshold_percentage: 42.5 }))
+
+    queryClient.clear()
+  })
+
+  it('disables the protection by saving a null threshold', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ override_pending: false, threshold_percentage: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { Wrapper, queryClient } = createQueryWrapper()
+    const { result } = renderHook(() => useUpdateDeletionGuardMutation(), {
+      wrapper: Wrapper,
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({ threshold_percentage: null })
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(init.body).toBe(JSON.stringify({ threshold_percentage: null }))
+
+    queryClient.clear()
+  })
+
+  it('arms the one-time override with the backend contract', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ override_pending: true, threshold_percentage: 40 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { Wrapper, queryClient } = createQueryWrapper()
+    const { result } = renderHook(
+      () => useUpdateDeletionGuardOverrideMutation(),
+      { wrapper: Wrapper },
+    )
+
+    await act(async () => {
+      await result.current.mutateAsync({ override_pending: true })
+    })
+
+    const [requestUrl, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ]
+    expect(requestUrl).toMatch(/\/indexing\/deletion-guard\/override$/)
+    expect(init.method).toBe('PUT')
+    expect(init.body).toBe(JSON.stringify({ override_pending: true }))
 
     queryClient.clear()
   })

@@ -383,14 +383,19 @@
     "alertsLoadFailed": "No se pudieron comprobar las alertas de indexado.",
     "history": {
       "title": "Alertas recientes",
-      "description": "Historial de las veces que la protección detuvo el indexado.",
+      "description": "Historial de las veces que la protección detuvo el indexado. Descartar una alerta solo la oculta para ti.",
       "itemTitle": "Indexado detenido · {source}",
+      "breakdownItem": "{source}: faltan {deleted} de {total} documentos",
       "loading": "Cargando alertas…",
       "empty": "Todavía no hay alertas. Aparecerán aquí cuando la protección detenga el indexado.",
-      "clearAll": "Borrar todas",
-      "delete": "Eliminar alerta",
-      "deleteFailed": "No se pudo eliminar la alerta.",
-      "clearFailed": "No se pudieron borrar las alertas."
+      "dismissAll": "Descartar todas",
+      "dismissAllConfirmTitle": "¿Descartar todas las alertas?",
+      "dismissAllConfirmDescription": "Las alertas desaparecerán de tu lista. El resto de managers y administradores seguirán viéndolas.",
+      "dismissAllConfirm": "Descartar todas",
+      "dismissAllCancel": "Cancelar",
+      "dismiss": "Descartar alerta",
+      "dismissFailed": "No se pudo descartar la alerta.",
+      "dismissAllFailed": "No se pudieron descartar las alertas."
     },
     "config": {
       "title": "Umbral de borrado",
@@ -400,7 +405,21 @@
       "save": "Guardar umbral",
       "validation": "Introduce un porcentaje válido entre 1 y 100.",
       "saved": "Umbral de borrado actualizado.",
-      "saveFailed": "No se pudo guardar el umbral de borrado."
+      "saveFailed": "No se pudo guardar el umbral de borrado.",
+      "disable": "Desactivar protección",
+      "disableHelp": "Desactivar la protección elimina el umbral guardado; el indexado dejará de detenerse por borrados.",
+      "disabled": "Protección de borrado desactivada.",
+      "disableFailed": "No se pudo desactivar la protección."
+    },
+    "override": {
+      "title": "Excepción puntual",
+      "description": "Si un borrado masivo es intencionado, permite que la próxima ejecución del indexado omita la protección una sola vez. Después se reactiva automáticamente.",
+      "arm": "Permitir la próxima ejecución",
+      "pending": "La próxima ejecución del indexado omitirá la protección.",
+      "cancel": "Cancelar excepción",
+      "armed": "Excepción activada para la próxima ejecución del indexado.",
+      "cancelled": "Excepción puntual cancelada.",
+      "updateFailed": "No se pudo actualizar la excepción."
     },
     "browser": {
       "title": "Notificaciones del navegador",

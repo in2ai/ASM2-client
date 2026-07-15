@@ -3,6 +3,7 @@ import { useLogto } from '@logto/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   DeletionGuardConfig,
+  DeletionGuardOverrideUpdate,
   DeletionGuardUpdate,
   IndexingDeletionAlert,
 } from './types'
@@ -81,6 +82,22 @@ export function useUpdateDeletionGuardMutation() {
   })
 }
 
+export function useUpdateDeletionGuardOverrideMutation() {
+  const request = useAuthorizedIndexingRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (override: DeletionGuardOverrideUpdate) =>
+      request<DeletionGuardConfig>('/indexing/deletion-guard/override', {
+        body: JSON.stringify(override),
+        method: 'PUT',
+      }),
+    onSuccess: (config) => {
+      queryClient.setQueryData(indexingAlertQueryKeys.deletionGuard, config)
+    },
+  })
+}
+
 export function useIndexingAlertsQuery(enabled: boolean) {
   const request = useAuthorizedIndexingRequest()
 
@@ -94,7 +111,7 @@ export function useIndexingAlertsQuery(enabled: boolean) {
   })
 }
 
-export function useDeleteIndexingAlertMutation() {
+export function useDismissIndexingAlertMutation() {
   const request = useAuthorizedIndexingRequest()
   const queryClient = useQueryClient()
 
@@ -110,7 +127,7 @@ export function useDeleteIndexingAlertMutation() {
   })
 }
 
-export function useClearIndexingAlertsMutation() {
+export function useDismissAllIndexingAlertsMutation() {
   const request = useAuthorizedIndexingRequest()
   const queryClient = useQueryClient()
 

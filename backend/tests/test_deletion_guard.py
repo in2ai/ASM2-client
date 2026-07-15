@@ -2,6 +2,7 @@ import unittest
 
 from src.indexing.deletion_guard import (
     DeletionThresholdExceeded,
+    SourceDeletionImpact,
     assess_cloud_deletions,
     enforce_deletion_guard,
     enforce_sources_deletion_guard,
@@ -95,6 +96,35 @@ class DeletionGuardTests(unittest.TestCase):
         self.assertEqual(impact.deleted_documents, 4)
         self.assertEqual(impact.total_documents, 10)
         self.assertEqual(impact.percentage, 40)
+
+    def test_multisource_guard_reports_only_affected_sources(self):
+        source_snapshots = [
+            ("intact", {"i1", "i2"}, {"i1", "i2"}),
+            ("first", {"a", "b"}, {"b"}),
+            (
+                "second",
+                {f"s{i}" for i in range(8)},
+                {f"s{i}" for i in range(3, 8)},
+            ),
+        ]
+
+        with self.assertRaises(DeletionThresholdExceeded) as raised:
+            enforce_sources_deletion_guard(
+                source_snapshots,
+                threshold_percentage=30,
+            )
+
+        self.assertEqual(
+            raised.exception.impact.source_breakdown,
+            (
+                SourceDeletionImpact(
+                    source="first", deleted_documents=1, total_documents=2
+                ),
+                SourceDeletionImpact(
+                    source="second", deleted_documents=3, total_documents=8
+                ),
+            ),
+        )
 
 
 if __name__ == "__main__":

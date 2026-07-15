@@ -6,12 +6,20 @@ AGGREGATED_SOURCE = "all_sources"
 
 
 @dataclass(frozen=True)
+class SourceDeletionImpact:
+    source: str
+    deleted_documents: int
+    total_documents: int
+
+
+@dataclass(frozen=True)
 class DeletionImpact:
     source: str
     deleted_documents: int
     total_documents: int
     percentage: float
     threshold_percentage: float
+    source_breakdown: tuple[SourceDeletionImpact, ...] = ()
 
 
 class DeletionThresholdExceeded(RuntimeError):
@@ -89,11 +97,22 @@ def assess_sources_cloud_deletions(
     """
     deleted_documents = 0
     total_documents = 0
+    source_breakdown: list[SourceDeletionImpact] = []
 
-    for _, indexed_document_ids, cloud_document_ids in source_snapshots:
+    for source, indexed_document_ids, cloud_document_ids in source_snapshots:
         indexed_ids = frozenset(indexed_document_ids)
+        source_deleted = len(indexed_ids.difference(cloud_document_ids))
         total_documents += len(indexed_ids)
-        deleted_documents += len(indexed_ids.difference(cloud_document_ids))
+        deleted_documents += source_deleted
+
+        if source_deleted > 0:
+            source_breakdown.append(
+                SourceDeletionImpact(
+                    source=source,
+                    deleted_documents=source_deleted,
+                    total_documents=len(indexed_ids),
+                )
+            )
 
     if total_documents == 0 or deleted_documents == 0:
         return None
@@ -108,6 +127,7 @@ def assess_sources_cloud_deletions(
         total_documents=total_documents,
         percentage=percentage,
         threshold_percentage=threshold_percentage,
+        source_breakdown=tuple(source_breakdown),
     )
 
 
