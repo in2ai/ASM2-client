@@ -96,15 +96,23 @@ QUERY_TIMING_CSV_PATH = Path("/app/benchmark/results/query_timings.csv")
 BATCH_TIMING_CSV_PATH = Path("/app/benchmark/results/batch_timings.csv")
 SUMMARY_CSV_PATH = Path("/app/benchmark/results/rag_evaluation_summary.csv")
 
-BENCHMARK_SOURCES: list[str] = ["squad2.0"]
+BENCHMARK_SOURCES: list[str] = ["squad2.0"] # narrativeqa, squad2.0
 
 EVAL_LLM = llm_factory(
     "gpt-4o-mini",
     client=CLIENT_OPENAI,
     max_tokens=4096,
 )
+
+# EVAL_LLM = llm_factory(
+#     "gpt-4o-mini",
+#     client=CLIENT_OPENAI,
+#     max_tokens=4096,
+# )
+
 EVAL_EMBEDDINGS = embedding_factory("openai", model="text-embedding-3-small", client=CLIENT_OPENAI)
 
+NUM_EVALUATIONS = 1
 MAX_RETRIES = 50
 BATCH_SIZE = 4
 RAG_EXECUTOR = ThreadPoolExecutor(max_workers=BATCH_SIZE)
@@ -607,12 +615,10 @@ def run_evaluation(attempt: int):
 
 def main():
     """Entry point: run the configured number of evaluation attempts."""
-    num_evaluations = 3
-
     RESULTS_CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    for attempt in range(1, num_evaluations + 1):
-        print(f"\n[BENCHMARK] ===== RAG evaluation run {attempt}/{num_evaluations} =====")
+    for attempt in range(1, NUM_EVALUATIONS + 1):
+        print(f"\n[BENCHMARK] ===== RAG evaluation run {attempt}/{NUM_EVALUATIONS} =====")
         run_evaluation(attempt)
 
 

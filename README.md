@@ -340,6 +340,8 @@ El dashboard estará disponible en `http://localhost:3001`.
 
 El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` por el script de evaluación [`benchmark.py`](backend/benchmark.py), que mide la calidad del pipeline RAG con métricas de **RAGAS `0.4.3`** (`context_precision`, `context_recall`, `answer_relevancy`, `faithfulness`) además de los tiempos de cada evaluación (consulta RAG + cálculo de métricas) y de cada lote.
 
+> El funcionamiento del benchmark (flujo de ejecución, variables parametrizables, métricas y ficheros de salida) se documenta en detalle en el [README del benchmark](benchmark/README.md).
+
 > **Nota:** La versión de RAGAS (`0.4.3`) está fijada en [`backend/uv.lock`](backend/uv.lock) (specifier `ragas>=0.4.3`). El benchmark depende de la API `ragas.metrics.collections` de esa versión.
 
 ```bash
@@ -354,12 +356,12 @@ El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` po
 
 **Resultados:** se escriben en `benchmark/results/` (montado como volumen), entre otros:
 
-- `rag_evaluation_results_attempt_N.csv` — resultados de métricas por pregunta.
-- `query_timings_attempt_N.csv` — tiempo total por pregunta (consulta + métricas).
-- `batch_timings_attempt_N.csv` — tiempo total por lote.
-- `rag_evaluation_summary.csv` — resumen de métricas y tiempos por ejecución.
+- `rag_evaluation_results_<fuentes>_attempt_<n>.csv` — resultados de métricas por pregunta.
+- `query_timings_<fuentes>_attempt_<n>.csv` — tiempo total por pregunta (consulta + métricas).
+- `batch_timings_<fuentes>_attempt_<n>.csv` — tiempo total por lote.
+- `rag_evaluation_summary_<fuentes>.csv` — resumen de métricas y tiempos por ejecución.
 
-Por defecto realiza 3 ejecuciones de evaluación (`NUM_EVALUATIONS`).
+Por defecto realiza 1 ejecución de evaluación (`NUM_EVALUATIONS`).
 
 ## Estructura del Proyecto
 
