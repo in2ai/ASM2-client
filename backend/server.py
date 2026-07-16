@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import json
+from urllib.parse import quote_plus
 
 from contextlib import asynccontextmanager
 from datetime import date, datetime
@@ -9,6 +10,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from psycopg_pool import AsyncConnectionPool
 
 from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
@@ -36,7 +38,14 @@ from src.connectors.manifest import VDBManifest
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
-from src.metrics.connection import get_questdb_pool
+from src.metrics.connection import (
+    PG_DB,
+    PG_HOST,
+    PG_PASSWORD,
+    PG_PORT,
+    PG_USER,
+    get_pg_pool,
+)
 from src.metrics.context import metrics_actor_from_auth
 from src.metrics.metrics import (
     Metrics,
@@ -63,14 +72,14 @@ from src.metrics.dashboard_queries import (
     top_k_search_terms,
     top_k_topics,
 )
-from src.chat.store import ChatNotFoundError, ChatStore
+from src.chat.store import ChatNotFoundError, PostgresChatStore
 from src.tracing import get_langfuse_handler
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
 from src.connectors.llms import get_configured_llm
 
 from graph.agent import build_graph
-from graph import get_checkpointer
+from graph import get_checkpointer, get_store
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 # ---------------------------------
@@ -80,17 +89,26 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_nlp()
-    
+
     # Global shared data
     app.state.llm = get_configured_llm()
     app.state.llm_with_tools = get_llm_with_tools(app.state.llm)
     app.state.vectorstore = get_vectordb(get_configured_embeddings())
     app.state.reranker = get_reranker()
-    app.state.questdb_pool = get_questdb_pool()
-    chat_db_path = os.getenv(
-        "CHAT_DB_PATH", os.path.join(os.path.dirname(__file__), "chat_history.sqlite3")
+    app.state.pg_pool = get_pg_pool()
+
+    DATABASE_URL = (
+        f"postgresql://{quote_plus(PG_USER)}:{quote_plus(PG_PASSWORD)}"
+        f"@{PG_HOST}:{PG_PORT}/{PG_DB}"
     )
-    app.state.chat_store = ChatStore(chat_db_path)
+    app.state.async_pg_pool = AsyncConnectionPool(
+        DATABASE_URL,
+        open=False,
+        kwargs={"autocommit": True, "prepare_threshold": 0},
+    )
+    await app.state.async_pg_pool.open()
+
+    app.state.tsdb_chat_store = PostgresChatStore(app.state.pg_pool)
 
     # Async periodic jobs
     jobs = [
@@ -99,7 +117,13 @@ async def lifespan(app: FastAPI):
         refresh_tokens,  # Refresh all valid access tokens near expiration
     ]
 
-    app.state.graph = build_graph(get_checkpointer())
+    graph_working_memory_saver = get_checkpointer(app.state.async_pg_pool)
+    graph_store_memory_saver = get_store(app.state.async_pg_pool)
+    await graph_working_memory_saver.setup()
+    await graph_store_memory_saver.setup()
+    app.state.graph = build_graph(
+        checkpointer=graph_working_memory_saver,
+        store=graph_store_memory_saver)
 
     loop = asyncio.get_running_loop()
     app.state.periodic_tasks = [loop.create_task(asyncio.to_thread(j)) for j in jobs]
@@ -118,7 +142,8 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
 
-        app.state.questdb_pool.closeall()
+        app.state.pg_pool.closeall()
+        await app.state.async_pg_pool.close()
 
 
 setup_logging()
@@ -149,10 +174,10 @@ app.add_middleware(
     responses={503: {"description": "Service not ready"}},
 )
 async def healthcheck():
-    questdb_pool = getattr(app.state, "questdb_pool", None)
+    pg_pool = getattr(app.state, "pg_pool", None)
     graph = getattr(app.state, "graph", None)
 
-    if questdb_pool is None or graph is None:
+    if pg_pool is None or graph is None:
         raise HTTPException(status_code=503, detail="Service not ready")
 
     return {"status": "ok"}
@@ -166,10 +191,10 @@ def refresh_tokens():
         if os.path.isfile(VDB_LOCK):
             logging.info("Refreshing access tokens...")
 
-            questdb_pool = app.state.questdb_pool
+            pg_pool = app.state.pg_pool
 
             # Get admin authenticated sources and update DB
-            credentials = get_credentials_to_refresh(questdb_pool)
+            credentials = get_credentials_to_refresh(pg_pool)
 
             logging.info("Found %s tokens to refresh", len(credentials))
 
@@ -184,7 +209,7 @@ def refresh_tokens():
 
                 # Add new credentials entry
                 new_creds = source.raw_creds
-                add_credentials(questdb_pool, user_id, source.name, new_creds, is_admin)
+                add_credentials(pg_pool, user_id, source.name, new_creds, is_admin)
 
             logging.info("Finished token refresh job for %s credentials", len(credentials))
 
@@ -206,12 +231,12 @@ def run_vdb_update_once() -> None:
         manifest = VDBManifest(QDRANT_META_PATH)
         initial_build_in_progress = not manifest.is_initialized()
 
-        questdb_pool = app.state.questdb_pool
+        pg_pool = app.state.pg_pool
         embeddings = vectorstore.embeddings
         llm = app.state.llm
 
         # Get admin authenticated sources and update DB
-        sources = get_authenticated_admin_sources(questdb_pool)
+        sources = get_authenticated_admin_sources(pg_pool)
 
         logging.info(
             "Found %s valid admin sources for VDB update: %s",
@@ -248,23 +273,21 @@ def extract_usage_metrics():
     def calc():
         logging.info("Collecting hardware usage metrics...")
 
-        questdb_pool = app.state.questdb_pool
+        pg_pool = app.state.pg_pool
 
         # CPU
         cpu_usage = psutil.cpu_percent(interval=1)
-        insert_system_metric(questdb_pool, Metrics.CPU_USAGE.value, cpu_usage)
+        insert_system_metric(pg_pool, Metrics.CPU_USAGE.value, cpu_usage)
 
         # RAM
         mem = psutil.virtual_memory()
-        insert_system_metric(questdb_pool, Metrics.RAM_USAGE.value, mem.percent)
+        insert_system_metric(pg_pool, Metrics.RAM_USAGE.value, mem.percent)
 
         # GPU (if available)
         gpus = GPUtil.getGPUs()
 
         if len(gpus) > 0:
-            insert_system_metric(
-                questdb_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100
-            )
+            insert_system_metric(pg_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100)
 
     periodic_task(calc, 30)
 
@@ -322,13 +345,13 @@ async def login_source(
         raise HTTPException(500, detail=f"Authentication failed for source {source}")
 
     # Store credentials in database
-    questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
     user_id = auth.sub
     is_admin = has_role(auth, "admin")
     needs_refresh_at, expires_at = source_instance.expiry()
 
     add_credentials(
-        questdb_pool,
+        pg_pool,
         user_id,
         source,
         source_instance.raw_creds,
@@ -338,9 +361,9 @@ async def login_source(
     )
 
 
-def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
-    connected_sources = sorted(get_authenticated_sources(questdb_pool, user_id).keys())
-    selected_sources = get_selected_sources(questdb_pool, user_id)
+def build_sources_status(pg_pool, user_id: str) -> dict[str, Any]:
+    connected_sources = sorted(get_authenticated_sources(pg_pool, user_id).keys())
+    selected_sources = get_selected_sources(pg_pool, user_id)
     connected_set = set(connected_sources)
     selected_connected_sources = sorted(
         source for source in selected_sources if source in connected_set
@@ -363,8 +386,8 @@ def build_sources_status(questdb_pool, user_id: str) -> dict[str, Any]:
 
 @app.get("/sources/status", response_model=SourcesStatusModel, status_code=200)
 async def get_sources_status(auth: AuthenticatedAuth):
-    questdb_pool = app.state.questdb_pool
-    return build_sources_status(questdb_pool, auth.sub)
+    pg_pool = app.state.pg_pool
+    return build_sources_status(pg_pool, auth.sub)
 
 
 @app.put("/sources/selection", response_model=SourcesStatusModel, status_code=200)
@@ -372,8 +395,8 @@ async def update_sources_selection(
     auth: AuthenticatedAuth,
     body: SourceSelectionRequestModel,
 ):
-    questdb_pool = app.state.questdb_pool
-    connected_sources = sorted(get_authenticated_sources(questdb_pool, auth.sub).keys())
+    pg_pool = app.state.pg_pool
+    connected_sources = sorted(get_authenticated_sources(pg_pool, auth.sub).keys())
     connected_set = set(connected_sources)
 
     normalized_sources: list[str] = []
@@ -386,30 +409,30 @@ async def update_sources_selection(
             )
         normalized_sources.append(source)
 
-    set_selected_sources(questdb_pool, auth.sub, normalized_sources)
-    return build_sources_status(questdb_pool, auth.sub)
+    set_selected_sources(pg_pool, auth.sub, normalized_sources)
+    return build_sources_status(pg_pool, auth.sub)
 
 
 @app.get("/authenticated-sources", status_code=200)
 async def get_auth_sources(auth: AuthenticatedAuth):
-    questdb_pool = app.state.questdb_pool
-    return build_sources_status(questdb_pool, auth.sub)
+    pg_pool = app.state.pg_pool
+    return build_sources_status(pg_pool, auth.sub)
 
 
 @app.get("/chats", response_model=list[ChatSummaryModel])
 async def list_chats(auth: AuthenticatedAuth):
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
     return chat_store.list_chats(auth.sub)
 
 
 @app.post("/chats", response_model=ChatDetailModel)
 async def create_chat(auth: AuthenticatedAuth, payload: CreateChatRequestModel):
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
     return chat_store.create_chat(auth.sub, title=payload.title)
 
 
 def _get_chat_or_404(
-    chat_store: ChatStore, user_id: str, chat_id: str
+    chat_store:PostgresChatStore, user_id: str, chat_id: str
 ) -> dict[str, Any]:
     chat = chat_store.get_chat(user_id, chat_id)
     if chat is None:
@@ -446,7 +469,7 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
                 if isinstance(followup, ToolMessage) and followup.tool_call_id == call_id:
                     try:
                         return json.loads(followup.content)
-                    
+
                     except:
                         return None
 
@@ -455,13 +478,13 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
 
 @app.get("/chats/{chat_id}", response_model=ChatDetailModel)
 async def get_chat(auth: AuthenticatedAuth, chat_id: str):
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
     return _get_chat_or_404(chat_store, auth.sub, chat_id)
 
 
 @app.delete("/chats/{chat_id}", status_code=204)
 async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
 
     try:
         chat_store.delete_chat(auth.sub, chat_id)
@@ -470,9 +493,9 @@ async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
 
 
 async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
-    questdb_pool = app.state.questdb_pool
-    sources_status = build_sources_status(questdb_pool, auth.sub)
-    sources = get_selected_authenticated_sources(questdb_pool, auth.sub)
+    pg_pool = app.state.pg_pool
+    sources_status = build_sources_status(pg_pool, auth.sub)
+    sources = get_selected_authenticated_sources(pg_pool, auth.sub)
 
     if not sources_status["selected_sources"]:
         raise HTTPException(
@@ -487,7 +510,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
         )
 
     metrics_actor = metrics_actor_from_auth(auth.sub, auth.role)
-    register_user_activity(questdb_pool, actor=metrics_actor)
+    register_user_activity(pg_pool, actor=metrics_actor)
 
     config: dict[str, Any] = {
         "configurable": {
@@ -496,7 +519,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "llm_with_tools": app.state.llm_with_tools,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
-            "questdb_pool": questdb_pool,
+            "pg_pool": pg_pool,
             "sources": sources,
             "metrics_actor": metrics_actor,
         }
@@ -514,7 +537,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
         }
 
     with TimedMetric(
-        questdb_pool, Metrics.LLM_RESPONSE_TIME.value, actor=metrics_actor
+        pg_pool, Metrics.LLM_RESPONSE_TIME.value, actor=metrics_actor
     ):
         try:
             result = await app.state.graph.ainvoke(
@@ -537,7 +560,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     if search_results is not None:
         available_sources = search_results['sources']
 
-    record_token_usage_metrics(questdb_pool, messages, metrics_actor)
+    record_token_usage_metrics(pg_pool, messages, metrics_actor)
     return {
         "answer": str(messages[-1].content),
         "detected_lang": str(result.get("detected_lang", "es")),
@@ -555,7 +578,7 @@ async def send_chat_message(
     if not content:
         raise HTTPException(status_code=422, detail="content must not be empty")
 
-    chat_store: ChatStore = app.state.chat_store
+    chat_store:PostgresChatStore = app.state.tsdb_chat_store
     _get_chat_or_404(chat_store, auth.sub, chat_id)
 
     try:
@@ -636,19 +659,19 @@ def _fetch_shared_metrics_data(
     }
 
 
-def record_token_usage_metrics(questdb_pool, messages: list[Any], actor) -> None:
+def record_token_usage_metrics(pg_pool, messages: list[Any], actor) -> None:
     try:
         for msg in messages:
             if isinstance(msg, AIMessage) and msg.usage_metadata:
                 usage = msg.usage_metadata
                 insert_metric(
-                    questdb_pool,
+                    pg_pool,
                     Metrics.NUM_LLM_TOKENS_IN.value,
                     usage.get("input_tokens", 0),
                     actor=actor,
                 )
                 insert_metric(
-                    questdb_pool,
+                    pg_pool,
                     Metrics.NUM_LLM_TOKENS_OUT.value,
                     usage.get("output_tokens", 0),
                     actor=actor,
@@ -660,7 +683,7 @@ def record_token_usage_metrics(questdb_pool, messages: list[Any], actor) -> None
 def validate_source(source: str) -> str:
     if source not in SOURCES:
         raise HTTPException(status_code=404, detail=f"Unknown source: {source}")
-    
+
     return source
 @app.get("/metrics/dashboard", response_model=DashboardMetricsResponseModel)
 async def metrics_dashboard(
@@ -673,12 +696,12 @@ async def metrics_dashboard(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
-    shared = _fetch_shared_metrics_data(questdb_pool, params, 10, 10)
+    shared = _fetch_shared_metrics_data(pg_pool, params, 10, 10)
 
-    metrics_count = count_metrics(questdb_pool, params)
-    metrics_by_tag = get_metrics_by_tag(questdb_pool, params)
+    metrics_count = count_metrics(pg_pool, params)
+    metrics_by_tag = get_metrics_by_tag(pg_pool, params)
 
     return {
         "metrics": {
@@ -719,15 +742,15 @@ async def metrics_stats(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
 
     mean_response_time = mean_metric(
-        questdb_pool, Metrics.LLM_RESPONSE_TIME.value, params
+        pg_pool, Metrics.LLM_RESPONSE_TIME.value, params
     )
-    session_length = mean_session_length(questdb_pool, params, 10)
-    unique_users_count = get_unique_users(questdb_pool, params)
-    total_events = get_total_activity_events(questdb_pool, params)
+    session_length = mean_session_length(pg_pool, params, 10)
+    unique_users_count = get_unique_users(pg_pool, params)
+    total_events = get_total_activity_events(pg_pool, params)
 
     return {
         "totalMetricsRecords": total_events,
@@ -748,9 +771,9 @@ async def metrics_export(
 ):
     _ensure_valid_date_range(startDate, endDate)
 
-    questdb_pool = app.state.questdb_pool
+    pg_pool = app.state.pg_pool
     params = build_query_params(startDate, endDate, userId, userRole, lang)
-    shared = _fetch_shared_metrics_data(questdb_pool, params, 100, 100)
+    shared = _fetch_shared_metrics_data(pg_pool, params, 100, 100)
 
     token_usage = shared["token_usage"]
     total_tokens = (

@@ -159,7 +159,7 @@ def mean_session_length(
     params: MetricsQueryParams,
     session_gap_minutes: int = 10,
 ) -> float | None:
-    gap_micros = session_gap_minutes * 60 * 1000 * 1000
+    gap_seconds = session_gap_minutes * 60
     conditions, query_params = _build_filter_conditions(
         params,
         include_user_id=True,
@@ -180,12 +180,12 @@ def mean_session_length(
         SELECT
             user_id,
             ts,
-            SUM(CASE WHEN prev_ts IS NULL OR (ts - prev_ts) >= {gap_micros} THEN 1 ELSE 0 END)
+            SUM(CASE WHEN prev_ts IS NULL OR EXTRACT(EPOCH FROM (ts - prev_ts)) >= {gap_seconds} THEN 1 ELSE 0 END)
                 OVER (PARTITION BY user_id ORDER BY ts ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS session_id
         FROM user_events
     )
     SELECT
-        AVG(session_length) / 1000000.0 AS mean_session_seconds
+        AVG(EXTRACT(EPOCH FROM session_length)) AS mean_session_seconds
     FROM (
         SELECT
             user_id,
@@ -266,12 +266,12 @@ def get_activity_by_day(
     )
     query = f"""
     SELECT
-      to_str(ts, 'yyyy-MM-dd') as date,
+      to_char(ts, 'YYYY-MM-DD') as date,
       COUNT(*) as event_count,
       COUNT(DISTINCT user_id) as unique_users
     FROM user_activity
     {_append_and_conditions("WHERE 1=1", conditions)}
-    GROUP BY to_str(ts, 'yyyy-MM-dd')
+    GROUP BY to_char(ts, 'YYYY-MM-DD')
     ORDER BY date DESC
     LIMIT 30
     """
@@ -321,12 +321,12 @@ def get_response_time_trend(
     conditions, query_params = _build_filter_conditions(params)
     query = f"""
     SELECT
-      to_str(ts, 'yyyy-MM-dd') as date,
+      to_char(ts, 'YYYY-MM-DD') as date,
       AVG(CASE WHEN tag = 'LLM_RESPONSE_TIME' THEN value ELSE NULL END) as llm_response_time,
       AVG(CASE WHEN tag = 'DOC_RESPONSE_TIME' THEN value ELSE NULL END) as doc_response_time
     FROM metrics
     {_append_and_conditions("WHERE tag IN ('LLM_RESPONSE_TIME', 'DOC_RESPONSE_TIME')", conditions)}
-    GROUP BY to_str(ts, 'yyyy-MM-dd')
+    GROUP BY to_char(ts, 'YYYY-MM-DD')
     ORDER BY date DESC
     LIMIT 30
     """

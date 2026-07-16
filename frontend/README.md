@@ -69,11 +69,11 @@ Compose integration (from repo root):
 docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 ```
 
-The base compose stack now includes the TanStack SPA image (served by Caddy), the FastAPI backend, and Qdrant. The local override adds QuestDB and Logto.
+The base compose stack now includes the TanStack SPA image (served by Caddy), the FastAPI backend, and Qdrant. The local override adds TimescaleDB and Logto.
 
 In the Docker stack, host traffic goes through Caddy on port `3001`, which serves the SPA and proxies `/api/*` to `backend:8001` over the internal Docker network.
 
-The backend, Qdrant, and QuestDB services are not published on host ports.
+The backend, Qdrant, and TimescaleDB services are not published on host ports.
 
 Both services now include health checks:
 

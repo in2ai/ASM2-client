@@ -12,7 +12,7 @@ El proyecto se compone ahora de varios módulos integrados:
 
 1. **Backend FastAPI**: API principal para chat, conectores, autenticación y métricas.
 2. **Dashboard SPA**: Frontend React/TanStack Router servido por Caddy y conectado al backend vía `/api`.
-3. **Servicios auxiliares**: QuestDB para métricas, Qdrant para vectores y Logto para autenticación.
+3. **Servicios auxiliares**: TimescaleDB para métricas, historial de chat y memoria del agente, Qdrant para vectores y Logto para autenticación.
 
 Este sistema permite:
 
@@ -31,8 +31,8 @@ El sistema se despliega mediante contenedores Docker orquestados:
 | `backend`      | API FastAPI para chat, métricas y conectores       |
 | `dashboard`    | SPA React servida por Caddy                        |
 | `qdrant`       | Base vectorial para búsqueda híbrida               |
-| `questdb`      | Base de datos Time-Series para métricas            |
-| `questdb-init` | Contenedor efímero para inicialización de esquemas |
+| `timescaledb`      | PostgreSQL + TimescaleDB: métricas, historial de chat, memoria del agente y checkpoints |
+| `timescaledb-init` | Contenedor efímero para inicialización de esquemas |
 | `logto`        | Proveedor de autenticación local opcional          |
 
 ## Requisitos
@@ -64,17 +64,15 @@ cp .env.example .env
 | `GOOGLE_CLIENT_SECRET_FILE` | Ruta opcional al fichero JSON del cliente OAuth cuando se monta en Docker | `/app/secrets/client_secret.json` |
 | `HF_TOKEN` | Token de Hugging Face opcional usado solo en tiempo de build del backend para acelerar la descarga de modelos (evita el rate limit anónimo). No se usa en runtime. | `hf_...` |
 
-#### QuestDB
+#### TimescaleDB
 
 | Variable | Descripción | Default |
 | --- | --- | --- |
-| `QUESTDB_HOST` | Host de QuestDB (`questdb` para Docker, IP para VPS) | `questdb` |
-| `QUESTDB_PORT` | Puerto PostgreSQL wire protocol | `8812` |
-| `QUESTDB_USER` | Usuario de base de datos | `admin` |
-| `QUESTDB_PASSWORD` | Contraseña del acceso PostgreSQL wire protocol usado por backend e init SQL | `change_me_for_local_pgwire` |
-| `QUESTDB_DB` | Nombre de la base de datos | `qdb` |
-| `QUESTDB_HTTP_USER` | Usuario del panel web / API HTTP de QuestDB | `admin` |
-| `QUESTDB_HTTP_PASSWORD` | Contraseña del panel web / API HTTP de QuestDB | `change_me_for_local_http` |
+| `PG_HOST` | Host de TimescaleDB (`timescaledb` para Docker, IP para VPS) | `timescaledb` |
+| `PG_PORT` | Puerto PostgreSQL | `5432` |
+| `PG_USER` | Usuario de base de datos | `postgres` |
+| `PG_PASSWORD` | Contraseña de PostgreSQL usada por backend e init SQL | `change_me_for_local_pg` |
+| `PG_DB` | Nombre de la base de datos | `tsdb` |
 
 #### Logto (Autenticación Dashboard)
 
@@ -139,7 +137,7 @@ El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el bu
 | Archivo | Descripción |
 | --- | --- |
 | `docker-compose.yml` | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) con `backend` y `qdrant` solo en red interna Docker |
-| `docker-compose.local.yml` | Override para infraestructura local (`questdb`, `questdb-init`, `logto`) con QuestDB web publicado en `localhost:9000` |
+| `docker-compose.local.yml` | Override para infraestructura local (`timescaledb`, `timescaledb-init`, `logto`) con Logto publicado en `localhost` |
 | `docker-compose.gpu.yml` | Override para habilitar soporte GPU en `backend` |
 | `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA |
 | `docker-compose.qdrant-amd.yml` | Override para Qdrant con GPU AMD (ROCm) |
@@ -147,7 +145,7 @@ El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el bu
 
 ### Opción 1: Stack Local Completo (Recomendada)
 
-Levanta backend, SPA, Qdrant, QuestDB y Logto local con un solo comando:
+Levanta backend, SPA, Qdrant, TimescaleDB y Logto local con un solo comando:
 
 ```bash
 ./run.sh up
@@ -162,11 +160,11 @@ Servicios internos en este modo:
 
 - **Backend API**: solo accesible desde la red Docker a través de `dashboard` y otros contenedores
 - **Qdrant**: solo accesible desde la red Docker
-- **QuestDB**: solo accesible desde la red Docker
+- **TimescaleDB**: solo accesible desde la red Docker
 
 ### Opción 2: Servicios Remotos
 
-Si QuestDB y Logto ya están desplegados fuera de Docker, ejecuta solo `backend`, `dashboard` y `qdrant`:
+Si TimescaleDB y Logto ya están desplegados fuera de Docker, ejecuta solo `backend`, `dashboard` y `qdrant`:
 
 ```bash
 ./run.sh up --remote
@@ -174,13 +172,14 @@ Si QuestDB y Logto ya están desplegados fuera de Docker, ejecuta solo `backend`
 
 **Requisitos previos:**
 
-1. Actualiza tu archivo `.env` con las URLs y credenciales remotas de QuestDB y Logto.
+1. Actualiza tu archivo `.env` con las URLs y credenciales remotas de TimescaleDB y Logto.
 
    ```env
-    QUESTDB_HOST=tu-ip-o-hostname-vps
-    QUESTDB_PORT=8812
-    QUESTDB_USER=admin
-    QUESTDB_PASSWORD=tu_contraseña
+    PG_HOST=tu-ip-o-hostname-vps
+    PG_PORT=5432
+    PG_USER=postgres
+    PG_PASSWORD=tu_contraseña
+    PG_DB=tsdb
     LOGTO_ENDPOINT=https://tu-logto-remoto
     LOGTO_APP_ID=tu_spa_app_id
     LOGTO_API_RESOURCE=https://tu-api-resource
@@ -307,10 +306,9 @@ ASM2-client/
 ├── secrets/                # Credenciales y ficheros sensibles
 ├── img/                    # Imágenes y assets
 ├── qdrant_index/           # Estado auxiliar y manifest del índice vectorial
-├── questdb/               # Datos persistentes de QuestDB (generado)
 ├── benchmark/              # Datasets QA de entrada y resultados del benchmark de RAG
 ├── docker-compose.yml     # Stack base backend + SPA + qdrant con solo dashboard publicado en localhost
-├── docker-compose.local.yml    # Infraestructura local (QuestDB + Logto) con Logto publicado en localhost
+├── docker-compose.local.yml    # Infraestructura local (TimescaleDB + Logto) con Logto publicado en localhost
 ├── docker-compose.gpu.yml # Override para soporte GPU (backend)
 ├── docker-compose.qdrant-nvidia.yml # Override para Qdrant GPU NVIDIA
 ├── docker-compose.qdrant-amd.yml    # Override para Qdrant GPU AMD

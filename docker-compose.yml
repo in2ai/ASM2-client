@@ -15,7 +15,6 @@ services:
     env_file:
       - .env
     environment:
-      CHAT_DB_PATH: /app/data/chat_history.sqlite3
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
     extra_hosts:
@@ -74,7 +73,7 @@ services:
       backend:
         condition: service_started
     ports:
-        - "127.0.0.1:3001:80"
+        - "3001:80"
     healthcheck:
       test:
         [
