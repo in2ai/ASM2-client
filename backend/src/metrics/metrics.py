@@ -37,8 +37,6 @@ def insert_metric(
     *,
     actor: MetricsActor,
 ):
-    return
-
     query = """
     INSERT INTO metrics (ts, user_id, user_role, tag, value)
     VALUES (NOW(), %s, %s, %s, %s)
@@ -48,8 +46,6 @@ def insert_metric(
 
 
 def insert_system_metric(pool: ThreadedConnectionPool, tag: str, value: float):
-    return
-
     """Record server-wide metrics (CPU, RAM, GPU) without user attribution."""
     query = """
     INSERT INTO metrics (ts, tag, value)
@@ -66,8 +62,6 @@ def register_words(
     actor: MetricsActor,
     lang: str = 'es',
 ):
-    return
-
     if not words:
         return
 
@@ -94,8 +88,6 @@ def register_topics(
     *,
     actor: MetricsActor,
 ):
-    return
-
     if not topics:
         return
 
@@ -115,7 +107,6 @@ def register_topics(
 
 
 def register_topic_intl(pool: ThreadedConnectionPool, mapping: dict):
-    return
     rows = []
 
     for lang, topics in mapping.items():
@@ -145,8 +136,6 @@ def register_topic_intl(pool: ThreadedConnectionPool, mapping: dict):
 
 
 def register_user_activity(pool: ThreadedConnectionPool, *, actor: MetricsActor):
-    return
-
     query = """
     INSERT INTO user_activity (ts, user_id, user_role)
     VALUES (NOW(), %s, %s)
