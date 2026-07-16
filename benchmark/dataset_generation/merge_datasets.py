@@ -1,3 +1,4 @@
+from pathlib import Path
 import pandas as pd
 
 BASE_DIR_DATA_GEN = "benchmark/dataset_generation"
@@ -28,9 +29,11 @@ def merge_datasets(first_csv_path: str, second_csv_path: str, output_csv_path: s
     second["evaluation_id"] = second["evaluation_id"] + n
 
     combined = pd.concat([first, second], ignore_index=True)
+
+    Path(output_csv_path).parent.mkdir(parents=True, exist_ok=True)
     combined.to_csv(output_csv_path, index=False)
 
-    print(f"Generated {output_csv_path} with {len(pd.read_csv(output_csv_path))} rows.")
+    print(f"Generated {output_csv_path} with {len(combined)} rows.")
 
 
 def main():

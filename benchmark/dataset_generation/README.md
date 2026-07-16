@@ -17,7 +17,7 @@ Todos los datasets comparten el mismo esquema de columnas:
 
 ## Estructura
 
-```
+```text
 dataset_generation/
 ├── merge_datasets.py                    # Une los dos datasets y guarda el resultado en benchmark/data
 ├── narrativeqa/
@@ -144,7 +144,7 @@ python benchmark/dataset_generation/merge_datasets.py
 
 ## Flujo completo
 
-```
+```text
 asm2-narrativeqa-documents.csv ┐
 asm2-narrativeqa-qaps.csv      ┴─► dataset_narrativeqa_qa_5_docs_200.csv ┐
                                                                          ├─► benchmark/data/dataset_asm2.csv
