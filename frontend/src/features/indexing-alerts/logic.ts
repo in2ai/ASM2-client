@@ -24,6 +24,13 @@ export function countUnseenAlerts(
   return alerts.filter((alert) => alert.id > lastSeenAlertId).length
 }
 
+export function getLatestAlertId(alerts: IndexingDeletionAlert[]): number {
+  return alerts.reduce(
+    (latestId, alert) => (Math.max(alert.id, latestId)),
+    -Infinity,
+  )
+}
+
 export function selectAlertsToNotify(
   alerts: IndexingDeletionAlert[],
   lastNotifiedAlertId: number | null,
