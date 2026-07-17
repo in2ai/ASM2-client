@@ -7,6 +7,7 @@ from pathlib import Path
 import time
 import traceback
 from typing import Any
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -18,14 +19,24 @@ from ragas.llms.base import llm_factory
 from ragas.metrics.collections import ContextPrecision, ContextRecall, AnswerRelevancy, Faithfulness
 from ragas.metrics.collections.answer_relevancy.util import AnswerRelevanceInput, AnswerRelevanceOutput
 from ragas.metrics.result import MetricResult
+from psycopg_pool import ConnectionPool
+from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.store.postgres import PostgresStore
 
-from graph.agent import build_graph, get_checkpointer
+from graph.agent import build_graph, get_checkpointer, get_store
 from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
 from src.connectors.llms import get_configured_llm
 from src.connectors.store import get_vectordb
 
-from src.metrics.connection import get_pg_pool
+from src.metrics.connection import (
+    PG_DB,
+    PG_HOST,
+    PG_PASSWORD,
+    PG_PORT,
+    PG_USER,
+    get_pg_pool,
+)
 from src.utils.nlp import init_nlp
 
 from src.utils.rag import get_reranker
@@ -47,12 +58,36 @@ CLIENT_TOGETHER = openai.AsyncOpenAI(
     timeout=60.0,
 )
 
-LLM = get_configured_llm()
-LLM_WITH_TOOLS = get_llm_with_tools(LLM)
-VDB = get_vectordb(get_configured_embeddings())
-RERANKER = get_reranker()
-GRAPH = build_graph(get_checkpointer())
-PG_POOL = get_pg_pool()
+async def lifespan():
+    # Global shared data
+    llm = get_configured_llm()
+    llm_with_tools = get_llm_with_tools(llm)
+    vectorstore = get_vectordb(get_configured_embeddings())
+    reranker = get_reranker()
+    pg_pool = get_pg_pool()
+
+    DATABASE_URL = (
+        f"postgresql://{quote_plus(PG_USER)}:{quote_plus(PG_PASSWORD)}"
+        f"@{PG_HOST}:{PG_PORT}/{PG_DB}"
+    )
+    sync_pg_pool = ConnectionPool(
+        DATABASE_URL,
+        open=False,
+        kwargs={"autocommit": True, "prepare_threshold": 0},
+    )
+    sync_pg_pool.open()
+
+    graph_working_memory_saver = PostgresSaver(sync_pg_pool)
+    graph_store_memory_saver = PostgresStore(sync_pg_pool)
+    graph_working_memory_saver.setup()
+    graph_store_memory_saver.setup()
+    graph = build_graph(
+        checkpointer=graph_working_memory_saver,
+        store=graph_store_memory_saver)
+    
+    return llm, llm_with_tools, vectorstore, reranker, pg_pool, graph
+
+LLM, LLM_WITH_TOOLS, VDB, RERANKER, PG_POOL, GRAPH = asyncio.run(lifespan())
 ADMIN_SOURCES = {}
 
 QA_CSV_PATH = Path("/app/benchmark/data/dataset_asm2.csv")

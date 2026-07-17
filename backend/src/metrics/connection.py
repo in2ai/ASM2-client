@@ -1,3 +1,5 @@
+import logging
+import psycopg2
 from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import RealDictCursor
 
@@ -28,33 +30,58 @@ def get_pg_pool():
     )
 
 
-def execute_query(pool: ThreadedConnectionPool, query, params=None):
-    conn = pool.getconn()
+def execute_query(pool: ThreadedConnectionPool, query, params=None, max_attempts: int = 3):
+    for attempt in range(1, max_attempts + 1):
+        conn = pool.getconn()
+        should_close = False
 
-    try:
-        with conn:
-            with conn.cursor() as cur:
-                cur.execute(query, params)
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
 
-                if cur.description:
-                    return cur.fetchall()
+                    if cur.description:
+                        return cur.fetchall()
+                    return None
 
-    finally:
-        pool.putconn(conn)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            should_close = True
+            logging.warning(
+                "execute_query: connection failure on attempt %s/%s, discarding. error=%s",
+                attempt, max_attempts, e,
+            )
+            # don't retry on the last attempt
+            if attempt == max_attempts:
+                raise
+
+        finally:
+            pool.putconn(conn, close=should_close)
 
 
-def execute_query_dict(pool: ThreadedConnectionPool, query, params=None):
-    conn = pool.getconn()
+def execute_query_dict(pool: ThreadedConnectionPool, query, params=None, max_attempts: int = 3): 
+    for attempt in range(1, max_attempts + 1):
+        conn = pool.getconn()
+        should_close = False
 
-    try:
-        with conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(query, params)
+        try:
+            with conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(query, params)
+ 
+                    if cur.description:
+                        return list(cur.fetchall())
+ 
+                    return []
 
-                if cur.description:
-                    return list(cur.fetchall())
-
-                return []
-
-    finally:
-        pool.putconn(conn)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            should_close = True
+            logging.warning(
+                "execute_query_dict: connection failure on attempt %s/%s, discarding. error=%s",
+                attempt, max_attempts, e,
+            )
+            # don't retry on the last attempt
+            if attempt == max_attempts:
+                raise
+ 
+        finally:
+            pool.putconn(conn, close=should_close)

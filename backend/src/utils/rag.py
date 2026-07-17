@@ -7,6 +7,7 @@ from typing import Dict, Optional
 from sentence_transformers import CrossEncoder
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from src.config.env import get_bool_env
 from src.connectors.source import DataSource
 from src.connectors.store import QDRANT_META_PATH
 from src.utils.nlp import detect_language, extract_search_terms
@@ -105,11 +106,12 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
         file_id = f.metadata["id"]
         source = f.metadata["source"]
 
-        if source not in sources:
-            continue
+        if not get_bool_env('BENCHMARK'): # Benchmark mode does not check live permissions
+            if source not in sources:
+                continue
 
-        if not sources[source].has_access(file_id):
-            continue
+            if not sources[source].has_access(file_id):
+                continue
 
         allowed_chunks.append(f)
 
@@ -131,7 +133,7 @@ def get_chunk_sources(chunks, sources):
             title = d.metadata.get("title") or d.metadata.get("name") or "(sin titulo)"
             link = d.metadata.get("webViewLink")
 
-            available_sources[doc_id] = {"title": title, "source_type": tag, "link": link}
+            available_sources[doc_id] = {"id": doc_id, "title": title, "source_type": tag, "link": link}
 
         page = d.metadata.get('page')
 

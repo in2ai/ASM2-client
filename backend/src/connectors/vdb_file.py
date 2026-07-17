@@ -1,6 +1,8 @@
 import csv
 import io
 import logging
+import mimetypes
+from pathlib import Path
 
 import chardet
 import requests
@@ -122,84 +124,116 @@ class VDBFile:
     def __init__(self, metadata):
         self.metadata = metadata
 
+    def download(self, path: str) -> Path: ...
     def get_text(self) -> str | list[str]: ...
 
 
 class GoogleDriveFile(VDBFile):
+    GOOGLE_EXPORT_MIME = {
+        "application/vnd.google-apps.document": "text/plain",
+        "application/vnd.google-apps.spreadsheet": "text/csv",
+        "application/vnd.google-apps.presentation": "text/plain",
+    }
+
+    GOOGLE_EXPORTS = {
+        "application/vnd.google-apps.document": ("text/plain", ".txt"),
+        "application/vnd.google-apps.spreadsheet": ("text/csv", ".csv"),
+        "application/vnd.google-apps.presentation": ("text/plain", ".txt"),
+    }
+
+    DIRECT_DOWNLOAD_MIME = {
+        "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/html",
+        "text/csv",
+    }
+
     def __init__(self, metadata, service):
         super().__init__(metadata)
         self.service = service
 
-    def get_text(self) -> str | list[str]:
+    def get_data(self):
         file_id = self.metadata["id"]
         mime_type = self.metadata["mimeType"]
 
-        # Archivos PDF
+        if mime_type in self.GOOGLE_EXPORT_MIME:
+            export_mime = self.GOOGLE_EXPORT_MIME[mime_type]
+            return safe_execute(
+                self.service.files().export(fileId=file_id, mimeType=export_mime)
+            )
+
+        return safe_execute(self.service.files().get_media(fileId=file_id))
+
+    def get_text(self) -> str | list[str] | None:
+        mime_type = self.metadata["mimeType"]
+        data = self.get_data()
+
+        if data is None:
+            return None
+
         if mime_type == "application/pdf":
-            data = safe_execute(self.service.files().get_media(fileId=file_id))
             return extract_pdf_text(data)
 
-        # Google Docs - exportar como texto plano
-        elif mime_type == "application/vnd.google-apps.document":
-            data = safe_execute(
-                self.service.files().export(fileId=file_id, mimeType="text/plain")
-            )
-            return data.decode("utf-8", errors="ignore")
-
-        # Google Sheets - exportar como CSV
-        elif mime_type == "application/vnd.google-apps.spreadsheet":
-            data = safe_execute(
-                self.service.files().export(fileId=file_id, mimeType="text/csv")
-            )
+        if mime_type == "application/vnd.google-apps.spreadsheet":
             return extract_csv_text(data)
 
-        # Google Slides - exportar como texto plano
-        elif mime_type == "application/vnd.google-apps.presentation":
-            data = safe_execute(
-                self.service.files().export(fileId=file_id, mimeType="text/plain")
-            )
+        if mime_type in {
+            "application/vnd.google-apps.document",
+            "application/vnd.google-apps.presentation",
+            "text/plain",
+            "text/markdown",
+        }:
             return data.decode("utf-8", errors="ignore")
 
-        # Texto plano y Markdown
-        elif mime_type in ("text/plain", "text/markdown"):
-            data = safe_execute(self.service.files().get_media(fileId=file_id))
-            return data.decode("utf-8", errors="ignore")
-
-        # Documentos Word
-        elif (
-            mime_type
-            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ):
-            data = safe_execute(self.service.files().get_media(fileId=file_id))
+        if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             return extract_docx_text(data)
 
-        # Presentaciones PowerPoint
-        elif (
-            mime_type
-            == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        ):
-            data = safe_execute(self.service.files().get_media(fileId=file_id))
+        if mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
             return extract_pptx_text(data)
 
-        # Hojas de cálculo Excel
-        elif (
-            mime_type
-            == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ):
-            data = safe_execute(self.service.files().get_media(fileId=file_id))
+        if mime_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
             return extract_excel_text(data)
 
-        # Archivos HTML
-        elif mime_type == "text/html":
-            data = safe_execute(self.service.files().get_media(fileId=file_id))
+        if mime_type == "text/html":
             return extract_html_text(data)
 
-        # Archivos CSV
-        elif mime_type == "text/csv":
-            data = safe_execute(self.service.files().get_media(fileId=file_id))
+        if mime_type == "text/csv":
             return extract_csv_text(data)
 
         return None
+
+    def _get_download_spec(self):
+        file_id = self.metadata["id"]
+        mime_type = self.metadata["mimeType"]
+
+        if mime_type in self.GOOGLE_EXPORTS:
+            export_mime, extension = self.GOOGLE_EXPORTS[mime_type]
+            request = self.service.files().export(fileId=file_id, mimeType=export_mime)
+            return request, extension
+
+        name = self.metadata.get("name", file_id)
+        extension = Path(name).suffix
+        request = self.service.files().get_media(fileId=file_id)
+        return request, extension
+
+    def download(self, directory: str | Path) -> Path:
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+
+        request, extension = self._get_download_spec()
+        file_id = self.metadata["id"]
+        path = directory / f"{file_id}{extension}"
+
+        data = safe_execute(request)
+        if data is None:
+            raise ValueError("No data available for download")
+
+        path.write_bytes(data)
+        return path
 
 
 class DropboxFile(VDBFile):
