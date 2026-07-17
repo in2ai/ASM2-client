@@ -61,9 +61,10 @@ cp .env.example .env
 | --- | --- | --- |
 | `OPENAI_API_KEY` | Clave de API para los modelos de OpenAI | `sk-...` |
 | `TOGETHER_API_KEY` | Clave de API de Together.ai (usada por el LLM evaluador del benchmark) | `tgp_v1_...` |
-| `FOLDER_ID` | ID de carpeta para almacenamiento (Google Drive) | `1ABC...` |
 | `CLIENT_SECRET` | JSON del cliente OAuth de Google (mismo contenido que `secrets/client_secret.json`; una sola línea en `.env`) | `{"web":{...}}` o `{"installed":{...}}` |
 | `GOOGLE_CLIENT_SECRET_FILE` | Ruta opcional al fichero JSON del cliente OAuth cuando se monta en Docker | `/app/secrets/client_secret.json` |
+| `GDRIVE_ROOTS` | IDs de las carpetas raíz de Google Drive que se indexarán (separados por comas) | `folder_id_1,folder_id_2` |
+| `GDRIVE_EXCLUDE` | IDs de las carpetas de Google Drive que se excluirán de la indexación (separados por comas) | `folder_id_3,folder_id_4` |
 | `HF_TOKEN` | Token de Hugging Face opcional usado solo en tiempo de build del backend para acelerar la descarga de modelos (evita el rate limit anónimo). No se usa en runtime. | `hf_...` |
 
 #### TimescaleDB
