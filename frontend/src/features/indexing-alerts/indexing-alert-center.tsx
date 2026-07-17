@@ -46,6 +46,7 @@ import {
 } from './api'
 import {
   countUnseenAlerts,
+  getLatestAlertId,
   parseDeletionThreshold,
   selectAlertsToNotify,
 } from './logic'
@@ -171,7 +172,7 @@ export function IndexingAlertCenter({
       return
     }
 
-    const latestAlertId = Math.max(...alertsQuery.data.map((alert) => alert.id))
+    const latestAlertId = getLatestAlertId(alertsQuery.data)
     setLastSeenAlertId((seenAlertId) => {
       if (seenAlertId !== null && latestAlertId <= seenAlertId) {
         return seenAlertId
@@ -191,7 +192,7 @@ export function IndexingAlertCenter({
       alertsQuery.data,
       lastNotifiedAlertIdRef.current,
     )
-    const latestAlertId = Math.max(...alertsQuery.data.map((alert) => alert.id))
+    const latestAlertId = getLatestAlertId(alertsQuery.data)
 
     if (
       user &&

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import {
   countUnseenAlerts,
+  getLatestAlertId,
   parseDeletionThreshold,
   selectAlertsToNotify,
 } from './logic'
@@ -34,6 +35,13 @@ describe('indexing alert logic', () => {
     expect(parseDeletionThreshold('not-a-number')).toBeNull()
     expect(parseDeletionThreshold('0')).toBeNull()
     expect(parseDeletionThreshold('101')).toBeNull()
+  })
+
+  it('returns the highest alert ID from a list', () => {
+    const alerts = [deletionAlert(1), deletionAlert(5), deletionAlert(3)]
+
+    expect(getLatestAlertId(alerts)).toBe(5)
+    expect(getLatestAlertId([])).toBe(-Infinity)
   })
 
   it('notifies only the latest unseen alert on the initial fetch', () => {
