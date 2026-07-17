@@ -236,6 +236,13 @@ El backend AMD utiliza por defecto la imagen validada `rocm/pytorch:rocm7.2.4_ub
 - Dispositivos `/dev/kfd` y `/dev/dri` accesibles
 - Usuario en los grupos `video` y `render`
 
+`run.sh` detecta automáticamente los GID de esos grupos. Si se invoca Docker Compose directamente, expórtalos antes:
+
+```bash
+export VIDEO_GID="$(getent group video | cut -d: -f3)"
+export RENDER_GID="$(getent group render | cut -d: -f3)"
+```
+
 > La GPU del backend acelera principalmente el reranker y los embeddings locales (`USE_LOCAL_EMB=true`). Las llamadas a modelos OpenAI se ejecutan de forma remota.
 
 ### Opción 4: Qdrant con Aceleración GPU

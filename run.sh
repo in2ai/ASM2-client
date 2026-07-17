@@ -47,6 +47,26 @@ load_root_env() {
   fi
 }
 
+load_amd_device_group_ids() {
+  local group_name group_id variable_name
+
+  for group_name in video render; do
+    variable_name="${group_name^^}_GID"
+    group_id="${!variable_name:-}"
+
+    if [ -z "$group_id" ]; then
+      group_id="$(getent group "$group_name" | awk -F: 'NR == 1 { print $3 }')"
+    fi
+
+    if [ -z "$group_id" ]; then
+      echo "ERROR: host group '$group_name' was not found; set $variable_name manually." >&2
+      exit 1
+    fi
+
+    export "$variable_name=$group_id"
+  done
+}
+
 ensure_gdrive_oauth_client_config() {
   if [ -f "./secrets/client_secret.json" ]; then
     return 0
@@ -160,6 +180,10 @@ case "$qdrant_accelerator" in
     exit 1
     ;;
 esac
+
+if [ "$backend_accelerator" = "amd" ] || [ "$qdrant_accelerator" = "amd" ]; then
+  load_amd_device_group_ids
+fi
 
 if [ "$action" = "up" ]; then
   load_root_env
