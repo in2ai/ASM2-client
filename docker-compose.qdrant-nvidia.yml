@@ -5,7 +5,7 @@
 #   - Helper script: ./run.sh up --qdrant nvidia
 services:
   qdrant:
-    image: qdrant/qdrant:gpu-nvidia-latest
+    image: qdrant/qdrant:v1.16.2-gpu-nvidia
     environment:
       # enable GPU indexing inside Qdrant
       - QDRANT__GPU__INDEXING=1

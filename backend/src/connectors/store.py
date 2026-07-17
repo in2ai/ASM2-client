@@ -1,9 +1,13 @@
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import logging
 import os
 from typing import List
 import uuid
+import shutil
+import threading
 
+from treedex import TreeDex, OpenAILLM
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -21,6 +25,9 @@ QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
 QDRANT_META_PATH = get_env("QDRANT_META_PATH", "/app/data/qdrant_meta")
 BM25_MODEL = "qdrant/bm25"
 VDB_LOCK = 'vdb.lock'
+
+TEXT_LOCK = threading.Lock()
+DOWNLOAD_LOCK = threading.Lock()
 
 QDRANT_COL = "documents"
 
@@ -55,6 +62,7 @@ def iterate_qdrant_docs(
             with_payload=with_payload,
             with_vectors=with_vectors,
             scroll_filter=scroll_filter,
+            timeout=600
         )
 
         for p in points:
@@ -73,7 +81,7 @@ def get_vectordb(embeddings) -> Qdrant:
     client = QdrantClient(
         url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
-        prefer_grpc=True,
+        prefer_grpc=True
     )
 
     vectorstore = Qdrant(client, QDRANT_COL, embeddings)
@@ -135,6 +143,12 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         logging.info('Creating Qdrant indexes...')
 
         # Create indexes
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name="metadata.id",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+        
         vectorstore.client.create_payload_index(
             collection_name=QDRANT_COL,
             field_name="metadata.source",
@@ -218,6 +232,15 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
 
         manifest.save()
 
+        logging.info("Deleting long context stale entries for source %s", source)
+
+        for f in files_to_delete:
+            treedex_path = QDRANT_META_PATH + '/treedex'
+            index_path = treedex_path + f'/{f}.json'
+
+            if os.path.isfile(index_path):
+                os.delete(index_path)
+
     # Read file chunks in batches
     docs_batch, pending_ids, chunk_idxs = [], [], []
 
@@ -275,7 +298,8 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
 
         f.metadata["source"] = source
 
-        txt = f.get_text()
+        with TEXT_LOCK:
+            txt = f.get_text()
 
         if not txt:
             # We add it to the manifest, since it has been already processed
@@ -320,6 +344,11 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
     if docs_batch:
         flush("final")
 
+    if get_bool_env('LONG_CONTEXT'):
+        # Generate long context
+        with ThreadPoolExecutor() as executor:
+            list(executor.map(generate_treedex_index, files))
+
     # Update status manifest
     manifest.add_completed_source(source)
     logging.info(
@@ -328,6 +357,33 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         source,
     )
     return vectorstore
+
+def generate_treedex_index(file: VDBFile):
+    try:
+        llm = OpenAILLM(
+            api_key=get_env('OPENAI_API_KEY'),
+            model=get_env('OPENAI_MODEL')
+        )
+
+        treedex_path = QDRANT_META_PATH + '/treedex'
+        index_path = treedex_path + f'/{file.metadata["id"]}.json'
+
+        if not os.path.isfile(index_path):
+            temp_path = QDRANT_META_PATH + '/treedex/tmp'
+
+            with DOWNLOAD_LOCK:
+                file_path = file.download(temp_path)
+
+            index = TreeDex.from_file(str(file_path), llm=llm, extract_images=get_bool_env('LONG_CONTEXT_IMGS'))
+            index.save(index_path)
+
+            os.remove(file_path)
+            
+        else:
+            logging.info(f'Index for {file.metadata["id"]} already found')
+
+    except Exception as e:
+        logging.info(f"Error while generating TreeDex index: {e}")
 
 
 def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):

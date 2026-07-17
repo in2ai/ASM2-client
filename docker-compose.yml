@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.16.2
     restart: unless-stopped
     volumes:
       - qdrant_index:/qdrant/storage

@@ -17,6 +17,7 @@ services:
     environment:
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
+      BENCHMARK: true
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
