@@ -378,7 +378,9 @@ describe('IndexingAlertCenter actions', () => {
         threshold_percentage: null,
       })
     })
-    expect(mocks.toast.success).toHaveBeenCalledWith('config.disabled')
+    await waitFor(() => {
+      expect(mocks.toast.success).toHaveBeenCalledWith('config.disabled')
+    })
   })
 
   it('arms the one-time override', async () => {
@@ -397,7 +399,9 @@ describe('IndexingAlertCenter actions', () => {
     await waitFor(() => {
       expect(updateOverride).toHaveBeenCalledWith({ override_pending: true })
     })
-    expect(mocks.toast.success).toHaveBeenCalledWith('override.armed')
+    await waitFor(() => {
+      expect(mocks.toast.success).toHaveBeenCalledWith('override.armed')
+    })
   })
 
   it('cancels a pending override', async () => {
@@ -416,7 +420,9 @@ describe('IndexingAlertCenter actions', () => {
     await waitFor(() => {
       expect(updateOverride).toHaveBeenCalledWith({ override_pending: false })
     })
-    expect(mocks.toast.success).toHaveBeenCalledWith('override.cancelled')
+    await waitFor(() => {
+      expect(mocks.toast.success).toHaveBeenCalledWith('override.cancelled')
+    })
   })
 })
 
@@ -491,7 +497,9 @@ describe('IndexingAlertCenter browser notifications and localStorage', () => {
     await waitFor(() => {
       expect(requestPermission).toHaveBeenCalled()
     })
-    expect(mocks.toast.success).toHaveBeenCalledWith('browser.enabled')
+    await waitFor(() => {
+      expect(mocks.toast.success).toHaveBeenCalledWith('browser.enabled')
+    })
   })
 
   it('marks alerts as seen in localStorage when the dialog opens', async () => {
