@@ -13,5 +13,5 @@ services:
       - /dev/kfd:/dev/kfd # AMD Kernel Fusion Driver
       - /dev/dri:/dev/dri # Direct Rendering Infrastructure
     group_add:
-      - video
-      - render
+      - ${VIDEO_GID:?VIDEO_GID must be set to the host video group ID}
+      - ${RENDER_GID:?RENDER_GID must be set to the host render group ID}
