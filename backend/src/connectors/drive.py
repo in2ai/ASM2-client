@@ -1,3 +1,4 @@
+from collections import deque
 from datetime import datetime, timedelta
 import json
 import logging
@@ -22,6 +23,10 @@ from src.connectors.vdb_file import GoogleDriveFile
 from src.utils.helpers import safe_execute
 
 
+FOLDER_MIME = "application/vnd.google-apps.folder"
+
+PERMISSION_FIELDS = "id,type,role,emailAddress,domain,displayName,allowFileDiscovery"
+
 SUPPORTED_MIMES = (
     "application/pdf",
     "application/vnd.google-apps.document",
@@ -34,6 +39,11 @@ SUPPORTED_MIMES = (
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
+
+# Folders are included so BFS can keep traversing; unsupported files are excluded server-side
+LIST_MIME_QUERY = " or ".join(
+    f"mimeType='{m}'" for m in (FOLDER_MIME, *SUPPORTED_MIMES)
 )
 
 
@@ -266,11 +276,7 @@ class GoogleDriveSource(DataSource):
         permissions = []
         page_token = None
 
-        FIELDS = (
-            "nextPageToken,permissions("
-            "id,type,role,emailAddress,domain,displayName,allowFileDiscovery"
-            ")"
-        )
+        FIELDS = f"nextPageToken,permissions({PERMISSION_FIELDS})"
 
         while True:
             resp = safe_execute(
@@ -292,10 +298,14 @@ class GoogleDriveSource(DataSource):
             if not page_token:
                 break
 
+        return self._principals_from_permissions(permissions)
+
+
+    @staticmethod
+    def _principals_from_permissions(permissions):
         # Transform permissions to unified format
         read_roles_set = {"reader", "commenter", "writer", "owner", "organizer"}
         acl_principals = set()
-        acl_anyone = False
 
         for p in permissions:
             p_type = p.get("type")
@@ -325,19 +335,21 @@ class GoogleDriveSource(DataSource):
                     acl_principals.add(f"gdrive:domain:{domain.strip().lower()}")
 
             elif p_type == "anyone":
-                acl_anyone = True
                 acl_principals.add("gdrive:anyone")
 
-        return {"anyone": bool(acl_anyone), "allowed": sorted(acl_principals)}
+        return {
+            "anyone": "gdrive:anyone" in acl_principals,
+            "allowed": sorted(acl_principals),
+        }
 
 
     def list_files(self):
         # Discover all files via BFS
-        queue = [(i, "") for i in self.roots]
+        queue = deque((i, "") for i in self.roots)
         files = []
 
         while queue:
-            current, current_path = queue.pop(0)
+            current, current_path = queue.popleft()
             page_token = None
 
             if current in GDRIVE_EXCLUDE:
@@ -346,8 +358,8 @@ class GoogleDriveSource(DataSource):
             while True:
                 resp = safe_execute(
                     self.service.files().list(
-                        q=f"'{current}' in parents and trashed=false",
-                        fields="nextPageToken, files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName))",
+                        q=f"'{current}' in parents and trashed=false and ({LIST_MIME_QUERY})",
+                        fields=f"nextPageToken, files(id,name,mimeType,modifiedTime,webViewLink,owners(displayName),permissions({PERMISSION_FIELDS}))",
                         pageSize=1000,
                         pageToken=page_token,
                         includeItemsFromAllDrives=True,
@@ -356,7 +368,7 @@ class GoogleDriveSource(DataSource):
                 )
 
                 for f in resp.get("files", []):
-                    if f["mimeType"] == "application/vnd.google-apps.folder":
+                    if f["mimeType"] == FOLDER_MIME:
                         folder_path = f"{current_path}/{f['name']}" if current_path else f["name"]
                         queue.append((f["id"], folder_path))
 
@@ -370,15 +382,9 @@ class GoogleDriveSource(DataSource):
                 if not page_token:
                     break
 
-        # Filter by mime type
-        files = [
-            f
-            for f in files
-            if f["mimeType"] in SUPPORTED_MIMES
-        ]
-
         # Get metadata for each file
         res = []
+        failed = 0
 
         for f in files:
             try:
@@ -395,11 +401,30 @@ class GoogleDriveSource(DataSource):
                         "mimeType": f["mimeType"],
                         "modifiedTime": f["modifiedTime"],
                         "webViewLink": f.get("webViewLink"),
-                        "permissions": self.get_file_principals(f["id"]),
+                        # Embedded permissions are absent for shared-drive items and
+                        # files the account can't share; fall back to permissions.list.
+                        # Residual limitation: if the embedded array is present but
+                        # truncated (no pagination or truncation signal exists for it;
+                        # reportedly capped around 100 entries), principals beyond the
+                        # cap are silently dropped and those users can't retrieve the
+                        # file. Only permissions.list paginates through the full ACL.
+                        "permissions": (
+                            self._principals_from_permissions(f["permissions"])
+                            if "permissions" in f
+                            else self.get_file_principals(f["id"])
+                        ),
                     }
                 )
             except Exception as e:
+                failed += 1
                 logging.exception("Failed to process file %s: %s", f.get("id", "unknown"), e)
+
+        if failed:
+            logging.warning(
+                "Google Drive listing skipped %d of %d files due to processing errors",
+                failed,
+                len(files),
+            )
 
         # Transform to file model
         res = [GoogleDriveFile(f, self.service) for f in res]
