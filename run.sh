@@ -10,6 +10,9 @@ Modes:
   --remote          Use external TimescaleDB and Logto services
   --bench           Just like --local, but changes entrypoint to a benchmark instead of the web server
 
+AI:
+  --local-model     Include docker-compose.ollama.yml for a local Ollama model
+
 Networking:
   dashboard         Published on localhost:3001
   logto             Published on localhost:3011 and localhost:3002 in --local mode
@@ -32,6 +35,8 @@ Examples:
   ./run.sh up --remote
   ./run.sh up --gpu --qdrant nvidia
   ./run.sh up --remote --gpu
+  ./run.sh up --local-model
+  ./run.sh up --gpu --local-model
   ./run.sh config --gpu
   ./run.sh up --bench
 EOF
@@ -62,6 +67,7 @@ action="up"
 mode="local"
 backend_gpu=0
 qdrant_accelerator="cpu"
+local_model=0
 detach=0
 build_on_up=1
 extra_args=()
@@ -86,6 +92,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --gpu)
       backend_gpu=1
+      shift
+      ;;
+    --local-model)
+      local_model=1
       shift
       ;;
     --qdrant)
@@ -144,6 +154,10 @@ fi
 
 if [ "$mode" = "local" ]; then
   compose_args+=(-f docker-compose.local.yml)
+fi
+
+if [ "$local_model" -eq 1 ]; then
+  compose_args+=(-f docker-compose.ollama.yml)
 fi
 
 if [ "$backend_gpu" -eq 1 ]; then
