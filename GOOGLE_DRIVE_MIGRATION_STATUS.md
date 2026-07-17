@@ -255,7 +255,6 @@ Important changes:
   - `GOOGLE_CLIENT_SECRET_FILE`
   - fallback `CLIENT_SECRET_FILE`
   - fallback default `secrets/client_secret.json`
-- `GDRIVE_ROOT` now falls back to legacy `FOLDER_ID`
 - Google scopes were expanded from only Drive readonly to:
   - `https://www.googleapis.com/auth/drive.readonly`
   - `openid`
@@ -265,7 +264,6 @@ Important changes:
 Why these changes matter:
 
 - the client secret path is now deployable in Docker and non-Docker environments without forcing one file location
-- the `FOLDER_ID` fallback keeps old environment setups working while the project transitions to `GDRIVE_ROOT`
 - the expanded scopes match the actual data the backend and UI need when validating and identifying the connected account
 
 The file also moved more environment reads through `get_env()`, which makes string cleanup and defaults more consistent than the previous direct `os.getenv()` usage.
