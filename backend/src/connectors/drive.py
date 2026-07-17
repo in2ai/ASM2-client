@@ -304,7 +304,7 @@ class GoogleDriveSource(DataSource):
     @staticmethod
     def _principals_from_permissions(permissions):
         # Transform permissions to unified format
-        read_roles_set = {"reader", "commenter", "writer", "owner", "organizer"}
+        read_roles_set = {"reader", "commenter", "writer", "owner", "organizer", "fileorganizer"}
         acl_principals = set()
 
         for p in permissions:
