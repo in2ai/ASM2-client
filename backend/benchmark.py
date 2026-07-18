@@ -23,7 +23,7 @@ from psycopg_pool import ConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.postgres import PostgresStore
 
-from graph.agent import build_graph, get_checkpointer, get_store
+from graph.agent import build_graph
 from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
 from src.connectors.llms import get_configured_llm
@@ -90,7 +90,6 @@ async def lifespan():
 LLM, LLM_WITH_TOOLS, VDB, RERANKER, PG_POOL, GRAPH = asyncio.run(lifespan())
 ADMIN_SOURCES = {}
 
-print("STARTING 5")
 # QA_CSV_PATH = Path("/app/benchmark_data/gutenberg_num_questions_5_num_documents_200_qaps.csv")
 QA_CSV_PATH = Path("/app/benchmark_data/dataset_wikipedia_qa_5_docs_200.csv")
 RESULTS_CSV_PATH = Path("/app/benchmark_data/rag_evaluation_results.csv")

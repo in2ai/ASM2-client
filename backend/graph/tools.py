@@ -22,7 +22,7 @@ from src.utils.topic import resolve_topic_names
 
 
 @tool
-def vectordb_search(query: str, config: RunnableConfig) -> str:
+def vectordb_search(query: str, config: RunnableConfig) -> str | dict:
     """Searches for documents relevant to the user's query through hybrid-search in a database."""
 
     configurable = config.get("configurable", {})

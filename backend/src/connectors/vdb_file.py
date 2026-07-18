@@ -1,7 +1,6 @@
 import csv
 import io
 import logging
-import mimetypes
 from pathlib import Path
 
 import chardet

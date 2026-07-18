@@ -24,8 +24,9 @@ class DataSource:
         ...
 
 
-    def expiry(self) -> Tuple[datetime, datetime]:
-        ...
+    def expiry(self) -> Tuple[datetime | None, datetime | None]:
+        # Sources without expiring credentials never need a refresh
+        return None, None
 
 
     def login_info() -> dict[str, Any] | None:

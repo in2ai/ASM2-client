@@ -2,6 +2,7 @@ from contextlib import contextmanager
 import logging
 import socket
 import ssl
+import threading
 import time
 
 from google.auth.exceptions import TransportError
@@ -116,8 +117,15 @@ def process_lock(lock_path: str):
             pass
 
 
+# Signals every periodic_task loop to exit; set on application shutdown.
+PERIODIC_STOP = threading.Event()
+
+
+def stop_periodic_tasks():
+    PERIODIC_STOP.set()
+
+
 def periodic_task(job_func, interval: int):
-    import time
     import hashlib
 
     # Generate a deterministic lock file across workers
@@ -125,10 +133,18 @@ def periodic_task(job_func, interval: int):
     digest = hashlib.sha256(ident.encode()).hexdigest()[:16]
     lock_path = f"/tmp/periodic-{digest}.lock"
 
-    # Execution loop (use asyncio)
-    while True:
+    # Execution loop. The lock is intentionally held during the wait so the
+    # same worker keeps ownership of the job and other workers skip it.
+    while not PERIODIC_STOP.is_set():
         with process_lock(lock_path) as locked:
             if locked:
-                job_func()
+                try:
+                    job_func()
 
-            time.sleep(interval)
+                except Exception:
+                    logging.exception(
+                        "Periodic job %s failed; retrying next interval", ident
+                    )
+
+            # Interruptible wait so shutdown does not block for `interval`
+            PERIODIC_STOP.wait(interval)

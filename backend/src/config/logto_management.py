@@ -4,7 +4,7 @@ import time
 
 import requests
 
-from src.config.env import get_env
+from src.config.env import get_env, get_int_env
 
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ _MANAGEMENT_ACCESS_TOKEN = ""
 _MANAGEMENT_ACCESS_TOKEN_EXPIRES_AT = 0.0
 _MANAGEMENT_ACCESS_TOKEN_RESOURCE = ""
 _MANAGEMENT_ACCESS_TOKEN_ENDPOINT = ""
-_USER_ROLE_CACHE_TTL_SECONDS = 60
+_USER_ROLE_CACHE_TTL_SECONDS = get_int_env("LOGTO_ROLE_CACHE_TTL_SECONDS", 60)
 _USER_ROLE_CACHE: dict[str, tuple[float, list[str]]] = {}
 
 

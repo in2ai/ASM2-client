@@ -5,7 +5,6 @@ import logging
 import os
 from typing import Iterable
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document

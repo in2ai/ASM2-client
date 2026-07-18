@@ -399,8 +399,14 @@ class GoogleDriveSource(DataSource):
                     }
                 )
 
-            except:
-                pass
+            except Exception:
+                # Don't drop files silently: a missing file here is treated as
+                # deleted by the next VDB sync
+                logging.warning(
+                    "Skipping Drive file %s: failed to build metadata",
+                    f.get("id", "<unknown>"),
+                    exc_info=True,
+                )
 
         # Transform to file model
         res = [GoogleDriveFile(f, self.service) for f in res]

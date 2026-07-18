@@ -1,10 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
-import hashlib
 import logging
 import os
 from typing import List
 import uuid
-import shutil
 import threading
 
 from treedex import TreeDex, OpenAILLM
@@ -24,7 +22,12 @@ from src.utils.topic import assign_topics, extract_initial_topics
 QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
 QDRANT_META_PATH = get_env("QDRANT_META_PATH", "/app/data/qdrant_meta")
 BM25_MODEL = "qdrant/bm25"
-VDB_LOCK = 'vdb.lock'
+# Keep the lock on the persistent data volume so the indexing-enabled state
+# survives container restarts (it previously lived in the process CWD).
+VDB_LOCK = get_env(
+    "VDB_LOCK_PATH",
+    os.path.join(os.path.dirname(QDRANT_META_PATH.rstrip("/")) or ".", "vdb.lock"),
+)
 
 TEXT_LOCK = threading.Lock()
 DOWNLOAD_LOCK = threading.Lock()
@@ -112,6 +115,10 @@ def build_vectordb_from_sources(llm, embeddings, sources: List[DataSource]):
 
     for name, files in grouped_files.items():
         vectordb = build_vectorstore(embeddings, files, name)
+
+    if vectordb is None:
+        logging.info("No sources available, skipping VDB build and topic extraction")
+        return None
 
     # Execute topic extraction
     extract_topics(llm, vectordb)
@@ -239,7 +246,7 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
             index_path = treedex_path + f'/{f}.json'
 
             if os.path.isfile(index_path):
-                os.delete(index_path)
+                os.remove(index_path)
 
     # Read file chunks in batches
     docs_batch, pending_ids, chunk_idxs = [], [], []
@@ -339,7 +346,7 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         pending_ids.append((f.metadata["id"], f.metadata["modifiedTime"]))
 
         if len(docs_batch) >= batch_size:
-            flush("lote")
+            flush("batch")
 
     if docs_batch:
         flush("final")
@@ -414,13 +421,12 @@ def extract_topics(llm, vectorstore: Qdrant, pool=None):
     manifest = VDBManifest(QDRANT_META_PATH)
 
     # Add topics if needed
-    if not manifest.has_topics():
+    if CALCULATE_TOPICS and not manifest.has_topics():
         if manifest.num_chunks() > TOPIC_MIN_SIZE:
             extract_initial_topics(llm, vectorstore, QDRANT_META_PATH, pool)
 
-            if CALCULATE_TOPICS:
-                manifest.set_topics()
-                manifest.save()
+            manifest.set_topics()
+            manifest.save()
 
         else:
             logging.info('Not enough data in VDB for topic detection')

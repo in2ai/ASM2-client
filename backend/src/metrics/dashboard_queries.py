@@ -55,7 +55,9 @@ def _build_filter_conditions(
         query_params.append(params.start_date)
 
     if params.end_date:
-        conditions.append("ts <= %s")
+        # end_date is already normalized to the day after the requested range,
+        # so the boundary must be exclusive
+        conditions.append("ts < %s")
         query_params.append(params.end_date)
 
     if include_user_id and params.user_id:

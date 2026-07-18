@@ -24,9 +24,19 @@ def add_credentials(
     needs_refresh_at: datetime | None = None,
     expires_at: datetime | None = None,
 ):
+    # Insert the new credentials and drop the superseded rows for the same
+    # (user_id, source) so the table does not grow with every login/refresh.
     query = """
-    INSERT INTO credentials (user_id, source, credentials, issued_at, needs_refresh_at, expires_at, is_admin)
-    VALUES (%s, %s, %s, NOW(), %s, %s, %s)
+    WITH inserted AS (
+        INSERT INTO credentials (user_id, source, credentials, issued_at, needs_refresh_at, expires_at, is_admin)
+        VALUES (%s, %s, %s, NOW(), %s, %s, %s)
+        RETURNING user_id, source, issued_at
+    )
+    DELETE FROM credentials c
+    USING inserted i
+    WHERE c.user_id = i.user_id
+        AND c.source = i.source
+        AND c.issued_at < i.issued_at
     """
 
     execute_query(
@@ -85,11 +95,16 @@ def get_credentials_to_refresh(pool: ThreadedConnectionPool):
 
 def set_selected_sources(pool: ThreadedConnectionPool, user_id: str, sources: list[str]):
     query = """
-    INSERT INTO source_preferences (user_id, selected_sources, updated_at)
-    VALUES (%s, %s, NOW())
+    WITH inserted AS (
+        INSERT INTO source_preferences (user_id, selected_sources, updated_at)
+        VALUES (%s, %s, NOW())
+        RETURNING user_id, updated_at
+    )
+    DELETE FROM source_preferences p
+    USING inserted i
+    WHERE p.user_id = i.user_id AND p.updated_at < i.updated_at
     """
-    normalized = [source for source in sources]
-    execute_query(pool, query, (user_id, json.dumps(sorted(set(normalized)))))
+    execute_query(pool, query, (user_id, json.dumps(sorted(set(sources)))))
 
 
 def get_selected_sources(pool: ThreadedConnectionPool, user_id: str) -> list[str]:

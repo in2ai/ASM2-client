@@ -1,3 +1,4 @@
+import logging
 import time
 from enum import Enum
 
@@ -73,7 +74,7 @@ def register_words(
         VALUES {value_insertions}
     """
 
-    # Flatten parameters (3 for each word)
+    # Flatten parameters (4 for each word)
     params = []
 
     for w in words:
@@ -176,9 +177,17 @@ class TimedMetric:
         return self
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
-        # Only insert the metric if no exception occurred
+        # Only insert the metric if no exception occurred. Metric recording must
+        # never fail the operation being measured.
         if exception_type is None:
             elapsed = time.perf_counter() - self.start
-            insert_metric(self.pool, self.metric, elapsed, actor=self.actor)
+
+            try:
+                insert_metric(self.pool, self.metric, elapsed, actor=self.actor)
+
+            except Exception:
+                logging.warning(
+                    "Failed to record metric %s", self.metric, exc_info=True
+                )
 
         return False

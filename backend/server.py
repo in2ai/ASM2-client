@@ -28,7 +28,6 @@ from src.config.logto_auth import AuthInfo, has_role
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import (
-    QDRANT_COL,
     QDRANT_META_PATH,
     VDB_LOCK,
     build_vectordb_from_sources,
@@ -36,14 +35,32 @@ from src.connectors.store import (
 )
 from src.connectors.manifest import VDBManifest
 
-from src.model.endpoints import *
-from src.utils.helpers import periodic_task
+from src.model.endpoints import (
+    AdminAuth,
+    AuthenticatedAuth,
+    ChatDetailModel,
+    ChatSummaryModel,
+    CreateChatRequestModel,
+    DashboardMetricsResponseModel,
+    ExportMetricsResponseModel,
+    MetricsExportAuth,
+    MetricsReadAuth,
+    SendMessageRequestModel,
+    SendMessageResultModel,
+    SourceLoginInfoModel,
+    SourceLoginRequestModel,
+    SourceSelectionRequestModel,
+    SourcesStatusModel,
+    StatsResponseModel,
+)
+from src.utils.helpers import periodic_task, stop_periodic_tasks
 from src.metrics.connection import (
     PG_DB,
     PG_HOST,
     PG_PASSWORD,
     PG_PORT,
     PG_USER,
+    execute_query,
     get_pg_pool,
 )
 from src.metrics.context import metrics_actor_from_auth
@@ -132,7 +149,10 @@ async def lifespan(app: FastAPI):
         yield
 
     finally:
-        # Cleanup before closing
+        # Cleanup before closing. Signal the periodic loops first so their
+        # interruptible waits return; cancelling alone cannot stop a thread.
+        stop_periodic_tasks()
+
         for j in app.state.periodic_tasks:
             j.cancel()
 
@@ -173,12 +193,18 @@ app.add_middleware(
     status_code=200,
     responses={503: {"description": "Service not ready"}},
 )
-async def healthcheck():
+def healthcheck():
     pg_pool = getattr(app.state, "pg_pool", None)
     graph = getattr(app.state, "graph", None)
 
     if pg_pool is None or graph is None:
         raise HTTPException(status_code=503, detail="Service not ready")
+
+    try:
+        execute_query(pg_pool, "SELECT 1", max_attempts=1)
+
+    except Exception:
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
     return {"status": "ok"}
 
@@ -187,31 +213,41 @@ async def healthcheck():
 # ---------------------------------
 
 def refresh_tokens():
+    # Note: token refresh runs unconditionally; it must not depend on whether
+    # VDB indexing is enabled, or user sessions would silently expire.
     def refresh():
-        if os.path.isfile(VDB_LOCK):
-            logging.info("Refreshing access tokens...")
+        logging.info("Refreshing access tokens...")
 
-            pg_pool = app.state.pg_pool
+        pg_pool = app.state.pg_pool
 
-            # Get admin authenticated sources and update DB
-            credentials = get_credentials_to_refresh(pg_pool)
+        # Get credentials close to expiry and update DB
+        credentials = get_credentials_to_refresh(pg_pool)
 
-            logging.info("Found %s tokens to refresh", len(credentials))
+        logging.info("Found %s tokens to refresh", len(credentials))
 
-            for user_id, source, creds, is_admin in credentials:
-                if source not in SOURCES:
-                    continue
+        for user_id, source, creds, is_admin in credentials:
+            if source not in SOURCES:
+                continue
 
-                source: DataSource = SOURCES[source](creds)
+            source: DataSource = SOURCES[source](creds)
 
-                if not source.login() or not source.refresh():
-                    continue  # Invalid source
+            if not source.login() or not source.refresh():
+                continue  # Invalid source
 
-                # Add new credentials entry
-                new_creds = source.raw_creds
-                add_credentials(pg_pool, user_id, source.name, new_creds, is_admin)
+            # Add new credentials entry, keeping the refresh/expiry metadata
+            # so the credential stays in the refresh cycle
+            needs_refresh_at, expires_at = source.expiry()
+            add_credentials(
+                pg_pool,
+                user_id,
+                source.name,
+                source.raw_creds,
+                is_admin,
+                needs_refresh_at=needs_refresh_at,
+                expires_at=expires_at,
+            )
 
-            logging.info("Finished token refresh job for %s credentials", len(credentials))
+        logging.info("Finished token refresh job for %s credentials", len(credentials))
 
     periodic_task(refresh, 300)  # Once every five minutes
 
@@ -263,7 +299,7 @@ def update_vdb():
     def update():
         run_vdb_update_once()
 
-    periodic_task(update, 7000)  # Once an hour
+    periodic_task(update, 7000)  # Roughly every two hours
 
 
 def extract_usage_metrics():
@@ -283,11 +319,12 @@ def extract_usage_metrics():
         mem = psutil.virtual_memory()
         insert_system_metric(pg_pool, Metrics.RAM_USAGE.value, mem.percent)
 
-        # GPU (if available)
+        # GPU (if available): mean load across all GPUs
         gpus = GPUtil.getGPUs()
 
         if len(gpus) > 0:
-            insert_system_metric(pg_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100)
+            mean_load = sum(gpu.load for gpu in gpus) / len(gpus)
+            insert_system_metric(pg_pool, Metrics.GPU_USAGE.value, mean_load * 100)
 
     periodic_task(calc, 30)
 
@@ -308,28 +345,35 @@ async def start_vdb_update(auth: AdminAuth):
 
 
 @app.post("/stop-vdb-update", status_code=200)
-async def stop_vdb_update(auth: AdminAuth):
+def stop_vdb_update(auth: AdminAuth):
     try:
         os.remove(VDB_LOCK)
 
-    except:
+    except FileNotFoundError:
         pass
 
 
 @app.get("/vdb-update-status", status_code=200)
-async def is_vdb_update_active(auth: AdminAuth):
+def is_vdb_update_active(auth: AdminAuth):
     return {"active": os.path.isfile(VDB_LOCK)}
 
 
+def validate_source(source: str) -> str:
+    if source not in SOURCES:
+        raise HTTPException(status_code=404, detail=f"Unknown source: {source}")
+
+    return source
+
+
 @app.get("/sources/login-info", response_model=SourceLoginInfoModel, status_code=200)
-async def get_source_login_info(auth: AuthenticatedAuth, source: str):
+def get_source_login_info(auth: AuthenticatedAuth, source: str):
     source = validate_source(source)
     source_class = SOURCES[source]
     return source_class.login_info() or {}
 
 
 @app.post("/login-source", status_code=200)
-async def login_source(
+def login_source(
     auth: AuthenticatedAuth,
     body: SourceLoginRequestModel,
 ):
@@ -385,13 +429,13 @@ def build_sources_status(pg_pool, user_id: str) -> dict[str, Any]:
 
 
 @app.get("/sources/status", response_model=SourcesStatusModel, status_code=200)
-async def get_sources_status(auth: AuthenticatedAuth):
+def get_sources_status(auth: AuthenticatedAuth):
     pg_pool = app.state.pg_pool
     return build_sources_status(pg_pool, auth.sub)
 
 
 @app.put("/sources/selection", response_model=SourcesStatusModel, status_code=200)
-async def update_sources_selection(
+def update_sources_selection(
     auth: AuthenticatedAuth,
     body: SourceSelectionRequestModel,
 ):
@@ -414,20 +458,20 @@ async def update_sources_selection(
 
 
 @app.get("/authenticated-sources", status_code=200)
-async def get_auth_sources(auth: AuthenticatedAuth):
+def get_auth_sources(auth: AuthenticatedAuth):
     pg_pool = app.state.pg_pool
     return build_sources_status(pg_pool, auth.sub)
 
 
 @app.get("/chats", response_model=list[ChatSummaryModel])
-async def list_chats(auth: AuthenticatedAuth):
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+def list_chats(auth: AuthenticatedAuth):
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
     return chat_store.list_chats(auth.sub)
 
 
 @app.post("/chats", response_model=ChatDetailModel)
-async def create_chat(auth: AuthenticatedAuth, payload: CreateChatRequestModel):
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+def create_chat(auth: AuthenticatedAuth, payload: CreateChatRequestModel):
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
     return chat_store.create_chat(auth.sub, title=payload.title)
 
 
@@ -470,21 +514,22 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
                     try:
                         return json.loads(followup.content)
 
-                    except:
+                    except (json.JSONDecodeError, TypeError):
+                        # The tool returned a plain-text fallback/error message
                         return None
 
     return None
 
 
 @app.get("/chats/{chat_id}", response_model=ChatDetailModel)
-async def get_chat(auth: AuthenticatedAuth, chat_id: str):
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+def get_chat(auth: AuthenticatedAuth, chat_id: str):
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
     return _get_chat_or_404(chat_store, auth.sub, chat_id)
 
 
 @app.delete("/chats/{chat_id}", status_code=204)
-async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+def delete_chat(auth: AuthenticatedAuth, chat_id: str):
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
 
     try:
         chat_store.delete_chat(auth.sub, chat_id)
@@ -494,8 +539,13 @@ async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
 
 async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
     pg_pool = app.state.pg_pool
-    sources_status = build_sources_status(pg_pool, auth.sub)
-    sources = get_selected_authenticated_sources(pg_pool, auth.sub)
+
+    # Source checks perform blocking DB queries and live OAuth logins; keep
+    # them off the event loop
+    sources_status = await asyncio.to_thread(build_sources_status, pg_pool, auth.sub)
+    sources = await asyncio.to_thread(
+        get_selected_authenticated_sources, pg_pool, auth.sub
+    )
 
     if not sources_status["selected_sources"]:
         raise HTTPException(
@@ -510,7 +560,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
         )
 
     metrics_actor = metrics_actor_from_auth(auth.sub, auth.role)
-    register_user_activity(pg_pool, actor=metrics_actor)
+    await asyncio.to_thread(register_user_activity, pg_pool, actor=metrics_actor)
 
     config: dict[str, Any] = {
         "configurable": {
@@ -560,7 +610,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     if search_results is not None:
         available_sources = search_results['sources']
 
-    record_token_usage_metrics(pg_pool, messages, metrics_actor)
+    await asyncio.to_thread(record_token_usage_metrics, pg_pool, messages, metrics_actor)
     return {
         "answer": str(messages[-1].content),
         "detected_lang": str(result.get("detected_lang", "es")),
@@ -578,10 +628,15 @@ async def send_chat_message(
     if not content:
         raise HTTPException(status_code=422, detail="content must not be empty")
 
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
-    _get_chat_or_404(chat_store, auth.sub, chat_id)
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
+    await asyncio.to_thread(_get_chat_or_404, chat_store, auth.sub, chat_id)
 
-    try:
+    result = await _run_chat_turn(auth, chat_id, content)
+
+    # Persist the turn only after it succeeded, so a failed turn leaves no
+    # orphaned user message behind (the client restores the composer and can
+    # retry without creating duplicates)
+    def persist_turn():
         user_message = chat_store.append_message(
             auth.sub,
             chat_id,
@@ -589,23 +644,24 @@ async def send_chat_message(
             content,
             status="sent",
         )
+        assistant_message = chat_store.append_message(
+            auth.sub,
+            chat_id,
+            "assistant",
+            result["answer"],
+            status="complete",
+            metadata={
+                "detected_lang": result["detected_lang"],
+                "sources": result["sources"],
+            },
+        )
+        chat = _get_chat_or_404(chat_store, auth.sub, chat_id)
+        return user_message, assistant_message, chat
+
+    try:
+        user_message, assistant_message, chat = await asyncio.to_thread(persist_turn)
     except ChatNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Chat not found") from exc
-
-    result = await _run_chat_turn(auth, chat_id, content)
-
-    assistant_message = chat_store.append_message(
-        auth.sub,
-        chat_id,
-        "assistant",
-        result["answer"],
-        status="complete",
-        metadata={
-            "detected_lang": result["detected_lang"],
-            "sources": result["sources"],
-        },
-    )
-    chat = _get_chat_or_404(chat_store, auth.sub, chat_id)
 
     return {
         "chat": chat,
@@ -680,13 +736,8 @@ def record_token_usage_metrics(pg_pool, messages: list[Any], actor) -> None:
         logging.warning("Failed to record token usage metrics", exc_info=True)
 
 
-def validate_source(source: str) -> str:
-    if source not in SOURCES:
-        raise HTTPException(status_code=404, detail=f"Unknown source: {source}")
-
-    return source
 @app.get("/metrics/dashboard", response_model=DashboardMetricsResponseModel)
-async def metrics_dashboard(
+def metrics_dashboard(
     auth: MetricsReadAuth,
     startDate: date | None = Query(default=None),
     endDate: date | None = Query(default=None),
@@ -732,7 +783,7 @@ async def metrics_dashboard(
 
 
 @app.get("/metrics/stats", response_model=StatsResponseModel)
-async def metrics_stats(
+def metrics_stats(
     auth: MetricsReadAuth,
     startDate: date | None = Query(default=None),
     endDate: date | None = Query(default=None),
@@ -761,7 +812,7 @@ async def metrics_stats(
 
 
 @app.get("/metrics/export", response_model=ExportMetricsResponseModel)
-async def metrics_export(
+def metrics_export(
     auth: MetricsExportAuth,
     startDate: date | None = Query(default=None),
     endDate: date | None = Query(default=None),
