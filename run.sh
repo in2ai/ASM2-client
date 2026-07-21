@@ -11,7 +11,8 @@ Modes:
   --bench           Just like --local, but changes entrypoint to a benchmark instead of the web server
 
 AI:
-  --local-model     Include docker-compose.ollama.yml for a local Ollama model
+  --local-model [cpu|nvidia|amd]
+                    Include a local Ollama model (CPU by default)
 
 Networking:
   dashboard         Published on localhost:3001
@@ -21,6 +22,10 @@ Networking:
 
 Accelerators:
   --gpu [nvidia|amd] Enable backend GPU (bare --gpu keeps NVIDIA compatibility)
+  --local-model cpu Run Ollama on CPU
+  --local-model nvidia
+                    Run Ollama on NVIDIA GPU
+  --local-model amd Run Ollama on AMD GPU with ROCm
   --qdrant cpu      Use CPU Qdrant (default)
   --qdrant nvidia   Enable NVIDIA GPU Qdrant image
   --qdrant amd      Enable AMD GPU Qdrant image
@@ -36,8 +41,9 @@ Examples:
   ./run.sh up --gpu --qdrant nvidia
   ./run.sh up --gpu amd --qdrant amd
   ./run.sh up --remote --gpu nvidia
-  ./run.sh up --local-model
-  ./run.sh up --gpu --local-model
+  ./run.sh up --local-model amd
+  ./run.sh up --gpu --local-model nvidia
+  ./run.sh up --local-model amd --qdrant amd
   ./run.sh config --gpu amd
   ./run.sh up --bench
 EOF
@@ -89,6 +95,7 @@ mode="local"
 backend_accelerator="cpu"
 qdrant_accelerator="cpu"
 local_model=0
+ollama_accelerator="cpu"
 detach=0
 build_on_up=1
 extra_args=()
@@ -139,11 +146,43 @@ while [ "$#" -gt 0 ]; do
       ;;
     --local-model)
       local_model=1
-      shift
+      if [ "$#" -ge 2 ]; then
+        case "$2" in
+          cpu|nvidia|amd)
+            ollama_accelerator="$2"
+            shift 2
+            ;;
+          --*)
+            shift
+            ;;
+          *)
+            echo "ERROR: --local-model accepts one of: cpu, nvidia, amd" >&2
+            exit 1
+            ;;
+        esac
+      else
+        shift
+      fi
       ;;
     --local-model)
       local_model=1
-      shift
+      if [ "$#" -ge 2 ]; then
+        case "$2" in
+          cpu|nvidia|amd)
+            ollama_accelerator="$2"
+            shift 2
+            ;;
+          --*)
+            shift
+            ;;
+          *)
+            echo "ERROR: --local-model accepts one of: cpu, nvidia, amd" >&2
+            exit 1
+            ;;
+        esac
+      else
+        shift
+      fi
       ;;
     --qdrant)
       if [ "$#" -lt 2 ]; then
@@ -199,6 +238,15 @@ if [ "$backend_accelerator" = "amd" ] || [ "$qdrant_accelerator" = "amd" ]; then
   load_amd_device_group_ids
 fi
 
+case "$ollama_accelerator" in
+  cpu|nvidia|amd)
+    ;;
+  *)
+    echo "ERROR: unsupported Ollama accelerator '$ollama_accelerator'" >&2
+    exit 1
+    ;;
+esac
+
 if [ "$action" = "up" ]; then
   load_root_env
   ensure_gdrive_oauth_client_config
@@ -218,6 +266,15 @@ fi
 
 if [ "$local_model" -eq 1 ]; then
   compose_args+=(-f docker-compose.ollama.yml)
+
+  case "$ollama_accelerator" in
+    nvidia)
+      compose_args+=(-f docker-compose.ollama-nvidia.yml)
+      ;;
+    amd)
+      compose_args+=(-f docker-compose.ollama-amd.yml)
+      ;;
+  esac
 fi
 
 if [ "$local_model" -eq 1 ]; then

@@ -33,16 +33,16 @@ done
 echo "[entrypoint] Server is ready."
 
 # Resolve which model to pull:
-#   1. LOCAL_HF_MODEL (+ optional LOCAL_HF_MODEL_QUANT) -> hf.co/<LOCAL_HF_MODEL>[:<LOCAL_HF_MODEL_QUANT>]
-#   2. OLLAMA_MODEL                   -> used as-is (library model, or your own full reference)
+#   1. OLLAMA_MODEL -> used as-is (an Ollama library model or full reference)
+#   2. LOCAL_HF_MODEL (+ optional LOCAL_HF_MODEL_QUANT) -> hf.co/<LOCAL_HF_MODEL>[:<LOCAL_HF_MODEL_QUANT>]
 MODEL_REF=""
-if [ -n "$LOCAL_HF_MODEL" ]; then
+if [ -n "$OLLAMA_MODEL" ]; then
+  MODEL_REF="$OLLAMA_MODEL"
+elif [ -n "$LOCAL_HF_MODEL" ]; then
   MODEL_REF="hf.co/${LOCAL_HF_MODEL}"
   if [ -n "$LOCAL_HF_MODEL_QUANT" ]; then
     MODEL_REF="${MODEL_REF}:${LOCAL_HF_MODEL_QUANT}"
   fi
-elif [ -n "$OLLAMA_MODEL" ]; then
-  MODEL_REF="$OLLAMA_MODEL"
 fi
 
 if [ -n "$MODEL_REF" ]; then

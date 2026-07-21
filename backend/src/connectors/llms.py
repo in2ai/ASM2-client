@@ -1,5 +1,4 @@
-from langchain_openai import ChatOpenAI 
-from langchain_community.chat_models import ChatLlamaCpp
+from langchain_openai import ChatOpenAI
 
 from src.config.env import get_bool_env, get_env
 
@@ -8,11 +7,31 @@ def get_openai_llm(model: str="gpt-4o-mini", temperature: float=0):
     return ChatOpenAI(model=model, temperature=temperature)
 
 
-def get_llamacpp_llm(temperature: float=0):
-    LOCAL_HF_MODEL = get_env('LOCAL_HF_MODEL')
-    LOCAL_HF_MODEL_QUANT = get_env('LOCAL_HF_MODEL_QUANT')
+def get_ollama_model_ref() -> str:
+    ollama_model = get_env("OLLAMA_MODEL")
 
-    model = f"hf.co/{LOCAL_HF_MODEL}:{LOCAL_HF_MODEL_QUANT}"
+    if ollama_model:
+        return ollama_model
+
+    local_hf_model = get_env("LOCAL_HF_MODEL")
+    local_hf_model_quant = get_env("LOCAL_HF_MODEL_QUANT")
+
+    if not local_hf_model:
+        raise ValueError(
+            "USE_LOCAL_MODEL is enabled, but neither OLLAMA_MODEL nor "
+            "LOCAL_HF_MODEL is configured"
+        )
+
+    model = f"hf.co/{local_hf_model}"
+
+    if local_hf_model_quant:
+        model = f"{model}:{local_hf_model_quant}"
+
+    return model
+
+
+def get_ollama_llm(temperature: float = 0):
+    model = get_ollama_model_ref()
 
     return ChatOpenAI(
         model=model,
@@ -24,7 +43,7 @@ def get_llamacpp_llm(temperature: float=0):
 
 def get_configured_llm():
     if get_bool_env('USE_LOCAL_MODEL', False):
-        return get_llamacpp_llm()
+        return get_ollama_llm()
     
     else:
         return get_openai_llm(get_env('OPENAI_MODEL', 'gpt-4o-mini'))
