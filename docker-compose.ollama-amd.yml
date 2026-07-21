@@ -1,0 +1,12 @@
+# Ollama AMD/ROCm GPU override configuration
+# Usage:
+#   - Helper script: ./run.sh up --local-model amd
+#   - Manual: docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.ollama.yml -f docker-compose.ollama-amd.yml up
+services:
+  ollama:
+    build:
+      args:
+        OLLAMA_IMAGE_TAG: rocm
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri

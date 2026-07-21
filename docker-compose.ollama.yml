@@ -2,9 +2,6 @@ services:
   ollama:
     build:
       context: ollama/.
-      # To build the AMD/ROCm image instead of the default CPU/NVIDIA one, uncomment:
-      # args:
-      #   OLLAMA_IMAGE_TAG: rocm
     image: ollama-openai-server:local
     env_file:
       - .env
@@ -13,6 +10,7 @@ services:
     ports:
       - "${HOST_PORT:-11434}:11434"
     environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
       LOCAL_HF_MODEL: ${LOCAL_HF_MODEL:-}
       LOCAL_HF_MODEL_QUANT: ${LOCAL_HF_MODEL_QUANT:-}
     volumes:
@@ -23,13 +21,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
 volumes:
   ollama_data:

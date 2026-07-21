@@ -1,0 +1,13 @@
+# Ollama NVIDIA GPU override configuration
+# Usage:
+#   - Helper script: ./run.sh up --local-model nvidia
+#   - Manual: docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.ollama.yml -f docker-compose.ollama-nvidia.yml up
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

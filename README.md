@@ -242,7 +242,40 @@ Qdrant soporta aceleración GPU para indexación vectorial. Por defecto, se usa 
 - Dispositivos `/dev/kfd` y `/dev/dri` accesibles
 - Usuario en los grupos `video` y `render`
 
-### Opción 5: Desarrollo Local
+### Opción 5: Modelo local con Ollama
+
+El archivo base `docker-compose.ollama.yml` contiene la configuración compartida. Selecciona el acelerador con el argumento opcional de `--local-model`:
+
+Configura preferentemente un modelo del registro oficial de Ollama en `.env`:
+
+```dotenv
+USE_LOCAL_MODEL=true
+OLLAMA_MODEL=qwen3.5:27b
+LOCAL_HF_MODEL=
+LOCAL_HF_MODEL_QUANT=
+```
+
+`OLLAMA_MODEL` tiene prioridad. `LOCAL_HF_MODEL` y `LOCAL_HF_MODEL_QUANT` se mantienen como alternativa para repositorios GGUF alojados en Hugging Face.
+
+```bash
+# CPU
+./run.sh up --local-model cpu
+
+# GPU NVIDIA
+./run.sh up --local-model nvidia
+
+# GPU AMD con ROCm
+./run.sh up --local-model amd
+
+# Ollama y Qdrant sobre AMD
+./run.sh up --local-model amd --qdrant amd
+```
+
+Los overrides específicos son `docker-compose.ollama-nvidia.yml` y `docker-compose.ollama-amd.yml`. Si no se indica un acelerador, `--local-model` usa CPU.
+
+Para AMD se requieren ROCm y acceso a `/dev/kfd` y `/dev/dri`. Para NVIDIA se requieren los drivers y `nvidia-container-toolkit`.
+
+### Opción 6: Desarrollo Local
 
 #### Backend FastAPI
 
@@ -270,7 +303,7 @@ pnpm dev
 
 El dashboard estará disponible en `http://localhost:3001`.
 
-### Opción 6: Benchmark
+### Opción 7: Benchmark
 
 El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` por el script de evaluación [`benchmark.py`](backend/benchmark.py), que mide la calidad del pipeline RAG con métricas de **RAGAS `0.4.3`** (`context_precision`, `context_recall`, `answer_relevancy`, `faithfulness`) además de los tiempos de cada evaluación (consulta RAG + cálculo de métricas) y de cada lote.
 
