@@ -33,7 +33,7 @@ El sistema se despliega mediante contenedores Docker orquestados:
 | `backend`      | API FastAPI para chat, métricas y conectores       |
 | `dashboard`    | SPA React servida por Caddy                        |
 | `qdrant`       | Base vectorial para búsqueda híbrida               |
-| `timescaledb`      | PostgreSQL + TimescaleDB: métricas, historial de chat, memoria del agente y checkpoints |
+| `timescaledb`      | Instancia PostgreSQL + TimescaleDB compartida: datos de la aplicación y base independiente de Logto |
 | `timescaledb-init` | Contenedor efímero para inicialización de esquemas |
 | `logto`        | Proveedor de autenticación local opcional          |
 
@@ -85,7 +85,7 @@ cp .env.example .env
 | `LOGTO_ENDPOINT` | Endpoint compartido de Logto usado por la SPA y por el backend |
 | `LOGTO_API_RESOURCE` | Audience del API compartido entre la SPA y la validación estricta en FastAPI |
 | `LOGTO_ADMIN_ENDPOINT` | Endpoint del panel de administración de Logto |
-| `LOGTO_POSTGRES_PASSWORD` | Contraseña de PostgreSQL usada por Logto self-hosted |
+| `LOGTO_POSTGRES_PASSWORD` | Contraseña del rol `logto` dentro de la instancia PostgreSQL compartida |
 | `LOGTO_MANAGEMENT_APP_ID` | Client ID opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_APP_SECRET` | Client secret opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_API_RESOURCE` | Resource opcional de la Management API de Logto |

@@ -7,7 +7,7 @@ Use it when you want to deploy the full stack on a single Dokploy host:
 - `dashboard` public on your main app domain
 - `logto` public on a dedicated auth domain
 - `logto` admin console public on a dedicated admin domain
-- `backend`, `qdrant`, `timescaledb`, `timescaledb-init`, and `logto-postgres` internal only
+- `backend`, `qdrant`, `timescaledb`, and `timescaledb-init` internal only
 - NVIDIA GPU enabled for `backend` and `qdrant`
 
 ## Important: Use a Docker Compose App
@@ -63,7 +63,9 @@ Notes:
 - If you use the Google Drive connector, prefer setting `CLIENT_SECRET` as inline JSON in Dokploy instead of mounting a secret file.
 - Only a small set of environment entries remain inline in the compose file. Those are service-local overrides such as internal hostnames, container paths, GPU flags, build-time mappings, translated variable names, or computed values.
 - The dashboard build reads the shared `LOGTO_ENDPOINT`, `LOGTO_APP_ID`, and `LOGTO_API_RESOURCE` values, and Vite exposes them as `VITE_*` values for browser code.
-- `LOGTO_POSTGRES_PASSWORD` is still defined in Dokploy's `Environment` tab, but the compose file now turns it into the runtime Docker secret `logto_postgres_password` for `logto-postgres` and `logto`.
+- `LOGTO_POSTGRES_PASSWORD` is defined in Dokploy's `Environment` tab. The compose file turns it into the runtime Docker secret `logto_postgres_password` for the database initialization job and Logto.
+- Logto has a dedicated `logto` database and role inside the shared PostgreSQL 18 / TimescaleDB instance. It does not use the application's `tsdb` database.
+- The `logto` role has `CREATEROLE`, but is not a superuser, because Logto creates an internal tenant role during schema seeding.
 
 ## 5. Domains in Dokploy
 
@@ -73,21 +75,90 @@ In Dokploy, add these domain mappings:
 2. Service `logto`, port `3001` -> `auth.example.com`
 3. Service `logto`, port `3002` -> `admin-auth.example.com`
 
-Do not expose `backend`, `qdrant`, `timescaledb`, or `logto-postgres` publicly.
+Do not expose `backend`, `qdrant`, or `timescaledb` publicly.
 
 ## 6. First Deployment Order
+
+If this Dokploy installation already has Logto users or configuration, create the
+dump described in **Migrating an existing Logto database** below before step 2.
 
 Use this order:
 
 1. Set `LOGTO_APP_ID=bootstrap-placeholder`.
 2. Deploy the Dokploy compose application.
-3. Wait until `logto` and `logto-postgres` are healthy.
-4. Open the Logto admin console at `https://admin-auth.example.com`.
-5. Create your first admin user.
-6. Create a Logto SPA application for the dashboard.
-7. Create a Logto API resource for the FastAPI backend.
-8. Replace `LOGTO_APP_ID` in Dokploy with the real Logto SPA app id.
-9. Redeploy the Dokploy application.
+3. Wait until `timescaledb` is healthy, `timescaledb-init` completes successfully, and `logto` starts.
+4. If you created an existing Logto dump, complete the restore procedure below.
+5. Open the Logto admin console at `https://admin-auth.example.com`.
+6. Create your first admin user only when this is a new Logto installation.
+7. Create or verify the Logto SPA application for the dashboard.
+8. Create or verify the Logto API resource for the FastAPI backend.
+9. Replace `LOGTO_APP_ID` in Dokploy with the real Logto SPA app id.
+10. Redeploy the Dokploy application.
+
+### Migrating an existing Logto database
+
+The previous stack used a separate PostgreSQL 18 container. Migrate it with a
+logical dump; do not copy its data directory into the TimescaleDB volume.
+
+Before deploying the new compose file, find the old database container and
+create a private dump on the server:
+
+```bash
+docker ps \
+  --filter label=com.docker.compose.service=logto-postgres \
+  --format '{{.Names}}'
+
+umask 077
+docker exec <old-logto-postgres-container> \
+  pg_dump -U logto -d logto -Fc --no-owner --no-privileges \
+  > logto-pg18.dump
+
+docker run --rm -v "$PWD:/backup:ro" postgres:18-alpine \
+  pg_restore --list /backup/logto-pg18.dump > /dev/null
+```
+
+Deploy the new compose file. Because TimescaleDB has not previously been
+deployed on this server, its `timescaledb-data` volume is initialized directly
+as PostgreSQL 18. The old `logto-postgres-data` volume is not deleted by a
+normal Dokploy redeploy.
+
+After deployment, find the new containers:
+
+```bash
+docker ps \
+  --filter label=com.docker.compose.service=timescaledb \
+  --format '{{.Names}}'
+docker ps \
+  --filter label=com.docker.compose.service=logto \
+  --format '{{.Names}}'
+```
+
+Stop Logto, replace the newly seeded empty `logto` database, and restore the
+dump. Replace the two container placeholders with the names returned above:
+
+```bash
+docker stop <logto-container>
+
+docker exec -i <timescaledb-container> \
+  sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres' <<'SQL'
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = 'logto' AND pid <> pg_backend_pid();
+DROP DATABASE IF EXISTS logto;
+CREATE DATABASE logto OWNER logto TEMPLATE template0;
+SQL
+
+docker exec -i <timescaledb-container> \
+  sh -c 'pg_restore --exit-on-error --no-owner --no-privileges --role=logto -U "$POSTGRES_USER" -d logto' \
+  < logto-pg18.dump
+
+docker start <logto-container>
+docker logs --tail 100 <logto-container>
+```
+
+Verify existing users, applications, roles, and a complete sign-in flow before
+removing the dump or the old `logto-postgres-data` volume. Never use
+`docker compose down -v` during this migration.
 
 ## 7. Logto Configuration
 
@@ -147,13 +218,11 @@ This deployment persists data in named Docker volumes:
 - `qdrant-data`
 - `timescaledb-data`
 - `logto-connectors`
-- `logto-postgres-data`
 
 Use Dokploy volume backup features for at least:
 
 - `qdrant-data`
 - `timescaledb-data`
-- `logto-postgres-data`
 - `backend-data`
 
 ## 11. What Is Public vs Internal
@@ -170,7 +239,6 @@ Internal only:
 - `qdrant`
 - `timescaledb`
 - `timescaledb-init`
-- `logto-postgres`
 
 TimescaleDB remains internal, used by the `backend` and init SQL over the PostgreSQL protocol. It is not exposed publicly.
 

@@ -16,6 +16,11 @@ services:
       QDRANT_HOST: qdrant
       QDRANT_META_PATH: /app/data/qdrant_meta
       GOOGLE_CLIENT_SECRET_FILE: ${GOOGLE_CLIENT_SECRET_FILE:-/app/secrets/client_secret.json}
+      PG_HOST: timescaledb
+      PG_PORT: 5432
+      PG_USER: ${PG_USER}
+      PG_PASSWORD: ${PG_PASSWORD}
+      PG_DB: ${PG_DB}
     volumes:
       - backend-data:/app/data
     depends_on:
@@ -23,6 +28,8 @@ services:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
+      timescaledb-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -104,18 +111,18 @@ services:
       - dokploy-network
 
   timescaledb:
-    image: timescale/timescaledb:2.21.3-pg17
+    image: timescale/timescaledb:2.28.3-pg18
     restart: unless-stopped
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       start_period: 30s
       interval: 10s
       timeout: 5s
       retries: 5
     volumes:
-      - timescaledb-data:/var/lib/postgresql/data
+      - timescaledb-data:/var/lib/postgresql
     environment:
       POSTGRES_USER: ${PG_USER}
       POSTGRES_PASSWORD: ${PG_PASSWORD}
@@ -124,7 +131,7 @@ services:
       - asm2-internal
 
   timescaledb-init:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     restart: "no"
     depends_on:
       timescaledb:
@@ -136,20 +143,24 @@ services:
       - .env
     working_dir: /init
     entrypoint: ["sh", "/init/init_tsdb.sh"]
+    environment:
+      LOGTO_POSTGRES_PASSWORD_FILE: /run/secrets/logto_postgres_password
+      PG_HOST: timescaledb
+      PG_PORT: 5432
+      PG_USER: ${PG_USER}
+      PG_PASSWORD: ${PG_PASSWORD}
+      PG_DB: ${PG_DB}
+    secrets:
+      - logto_postgres_password
     networks:
       - asm2-internal
 
   logto:
     image: ghcr.io/logto-io/logto:1.38.0
     depends_on:
-      logto-postgres:
-        condition: service_healthy
-    entrypoint:
-      [
-        "sh",
-        "-ec",
-        "export DB_URL=\"postgres://logto:$(cat /run/secrets/logto_postgres_password)@logto-postgres:5432/logto\" && npm run cli db seed -- --swe && npm start",
-      ]
+      timescaledb-init:
+        condition: service_completed_successfully
+    entrypoint: ["sh", "/init/start_logto.sh"]
     ports:
       - "3001"
       - "3002"
@@ -159,8 +170,10 @@ services:
       TRUST_PROXY_HEADER: 1
       ENDPOINT: ${LOGTO_ENDPOINT}
       ADMIN_ENDPOINT: ${LOGTO_ADMIN_ENDPOINT}
+      LOGTO_POSTGRES_PASSWORD_FILE: /run/secrets/logto_postgres_password
     volumes:
       - logto-connectors:/etc/logto/packages/core/connectors
+      - ./sql/start_logto.sh:/init/start_logto.sh:ro
     secrets:
       - logto_postgres_password
     restart: unless-stopped
@@ -168,34 +181,11 @@ services:
       - asm2-internal
       - dokploy-network
 
-  logto-postgres:
-    image: postgres:18-alpine
-    user: postgres
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: logto
-      POSTGRES_DB: logto
-      POSTGRES_PASSWORD_FILE: /run/secrets/logto_postgres_password
-    volumes:
-      - logto-postgres-data:/var/lib/postgresql
-    secrets:
-      - logto_postgres_password
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U logto -d logto"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - asm2-internal
-
 volumes:
   backend-data:
   qdrant-data:
   timescaledb-data:
   logto-connectors:
-  logto-postgres-data:
 
 secrets:
   hf_token:

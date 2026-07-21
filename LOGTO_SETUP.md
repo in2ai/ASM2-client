@@ -45,14 +45,16 @@ Relevant backend files:
 
 ## 2. Self-Hosted Docker Setup
 
-The repository includes a self-hosted Logto service and a dedicated PostgreSQL database in `docker-compose.yml`.
+The repository includes a self-hosted Logto service. Logto uses its own `logto`
+database and role inside the same PostgreSQL 18 / TimescaleDB instance used by
+the backend. Its tables are not stored in the application's `tsdb` database.
 
 Current container mapping:
 
 - host `3011` -> Logto main endpoint `3001`
 - host `3002` -> Logto admin console `3002`
 
-Required root `.env` values for the Logto containers:
+Required root `.env` values:
 
 ```env
 LOGTO_POSTGRES_PASSWORD=your_secure_password
@@ -63,8 +65,13 @@ LOGTO_ADMIN_ENDPOINT=http://localhost:3002
 Start the stack with:
 
 ```bash
-docker compose up -d logto logto-postgres
+docker compose up -d timescaledb timescaledb-init logto
 ```
+
+`timescaledb-init` creates the `logto` role and database when missing. Logto
+waits for that one-shot initialization service before applying its own schema.
+The role has PostgreSQL `CREATEROLE` because Logto creates and manages its
+internal tenant role during database seeding; it is not a superuser.
 
 Then open the admin console:
 
