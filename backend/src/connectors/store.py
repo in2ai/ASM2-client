@@ -7,7 +7,7 @@ import uuid
 import shutil
 import threading
 
-from treedex import TreeDex, OpenAILLM
+from treedex import TreeDex
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -17,6 +17,7 @@ from qdrant_client.http.models import Document as QDocument
 
 from src.config.env import get_bool_env, get_env, get_int_env
 from src.connectors.source import DataSource
+from src.connectors.llms import get_configured_long_context_llm
 from src.connectors.manifest import VDBManifest
 from src.connectors.vdb_file import VDBFile
 from src.utils.topic import assign_topics, extract_initial_topics
@@ -111,7 +112,7 @@ def build_vectordb_from_sources(llm, embeddings, sources: List[DataSource]):
     vectordb = None
 
     for name, files in grouped_files.items():
-        vectordb = build_vectorstore(embeddings, files, name)
+        vectordb = build_vectorstore(llm, embeddings, files, name)
 
     # Execute topic extraction
     extract_topics(llm, vectordb)
@@ -119,7 +120,7 @@ def build_vectordb_from_sources(llm, embeddings, sources: List[DataSource]):
     return vectordb
 
 
-def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=200):
+def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_size=200):
     # Read status manifest file
     manifest = VDBManifest(QDRANT_META_PATH)
 
@@ -345,9 +346,12 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         flush("final")
 
     if get_bool_env('LONG_CONTEXT'):
+        def generate_index(f):
+            return generate_treedex_index(llm, f)
+        
         # Generate long context
         with ThreadPoolExecutor() as executor:
-            list(executor.map(generate_treedex_index, files))
+            list(executor.map(generate_index, files))
 
     # Update status manifest
     manifest.add_completed_source(source)
@@ -358,12 +362,9 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
     )
     return vectorstore
 
-def generate_treedex_index(file: VDBFile):
+def generate_treedex_index(llm, file: VDBFile):
     try:
-        llm = OpenAILLM(
-            api_key=get_env('OPENAI_API_KEY'),
-            model=get_env('OPENAI_MODEL')
-        )
+        llm = get_configured_long_context_llm(llm)
 
         treedex_path = QDRANT_META_PATH + '/treedex'
         index_path = treedex_path + f'/{file.metadata["id"]}.json'

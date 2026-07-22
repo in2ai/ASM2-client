@@ -1,4 +1,6 @@
+from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
+from treedex import FunctionLLM
 
 from src.config.env import get_bool_env, get_env
 
@@ -47,3 +49,6 @@ def get_configured_llm():
     
     else:
         return get_openai_llm(get_env('OPENAI_MODEL', 'gpt-4o-mini'))
+
+def get_configured_long_context_llm(llm):
+        return FunctionLLM(lambda prompt: llm.invoke([HumanMessage(content=prompt)]).content)
