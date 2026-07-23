@@ -262,7 +262,7 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
             index_path = treedex_path + f'/{f}.json'
 
             if os.path.isfile(index_path):
-                os.delete(index_path)
+                os.remove(index_path)
 
     # Read file chunks in batches
     docs_batch, pending_ids, chunk_idxs = [], [], []
