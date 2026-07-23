@@ -58,26 +58,6 @@ load_root_env() {
   fi
 }
 
-load_amd_device_group_ids() {
-  local group_name group_id variable_name
-
-  for group_name in video render; do
-    variable_name="${group_name^^}_GID"
-    group_id="${!variable_name:-}"
-
-    if [ -z "$group_id" ]; then
-      group_id="$(getent group "$group_name" | awk -F: 'NR == 1 { print $3 }')"
-    fi
-
-    if [ -z "$group_id" ]; then
-      echo "ERROR: host group '$group_name' was not found; set $variable_name manually." >&2
-      exit 1
-    fi
-
-    export "$variable_name=$group_id"
-  done
-}
-
 ensure_gdrive_oauth_client_config() {
   if [ -f "./secrets/client_secret.json" ]; then
     return 0
@@ -92,7 +72,7 @@ ensure_gdrive_oauth_client_config() {
 
 action="up"
 mode="local"
-backend_accelerator="cpu"
+backend_gpu=0
 qdrant_accelerator="cpu"
 local_model=0
 ollama_accelerator="cpu"
@@ -119,30 +99,8 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --gpu)
-      if [ "$#" -ge 2 ]; then
-        case "$2" in
-          cpu|none)
-            backend_accelerator="cpu"
-            shift 2
-            ;;
-          nvidia|amd)
-            backend_accelerator="$2"
-            shift 2
-            ;;
-          --*|up|down|build|config|logs|ps)
-            # Preserve the original bare --gpu behavior.
-            backend_accelerator="nvidia"
-            shift
-            ;;
-          *)
-            echo "ERROR: --gpu requires one of: nvidia, amd" >&2
-            exit 1
-            ;;
-        esac
-      else
-        backend_accelerator="nvidia"
-        shift
-      fi
+      backend_gpu=1
+      shift
       ;;
     --local-model)
       local_model=1
@@ -215,15 +173,6 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
-
-case "$backend_accelerator" in
-  cpu|nvidia|amd)
-    ;;
-  *)
-    echo "ERROR: unsupported backend accelerator '$backend_accelerator'" >&2
-    exit 1
-    ;;
-esac
 
 case "$qdrant_accelerator" in
   cpu|nvidia|amd)
