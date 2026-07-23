@@ -373,6 +373,64 @@
       }
     }
   },
+  "IndexingAlerts": {
+    "open": "Abrir alertas e protección do indexado",
+    "openWithUnseen": "Abrir alertas e protección do indexado ({count} sen ler)",
+    "title": "Protección do indexado",
+    "description": "Configura o límite de borrado seguro e os avisos do navegador.",
+    "alertTitle": "Indexado detido por seguridade",
+    "alertDescription": "Detívose o indexado antes de eliminar {deleted} de {total} documentos ({percentage} %). O limiar configurado é {threshold} %.",
+    "alertsLoadFailed": "Non se puideron comprobar as alertas de indexado.",
+    "history": {
+      "title": "Alertas recentes",
+      "description": "Historial das veces que a protección detivo o indexado. Descartar unha alerta só a oculta para ti.",
+      "itemTitle": "Indexado detido · {source}",
+      "breakdownItem": "{source}: faltan {deleted} de {total} documentos",
+      "loading": "Cargando alertas…",
+      "empty": "Aínda non hai alertas. Aparecerán aquí cando a protección deteña o indexado.",
+      "dismissAll": "Descartar todas",
+      "dismissAllConfirmTitle": "Descartar todas as alertas?",
+      "dismissAllConfirmDescription": "As alertas desaparecerán da túa lista. O resto de managers e administradores seguirán véndoas.",
+      "dismissAllConfirm": "Descartar todas",
+      "dismissAllCancel": "Cancelar",
+      "dismiss": "Descartar alerta",
+      "dismissFailed": "Non se puido descartar a alerta.",
+      "dismissAllFailed": "Non se puideron descartar as alertas."
+    },
+    "config": {
+      "title": "Limiar de borrado",
+      "description": "A protección actívase ao gardar unha porcentaxe e detén o indexado cando os documentos que desaparecerían de Qdrant acadan ese valor.",
+      "label": "Limiar de bloqueo",
+      "help": "Introduce un valor entre 1 e 100. Sen un valor gardado, a protección permanece desactivada.",
+      "save": "Gardar limiar",
+      "validation": "Introduce unha porcentaxe válida entre 1 e 100.",
+      "saved": "Limiar de borrado actualizado.",
+      "saveFailed": "Non se puido gardar o limiar de borrado.",
+      "disable": "Desactivar protección",
+      "disableHelp": "Desactivar a protección elimina o limiar gardado; o indexado deixará de deterse por borrados.",
+      "disabled": "Protección de borrado desactivada.",
+      "disableFailed": "Non se puido desactivar a protección."
+    },
+    "override": {
+      "title": "Excepción puntual",
+      "description": "Se un borrado masivo é intencionado, permite que a próxima execución do indexado omita a protección unha soa vez. Despois reactívase automaticamente.",
+      "arm": "Permitir a próxima execución",
+      "pending": "A próxima execución do indexado omitirá a protección.",
+      "cancel": "Cancelar excepción",
+      "armed": "Excepción activada para a próxima execución do indexado.",
+      "cancelled": "Excepción puntual cancelada.",
+      "updateFailed": "Non se puido actualizar a excepción."
+    },
+    "browser": {
+      "title": "Notificacións do navegador",
+      "default": "Actívaas para recibir o aviso aínda que esta lapela estea en segundo plano.",
+      "granted": "As notificacións do navegador están activadas.",
+      "denied": "O navegador bloqueounas. Podes habilitalas nos permisos do sitio.",
+      "unsupported": "Este navegador non admite notificacións web.",
+      "enable": "Activar avisos",
+      "enabled": "Notificacións do navegador activadas."
+    }
+  },
   "SignInPage": {
     "description": "Inicia sesión para acceder ao dashboard de métricas",
     "signInButton": "Iniciar sesión"

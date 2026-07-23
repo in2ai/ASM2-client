@@ -373,6 +373,64 @@
       }
     }
   },
+  "IndexingAlerts": {
+    "open": "Open indexing alerts and protection",
+    "openWithUnseen": "Open indexing alerts and protection ({count} unread)",
+    "title": "Indexing protection",
+    "description": "Configure the safe deletion limit and browser alerts.",
+    "alertTitle": "Indexing stopped for safety",
+    "alertDescription": "Indexing stopped before deleting {deleted} of {total} documents ({percentage}%). The configured threshold is {threshold}%.",
+    "alertsLoadFailed": "Indexing alerts could not be checked.",
+    "history": {
+      "title": "Recent alerts",
+      "description": "History of the times indexing was stopped by the guard. Dismissing an alert hides it only for you.",
+      "itemTitle": "Indexing stopped · {source}",
+      "breakdownItem": "{source}: {deleted} of {total} documents missing",
+      "loading": "Loading alerts…",
+      "empty": "No alerts yet. They will appear here when the guard stops indexing.",
+      "dismissAll": "Dismiss all",
+      "dismissAllConfirmTitle": "Dismiss all alerts?",
+      "dismissAllConfirmDescription": "The alerts will disappear from your list. Other managers and administrators will keep seeing them.",
+      "dismissAllConfirm": "Dismiss all",
+      "dismissAllCancel": "Cancel",
+      "dismiss": "Dismiss alert",
+      "dismissFailed": "The alert could not be dismissed.",
+      "dismissAllFailed": "The alerts could not be dismissed."
+    },
+    "config": {
+      "title": "Deletion threshold",
+      "description": "The guard is enabled after saving a percentage and stops indexing when the documents that would disappear from Qdrant reach that value.",
+      "label": "Blocking threshold",
+      "help": "Enter a value from 1 to 100. Without a saved value, the guard remains disabled.",
+      "save": "Save threshold",
+      "validation": "Enter a valid percentage from 1 to 100.",
+      "saved": "Deletion threshold updated.",
+      "saveFailed": "The deletion threshold could not be saved.",
+      "disable": "Disable protection",
+      "disableHelp": "Disabling the protection removes the saved threshold; indexing will no longer be stopped by deletions.",
+      "disabled": "Deletion protection disabled.",
+      "disableFailed": "The protection could not be disabled."
+    },
+    "override": {
+      "title": "One-time override",
+      "description": "If a mass deletion is intentional, allow the next indexing run to skip the guard once. The protection re-arms automatically afterwards.",
+      "arm": "Allow next indexing run",
+      "pending": "The next indexing run will skip the deletion guard.",
+      "cancel": "Cancel override",
+      "armed": "Override enabled for the next indexing run.",
+      "cancelled": "One-time override cancelled.",
+      "updateFailed": "The override could not be updated."
+    },
+    "browser": {
+      "title": "Browser notifications",
+      "default": "Enable them to receive the warning while this tab is in the background.",
+      "granted": "Browser notifications are enabled.",
+      "denied": "The browser blocked notifications. You can enable them in the site permissions.",
+      "unsupported": "This browser does not support web notifications.",
+      "enable": "Enable alerts",
+      "enabled": "Browser notifications enabled."
+    }
+  },
   "SignInPage": {
     "description": "Sign in to access the metrics dashboard",
     "signInButton": "Sign in"

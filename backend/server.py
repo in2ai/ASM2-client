@@ -25,16 +25,26 @@ from src.config.auth import (
     set_selected_sources,
 )
 from src.config.logto_auth import AuthInfo, has_role
+from src.config.indexing import (
+    consume_deletion_guard_override,
+    create_indexing_alert,
+    dismiss_all_indexing_alerts,
+    dismiss_indexing_alert,
+    get_deletion_guard_config,
+    list_indexing_alerts,
+    set_deletion_guard_override,
+    set_deletion_threshold_percentage,
+)
 from src.connectors.source import DataSource
 from src.config.sources import SOURCES
 from src.connectors.store import (
-    QDRANT_COL,
     QDRANT_META_PATH,
     VDB_LOCK,
     build_vectordb_from_sources,
     get_vectordb,
 )
 from src.connectors.manifest import VDBManifest
+from src.indexing.deletion_guard import DeletionThresholdExceeded
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
@@ -244,7 +254,23 @@ def run_vdb_update_once() -> None:
             [source.name for source in sources],
         )
 
-        build_vectordb_from_sources(llm, embeddings, sources)
+        deletion_threshold_percentage = get_deletion_guard_config(pg_pool)[
+            "threshold_percentage"
+        ]
+        if deletion_threshold_percentage is not None and consume_deletion_guard_override(
+            pg_pool
+        ):
+            logging.warning(
+                "Deletion guard override consumed: this indexing run skips the guard"
+            )
+            deletion_threshold_percentage = None
+
+        build_vectordb_from_sources(
+            llm,
+            embeddings,
+            sources,
+            deletion_threshold_percentage=deletion_threshold_percentage,
+        )
 
         if initial_build_in_progress:
             manifest = VDBManifest(QDRANT_META_PATH)
@@ -254,6 +280,27 @@ def run_vdb_update_once() -> None:
         elapsed = time.time() - start_time
 
         logging.info(f"VDB update job finished in {elapsed} seconds")
+
+    except DeletionThresholdExceeded as exc:
+        try:
+            os.remove(VDB_LOCK)
+        except FileNotFoundError:
+            pass
+
+        try:
+            create_indexing_alert(app.state.pg_pool, exc.impact)
+        except Exception:
+            logging.exception("Unable to persist indexing deletion alert")
+
+        logging.warning(
+            "VDB indexing stopped by deletion guard for source %s: "
+            "%s of %s documents (%.2f%%, threshold %.2f%%)",
+            exc.impact.source,
+            exc.impact.deleted_documents,
+            exc.impact.total_documents,
+            exc.impact.percentage,
+            exc.impact.threshold_percentage,
+        )
 
     except Exception:
         logging.exception("VDB update job failed")
@@ -319,6 +366,76 @@ async def stop_vdb_update(auth: AdminAuth):
 @app.get("/vdb-update-status", status_code=200)
 async def is_vdb_update_active(auth: AdminAuth):
     return {"active": os.path.isfile(VDB_LOCK)}
+
+
+@app.get(
+    "/indexing/deletion-guard",
+    response_model=DeletionGuardConfigModel,
+    status_code=200,
+)
+async def get_indexing_deletion_guard(auth: IndexingManagementAuth):
+    return get_deletion_guard_config(app.state.pg_pool)
+
+
+@app.put(
+    "/indexing/deletion-guard",
+    response_model=DeletionGuardConfigModel,
+    status_code=200,
+)
+async def update_indexing_deletion_guard(
+    auth: IndexingManagementAuth,
+    body: DeletionGuardUpdateModel,
+):
+    return set_deletion_threshold_percentage(
+        app.state.pg_pool,
+        body.threshold_percentage,
+    )
+
+
+@app.put(
+    "/indexing/deletion-guard/override",
+    response_model=DeletionGuardConfigModel,
+    status_code=200,
+)
+async def update_indexing_deletion_guard_override(
+    auth: IndexingManagementAuth,
+    body: DeletionGuardOverrideModel,
+):
+    if body.override_pending:
+        config = get_deletion_guard_config(app.state.pg_pool)
+        if config["threshold_percentage"] is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Deletion guard is not configured",
+            )
+
+    return set_deletion_guard_override(app.state.pg_pool, body.override_pending)
+
+
+@app.get(
+    "/indexing/alerts",
+    response_model=list[IndexingAlertModel],
+    status_code=200,
+)
+async def get_indexing_alerts(
+    auth: IndexingManagementAuth,
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    return list_indexing_alerts(app.state.pg_pool, auth.sub, limit=limit)
+
+
+@app.delete("/indexing/alerts", status_code=204)
+async def clear_indexing_alerts(auth: IndexingManagementAuth):
+    dismiss_all_indexing_alerts(app.state.pg_pool, auth.sub)
+
+
+@app.delete("/indexing/alerts/{alert_id}", status_code=204)
+async def remove_indexing_alert(
+    auth: IndexingManagementAuth,
+    alert_id: int,
+):
+    if not dismiss_indexing_alert(app.state.pg_pool, auth.sub, alert_id):
+        raise HTTPException(status_code=404, detail="Indexing alert not found")
 
 
 @app.get("/sources/login-info", response_model=SourceLoginInfoModel, status_code=200)

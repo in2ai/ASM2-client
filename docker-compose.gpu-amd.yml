@@ -1,0 +1,19 @@
+# AMD ROCm GPU override configuration for the backend service.
+# Usage:
+#   - Base stack only: docker compose -f docker-compose.yml -f docker-compose.gpu-amd.yml up
+#   - Local infra: docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.gpu-amd.yml up
+#   - Helper script: ./run.sh up --gpu amd
+services:
+  backend:
+    build:
+      dockerfile: Dockerfile.rocm
+      args:
+        ROCM_PYTORCH_IMAGE: ${ROCM_PYTORCH_IMAGE:-rocm/pytorch:rocm7.2.4_ubuntu22.04_py3.10_pytorch_release_2.9.1}
+    image: asm2-backend:rocm
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - ${VIDEO_GID:?VIDEO_GID must be set to the host video group ID}
+      - ${RENDER_GID:?RENDER_GID must be set to the host render group ID}
+    shm_size: 8gb

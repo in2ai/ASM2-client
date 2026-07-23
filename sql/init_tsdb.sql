@@ -107,3 +107,38 @@ CREATE INDEX IF NOT EXISTS idx_credentials_user_source_issued
     ON credentials (user_id, source, issued_at DESC);
 CREATE INDEX IF NOT EXISTS idx_source_preferences_user_updated
     ON source_preferences (user_id, updated_at DESC);
+
+-- Global indexing deletion guard and persistent alerts for managers/admins
+
+CREATE TABLE IF NOT EXISTS indexing_deletion_guard (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    threshold_percentage DOUBLE PRECISION
+        CHECK (threshold_percentage >= 1 AND threshold_percentage <= 100),
+    override_pending BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+INSERT INTO indexing_deletion_guard (
+    id
+)
+VALUES (1)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS indexing_alerts (
+    id BIGSERIAL PRIMARY KEY,
+    source TEXT NOT NULL,
+    deleted_documents INTEGER NOT NULL CHECK (deleted_documents > 0),
+    total_documents INTEGER NOT NULL CHECK (total_documents > 0),
+    percentage DOUBLE PRECISION NOT NULL CHECK (percentage > 0 AND percentage <= 100),
+    threshold_percentage DOUBLE PRECISION NOT NULL
+        CHECK (threshold_percentage >= 1 AND threshold_percentage <= 100),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source_breakdown JSONB
+);
+
+-- Alerts are dismissed per user instead of deleted globally.
+CREATE TABLE IF NOT EXISTS indexing_alert_dismissals (
+    user_id TEXT NOT NULL,
+    alert_id BIGINT NOT NULL REFERENCES indexing_alerts(id) ON DELETE CASCADE,
+    dismissed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, alert_id)
+);
