@@ -57,9 +57,18 @@ Estas son las variables que cambian el comportamiento del benchmark. Todas viven
 | `BENCHMARK_SOURCES` | Lista de fuentes a evaluar: `["squad2.0"]`, `["narrativeqa"]`, ambas, o `[]` = **todas las presentes en el CSV**. Se valida contra las fuentes que existen en el dataset (lanza error si hay alguna desconocida). Además determina el sufijo con el que se nombran los ficheros de salida. |
 | `NUM_EVALUATIONS` | Número de intentos completos del benchmark. Cada intento genera sus propios ficheros de salida; útil para medir la varianza entre ejecuciones. |
 | `BATCH_SIZE` | Preguntas procesadas en paralelo por lote. |
-| `MAX_RETRIES` | Máximo de reintentos por pregunta ante un error, con backoff exponencial limitado a 30 s. |
-| `EVAL_LLM` | El LLM **juez** que calcula las métricas. Por defecto `Llama-3.3-70B-Instruct-Turbo` de Together. |
-| `EVAL_EMBEDDINGS` | Modelo de embeddings que usa `answer_relevancy` (OpenAI `text-embedding-3-small`). |
+| `MAX_RETRIES` | Máximo de reintentos con backoff exponencial, tanto por pregunta completa (backoff limitado a 30 s) como por cada métrica individual de RAGAS (backoff limitado a 8 s). |
+| `EVAL_LLM_PROVIDER` | Proveedor del LLM **juez** que calcula las métricas: `"openai"` o `"together"`. Por defecto `"openai"`. Basta con cambiar esta línea para alternar entre ambos. |
+| `EVAL_LLM_CONFIG` | Configuración (`model`, `base_url`, `api_key`) de cada proveedor. El cliente se crea **por hilo de trabajo** dentro de `_build_thread_metrics`, no de forma global. |
+| `EVAL_LLM_MAX_TOKENS` | Máximo de tokens de salida del LLM juez. |
+| `EVAL_EMBEDDINGS_MODEL` | Modelo de embeddings que usa `answer_relevancy`. **Siempre se ejecuta en OpenAI** (`text-embedding-3-small`), independientemente del `EVAL_LLM_PROVIDER` elegido. |
+
+> **Nota sobre proveedores y credenciales.** El selector `EVAL_LLM_PROVIDER` solo cambia el
+> **LLM juez**. Los embeddings de `answer_relevancy` corren siempre en OpenAI, así que necesitas
+> una `OPENAI_API_KEY` válida incluso si eliges `"together"` (que además requiere
+> `TOGETHER_API_KEY`). Cada hilo de trabajo crea su propio cliente y su propio event loop; esto
+> mantiene las métricas ejecutándose en paralelo y evita errores de reutilización de conexiones
+> entre event loops.
 
 ---
 

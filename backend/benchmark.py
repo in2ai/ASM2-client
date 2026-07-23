@@ -4,10 +4,10 @@ import csv
 import json
 import os
 from pathlib import Path
+import threading
 import time
 import traceback
 from typing import Any
-from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -19,22 +19,15 @@ from ragas.llms.base import llm_factory
 from ragas.metrics.collections import ContextPrecision, ContextRecall, AnswerRelevancy, Faithfulness
 from ragas.metrics.collections.answer_relevancy.util import AnswerRelevanceInput, AnswerRelevanceOutput
 from ragas.metrics.result import MetricResult
-from psycopg_pool import ConnectionPool
-from langgraph.checkpoint.postgres import PostgresSaver
-from langgraph.store.postgres import PostgresStore
+from langgraph.checkpoint.memory import MemorySaver
 
-from graph.agent import build_graph, get_checkpointer, get_store
+from graph.agent import build_graph
 from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
 from src.connectors.llms import get_configured_llm
 from src.connectors.store import get_vectordb
 
 from src.metrics.connection import (
-    PG_DB,
-    PG_HOST,
-    PG_PASSWORD,
-    PG_PORT,
-    PG_USER,
     get_pg_pool,
 )
 from src.utils.nlp import init_nlp
@@ -48,16 +41,6 @@ init_nlp()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 
-CLIENT_OPENAI = openai.AsyncOpenAI(
-    api_key=OPENAI_API_KEY,
-    timeout=60.0,
-)
-CLIENT_TOGETHER = openai.AsyncOpenAI(
-    base_url="https://api.together.xyz/v1",
-    api_key=TOGETHER_API_KEY,
-    timeout=60.0,
-)
-
 async def lifespan():
     # Global shared data
     llm = get_configured_llm()
@@ -66,25 +49,9 @@ async def lifespan():
     reranker = get_reranker()
     pg_pool = get_pg_pool()
 
-    DATABASE_URL = (
-        f"postgresql://{quote_plus(PG_USER)}:{quote_plus(PG_PASSWORD)}"
-        f"@{PG_HOST}:{PG_PORT}/{PG_DB}"
-    )
-    sync_pg_pool = ConnectionPool(
-        DATABASE_URL,
-        open=False,
-        kwargs={"autocommit": True, "prepare_threshold": 0},
-    )
-    sync_pg_pool.open()
+    graph_working_memory_saver = MemorySaver()
+    graph = build_graph(checkpointer=graph_working_memory_saver)
 
-    graph_working_memory_saver = PostgresSaver(sync_pg_pool)
-    graph_store_memory_saver = PostgresStore(sync_pg_pool)
-    graph_working_memory_saver.setup()
-    graph_store_memory_saver.setup()
-    graph = build_graph(
-        checkpointer=graph_working_memory_saver,
-        store=graph_store_memory_saver)
-    
     return llm, llm_with_tools, vectorstore, reranker, pg_pool, graph
 
 LLM, LLM_WITH_TOOLS, VDB, RERANKER, PG_POOL, GRAPH = asyncio.run(lifespan())
@@ -98,19 +65,21 @@ SUMMARY_CSV_PATH = Path("/app/benchmark/results/rag_evaluation_summary.csv")
 
 BENCHMARK_SOURCES: list[str] = ["squad2.0"] # narrativeqa, squad2.0
 
-EVAL_LLM = llm_factory(
-    "gpt-4o-mini",
-    client=CLIENT_OPENAI,
-    max_tokens=4096,
-)
-
-# EVAL_LLM = llm_factory(
-#     "gpt-4o-mini",
-#     client=CLIENT_OPENAI,
-#     max_tokens=4096,
-# )
-
-EVAL_EMBEDDINGS = embedding_factory("openai", model="text-embedding-3-small", client=CLIENT_OPENAI)
+EVAL_LLM_PROVIDER = "openai" # Evaluation LLM provider: "openai" or "together"
+EVAL_LLM_CONFIG = {
+    "openai": {
+        "model": "gpt-4o-mini",
+        "base_url": None,
+        "api_key": OPENAI_API_KEY,
+    },
+    "together": {
+        "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "base_url": "https://api.together.xyz/v1",
+        "api_key": TOGETHER_API_KEY,
+    },
+}
+EVAL_LLM_MAX_TOKENS = 4096
+EVAL_EMBEDDINGS_MODEL = "text-embedding-3-small"
 
 NUM_EVALUATIONS = 1
 MAX_RETRIES = 50
@@ -175,16 +144,54 @@ class AnswerRelevancyWithFlag(AnswerRelevancy):
         return r
 
 
-METRICS = {
-    "context_precision": ContextPrecision(llm=EVAL_LLM),
-    "context_recall": ContextRecall(llm=EVAL_LLM),
-    "answer_relevancy": AnswerRelevancyWithFlag(
-        llm=EVAL_LLM,
-        embeddings=EVAL_EMBEDDINGS,
-        strictness=3,
-    ),
-    "faithfulness": Faithfulness(llm=EVAL_LLM),
-}
+_thread_local = threading.local()
+
+
+def _build_thread_metrics() -> dict[str, Any]:
+    """Build a metrics dict backed by a per-thread OpenAI client.
+
+    Each worker thread gets its own client so its connection pool is only ever
+    used on that thread's own event loop.
+    """
+    cfg = EVAL_LLM_CONFIG[EVAL_LLM_PROVIDER]
+    llm_client = openai.AsyncOpenAI(
+        api_key=cfg["api_key"],
+        base_url=cfg["base_url"],
+        timeout=60.0,
+    )
+    eval_llm = llm_factory(cfg["model"], client=llm_client, max_tokens=EVAL_LLM_MAX_TOKENS)
+
+    emb_client = (
+        llm_client
+        if EVAL_LLM_PROVIDER == "openai"
+        else openai.AsyncOpenAI(api_key=OPENAI_API_KEY, timeout=60.0)
+    )
+    eval_embeddings = embedding_factory("openai", model=EVAL_EMBEDDINGS_MODEL, client=emb_client)
+    return {
+        "context_precision": ContextPrecision(llm=eval_llm),
+        "context_recall": ContextRecall(llm=eval_llm),
+        "answer_relevancy": AnswerRelevancyWithFlag(
+            llm=eval_llm,
+            embeddings=eval_embeddings,
+            strictness=3,
+        ),
+        "faithfulness": Faithfulness(llm=eval_llm),
+    }
+
+
+def _get_thread_eval_ctx() -> tuple[Any, dict[str, Any]]:
+    """Return the current worker thread's (event loop, metrics), creating them once.
+
+    The loop and client are created lazily per thread and reused across all
+    metric calls made by that thread.
+    """
+    ctx = getattr(_thread_local, "eval_ctx", None)
+    if ctx is None:
+        loop = asyncio.new_event_loop()
+        metrics = _build_thread_metrics()
+        ctx = (loop, metrics)
+        _thread_local.eval_ctx = ctx
+    return ctx
 
 
 def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> tuple[bool, Any | None]:
@@ -274,41 +281,41 @@ def eval_dataset(
     print(f"[BENCHMARK][eval_id={eval_id}] Evaluating all metrics in parallel...")
 
     def run_metric(args):
-        """Run one metric with up to 3 retries; return (name, result) or (name, exception)."""
-        name, fn, kwargs = args
+        """Run one metric with retries and backoff; return (name, result) or (name, exception)."""
+        name, kwargs = args
 
-        for attempt in range(3):
+        for attempt in range(MAX_RETRIES):
             try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                return name, fn(**kwargs)
+                loop, metrics = _get_thread_eval_ctx()
+                return name, loop.run_until_complete(metrics[name].ascore(**kwargs))
 
             except Exception as e:
-                if attempt == 2:
+                if attempt == MAX_RETRIES - 1:
                     return name, e
-
-            finally:
-                loop.close()
+                
+                backoff = min(2 ** attempt, 8)
+                print(
+                    f"[BENCHMARK][eval_id={eval_id}][run_metric] metric={name} attempt {attempt + 1}/{MAX_RETRIES} "
+                    f"failed ({type(e).__name__}); retrying in {backoff}s"
+                )
+                time.sleep(backoff)
 
     tasks = [
-        ("answer_relevancy", METRICS["answer_relevancy"].score, {"user_input": query, "response": answer}),
+        ("answer_relevancy", {"user_input": query, "response": answer}),
     ]
 
     if relevant_docs:
         tasks += [
             (
                 "context_precision",
-                METRICS["context_precision"].score,
                 {"user_input": query, "retrieved_contexts": relevant_docs, "reference": reference_answer},
             ),
             (
                 "context_recall",
-                METRICS["context_recall"].score,
                 {"user_input": query, "retrieved_contexts": relevant_docs, "reference": reference_answer},
             ),
             (
                 "faithfulness",
-                METRICS["faithfulness"].score,
                 {"user_input": query, "response": answer, "retrieved_contexts": relevant_docs},
             ),
         ]
