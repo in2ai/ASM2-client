@@ -1,0 +1,87 @@
+# syntax=docker/dockerfile:1
+
+ARG ROCM_PYTORCH_IMAGE=rocm/pytorch:rocm7.2.4_ubuntu22.04_py3.10_pytorch_release_2.9.1
+FROM ${ROCM_PYTORCH_IMAGE}
+
+ARG USE_LOCAL_EMB=false
+ARG LOCAL_EMB_REPO=""
+ARG USE_LOCAL_MODEL=false
+ARG LOCAL_MODEL_REPO=""
+ARG LOCAL_MODEL_FILE=""
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    SENTENCE_TRANSFORMERS_HOME=/app/models \
+    HF_HOME=/app/models \
+    STANZA_RESOURCES_DIR=/app/models/stanza \
+    NLTK_DATA=/app/models/nltk \
+    LANG=es_ES.UTF-8 \
+    LANGUAGE=es_ES:es \
+    LC_ALL=es_ES.UTF-8 \
+    TZ=Europe/Madrid \
+    PATH=/opt/venv/bin:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    locales \
+    && sed -i 's/^# *\(es_ES.UTF-8 UTF-8\)/\1/' /etc/locale.gen \
+    && locale-gen es_ES.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /uvx /bin/
+COPY pyproject.toml uv.lock ./
+
+# The AMD base image contains a ROCm-tested PyTorch build. Install the rest of
+# the locked environment without replacing it with the CUDA build in uv.lock.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    python3 -m venv --system-site-packages /opt/venv \
+    && uv export --frozen --no-dev --no-editable --no-hashes --output-file /tmp/requirements-all.txt \
+    && grep -Ev '^(cuda-|nvidia-|pytorch-triton-rocm|torch|triton|triton-rocm)([= @<>!~;]|$)' /tmp/requirements-all.txt > /tmp/requirements-rocm.txt \
+    && uv pip install --python /opt/venv/bin/python --no-deps --requirement /tmp/requirements-rocm.txt \
+    && /opt/venv/bin/python -c "import torch; assert torch.version.hip, 'The base image does not provide ROCm PyTorch'" \
+    && rm -f /tmp/requirements-all.txt /tmp/requirements-rocm.txt
+
+RUN --mount=type=secret,id=hf_token,env=HF_TOKEN \
+    mkdir -p /app/data /app/models/stanza /app/models/nltk /app/qdrant_index /app/secrets \
+    && /opt/venv/bin/python -c "import stanza; \
+stanza.download('es', package='ancora', processors='tokenize,mwt,pos,lemma'); \
+stanza.download('en', processors='tokenize,mwt,pos,lemma'); \
+stanza.download('gl', package='ctg', processors='tokenize,mwt,pos,lemma')" \
+    && /opt/venv/bin/python -c "import os, nltk; nltk.download('stopwords', download_dir=os.environ['NLTK_DATA'])" \
+    && /opt/venv/bin/python -c "from huggingface_hub import hf_hub_download; \
+hf_hub_download(repo_id='cis-lmu/glotlid', filename='model.bin')" \
+    && /opt/venv/bin/python -c "from sentence_transformers import CrossEncoder; \
+CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')"
+
+RUN if [ "$USE_LOCAL_EMB" = "true" ]; then \
+      /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('$LOCAL_EMB_REPO')"; \
+    fi
+
+RUN if [ "$USE_LOCAL_MODEL" = "true" ]; then \
+      /opt/venv/bin/python -c "from huggingface_hub import hf_hub_download; \
+hf_hub_download(repo_id='$LOCAL_MODEL_REPO', filename='$LOCAL_MODEL_FILE', local_dir='/app/models', local_dir_use_symlinks=False)" \
+      && chmod -R 755 /app/models; \
+    fi
+
+COPY server.py server.py
+COPY benchmark.py benchmark.py
+COPY src src
+COPY graph graph
+
+RUN groupadd --system --gid 10001 appuser \
+    && useradd --system --uid 10001 --gid appuser --create-home --home-dir /home/appuser appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
+    CMD curl -fsS http://127.0.0.1:8001/healthz || exit 1
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -1,6 +1,7 @@
 import { UserMenu } from "@/app/_components/app-layout";
 import { AreaSwitcher } from "@/app/_components/area-switcher";
 import { Button } from "@/components/ui/button";
+import { IndexingAlertCenter } from "@/features/indexing-alerts/indexing-alert-center";
 import type { LogtoUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Menu, MessageSquareText, X } from "lucide-react";
@@ -85,6 +86,7 @@ export function ChatShell({
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {headerActions}
+            <IndexingAlertCenter user={user} />
             <AreaSwitcher activeArea="chat" user={user} />
             {user.role === "admin" ? (
               <div className="bg-border mx-1 hidden h-6 w-px sm:block" />

@@ -7,6 +7,7 @@ import { LogtoProvider } from '@logto/react'
 import { I18nProvider } from '@/i18n/provider'
 import { logtoConfig } from '@/lib/logto'
 import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routeTree } from './routeTree.gen'
 
@@ -36,6 +37,7 @@ if (!rootElement.innerHTML) {
             <TooltipProvider>
               <I18nProvider>
                 <RouterProvider router={router} />
+                <Toaster />
               </I18nProvider>
             </TooltipProvider>
           </ThemeProvider>
