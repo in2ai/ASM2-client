@@ -79,6 +79,12 @@ ensure_gdrive_oauth_client_config() {
   exit 1
 }
 
+ensure_bench_results_writable() {
+  local dir="benchmark/results"
+  mkdir -p "$dir"
+  chmod 0777 "$dir"
+}
+
 action="up"
 mode="local"
 backend_accelerator="cpu"
@@ -188,6 +194,9 @@ fi
 if [ "$action" = "up" ]; then
   load_root_env
   ensure_gdrive_oauth_client_config
+  if [ "$mode" = "bench" ]; then
+    ensure_bench_results_writable
+  fi
 fi
 
 compose_args=()
