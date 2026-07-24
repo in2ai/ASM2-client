@@ -38,11 +38,10 @@ Common flags:
 Examples:
   ./run.sh up
   ./run.sh up --remote
-  ./run.sh up --gpu --qdrant nvidia
-  ./run.sh up --gpu amd --qdrant amd
-  ./run.sh up --remote --gpu nvidia
+  ./run.sh up --gpu nvidia --qdrant nvidia
+  ./run.sh up --remote --gpu amd
   ./run.sh up --local-model amd
-  ./run.sh up --gpu --local-model nvidia
+  ./run.sh up --gpu amd --local-model amd
   ./run.sh up --local-model amd --qdrant amd
   ./run.sh config --gpu amd
   ./run.sh up --bench
@@ -56,6 +55,26 @@ load_root_env() {
     . ./.env
     set +a
   fi
+}
+
+load_amd_device_group_ids() {
+  local group_name group_id variable_name
+
+  for group_name in video render; do
+    variable_name="${group_name^^}_GID"
+    group_id="${!variable_name:-}"
+
+    if [ -z "$group_id" ]; then
+      group_id="$(getent group "$group_name" | awk -F: 'NR == 1 { print $3 }')"
+    fi
+
+    if [ -z "$group_id" ]; then
+      echo "ERROR: host group '$group_name' was not found; set $variable_name manually." >&2
+      exit 1
+    fi
+
+    export "$variable_name=$group_id"
+  done
 }
 
 ensure_gdrive_oauth_client_config() {
@@ -72,7 +91,7 @@ ensure_gdrive_oauth_client_config() {
 
 action="up"
 mode="local"
-backend_gpu=0
+backend_accelerator="cpu"
 qdrant_accelerator="cpu"
 local_model=0
 ollama_accelerator="cpu"
@@ -99,8 +118,49 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     --gpu)
-      backend_gpu=1
-      shift
+      if [ "$#" -ge 2 ]; then
+        case "$2" in
+          cpu|none)
+            backend_accelerator="cpu"
+            shift 2
+            ;;
+          nvidia|amd)
+            backend_accelerator="$2"
+            shift 2
+            ;;
+          --*|up|down|build|config|logs|ps)
+            backend_accelerator="nvidia"
+            shift
+            ;;
+          *)
+            echo "ERROR: --gpu accepts one of: nvidia, amd" >&2
+            exit 1
+            ;;
+        esac
+      else
+        backend_accelerator="nvidia"
+        shift
+      fi
+      ;;
+    --local-model)
+      local_model=1
+      if [ "$#" -ge 2 ]; then
+        case "$2" in
+          cpu|nvidia|amd)
+            ollama_accelerator="$2"
+            shift 2
+            ;;
+          --*)
+            shift
+            ;;
+          *)
+            echo "ERROR: --local-model accepts one of: cpu, nvidia, amd" >&2
+            exit 1
+            ;;
+        esac
+      else
+        shift
+      fi
       ;;
     --local-model)
       local_model=1
@@ -174,6 +234,15 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+case "$backend_accelerator" in
+  cpu|nvidia|amd)
+    ;;
+  *)
+    echo "ERROR: unsupported backend accelerator '$backend_accelerator'" >&2
+    exit 1
+    ;;
+esac
+
 case "$qdrant_accelerator" in
   cpu|nvidia|amd)
     ;;
@@ -199,6 +268,10 @@ esac
 if [ "$action" = "up" ]; then
   load_root_env
   ensure_gdrive_oauth_client_config
+fi
+
+if [ "$backend_accelerator" = "amd" ] || [ "$qdrant_accelerator" = "amd" ]; then
+  load_amd_device_group_ids
 fi
 
 compose_args=()
