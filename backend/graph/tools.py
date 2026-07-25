@@ -2,13 +2,14 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import os
 
-from treedex import TreeDex, OpenAILLM
+from treedex import TreeDex
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from src.config.env import get_env, get_bool_env
 from src.connectors.store import QDRANT_META_PATH
 from src.connectors.search import augment_chunks
+from src.connectors.llms import get_configured_long_context_llm
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
@@ -66,10 +67,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     long_context = []
 
     if USE_LONG_CONTEXT:
-        llm = OpenAILLM(
-            api_key=get_env('OPENAI_API_KEY'),
-            model=get_env('OPENAI_MODEL')
-        )
+        llm = get_configured_long_context_llm(llm)
 
         for source in long_context_sources:
             treedex_path = QDRANT_META_PATH + f'/treedex/{source["id"]}.json'
