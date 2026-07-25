@@ -162,46 +162,6 @@ while [ "$#" -gt 0 ]; do
         shift
       fi
       ;;
-    --local-model)
-      local_model=1
-      if [ "$#" -ge 2 ]; then
-        case "$2" in
-          cpu|nvidia|amd)
-            ollama_accelerator="$2"
-            shift 2
-            ;;
-          --*)
-            shift
-            ;;
-          *)
-            echo "ERROR: --local-model accepts one of: cpu, nvidia, amd" >&2
-            exit 1
-            ;;
-        esac
-      else
-        shift
-      fi
-      ;;
-    --local-model)
-      local_model=1
-      if [ "$#" -ge 2 ]; then
-        case "$2" in
-          cpu|nvidia|amd)
-            ollama_accelerator="$2"
-            shift 2
-            ;;
-          --*)
-            shift
-            ;;
-          *)
-            echo "ERROR: --local-model accepts one of: cpu, nvidia, amd" >&2
-            exit 1
-            ;;
-        esac
-      else
-        shift
-      fi
-      ;;
     --qdrant)
       if [ "$#" -lt 2 ]; then
         echo "ERROR: --qdrant requires one of: cpu, nvidia, amd" >&2
@@ -252,10 +212,6 @@ case "$qdrant_accelerator" in
     ;;
 esac
 
-if [ "$backend_accelerator" = "amd" ] || [ "$qdrant_accelerator" = "amd" ]; then
-  load_amd_device_group_ids
-fi
-
 case "$ollama_accelerator" in
   cpu|nvidia|amd)
     ;;
@@ -297,10 +253,6 @@ if [ "$local_model" -eq 1 ]; then
       compose_args+=(-f docker-compose.ollama-amd.yml)
       ;;
   esac
-fi
-
-if [ "$local_model" -eq 1 ]; then
-  compose_args+=(-f docker-compose.ollama.yml)
 fi
 
 case "$backend_accelerator" in
