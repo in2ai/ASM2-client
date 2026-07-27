@@ -109,6 +109,15 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
 
     logging.info('Generating similarity graph...')
 
+    # Total number of points in the collection
+    total_points = vdb.client.count(
+        collection_name=vdb.collection_name,
+        exact=True,
+    ).count
+
+    processed = 0
+    next_log = 1  # Next percentage to log
+
     while True:
         batch, offset = vdb.client.scroll(
             collection_name=vdb.collection_name,
@@ -149,8 +158,18 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
 
                 edges.append((point.id, n.id))
 
+        # Log progress
+        processed += len(batch)
+        progress = (processed * 100) // total_points
+
+        while progress >= next_log:
+            logging.info("Similarity graph progress: %d%% (%d/%d)", next_log, processed, total_points)
+            next_log += 1
+
         if offset is None:
             break
+
+    logging.info("Similarity graph progress: 100%% (%d/%d)", processed, total_points)
 
     # Construct graph
     num_vectors = vdb.client.count(vdb.collection_name).count
