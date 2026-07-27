@@ -116,19 +116,28 @@ def process_lock(lock_path: str):
             pass
 
 
-def periodic_task(job_func, interval: int):
+def periodic_task(job_func, interval: int, lock_name: str="", execute_once: bool=False):
     import time
     import hashlib
 
-    # Generate a deterministic lock file across workers
-    ident = f"{job_func.__module__}.{job_func.__qualname__}"
-    digest = hashlib.sha256(ident.encode()).hexdigest()[:16]
-    lock_path = f"/tmp/periodic-{digest}.lock"
+    if lock_name:
+        # Use shared lock name
+        lock_path = f"/tmp/periodic-{lock_name}.lock"
+
+    else:
+        # Generate a deterministic lock file across workers
+        ident = f"{job_func.__module__}.{job_func.__qualname__}"
+        digest = hashlib.sha256(ident.encode()).hexdigest()[:16]
+        lock_path = f"/tmp/periodic-{digest}.lock"
 
     # Execution loop (use asyncio)
     while True:
         with process_lock(lock_path) as locked:
             if locked:
                 job_func()
+
+                # Exit if the job only needed to execute once
+                if execute_once:
+                    return
 
             time.sleep(interval)
