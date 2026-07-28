@@ -101,9 +101,11 @@ def join_contiguous_chunks(docs):
         result.append(content[overlap:])
         last_end = start + len(content)
 
+    chunk_idx = min(PREV_CHUNKS, len(docs) - 1)
+
     return Document(
         page_content="".join(result),
-        metadata=docs[PREV_CHUNKS].metadata # Take central chunk
+        metadata=docs[chunk_idx].metadata # Take central chunk
     )
 
 
