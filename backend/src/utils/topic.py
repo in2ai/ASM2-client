@@ -3,6 +3,8 @@ import random
 import json
 import logging
 import os
+import time
+from datetime import timedelta
 from typing import Iterable
 
 from langchain_openai import ChatOpenAI
@@ -115,6 +117,7 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
         exact=True,
     ).count
 
+    start_time = time.monotonic()
     processed = 0
     next_log = 1  # Next percentage to log
 
@@ -160,10 +163,27 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
 
         # Log progress
         processed += len(batch)
-        progress = (processed * 100) // total_points
 
-        while progress >= next_log:
-            logging.info("Similarity graph progress: %d%% (%d/%d)", next_log, processed, total_points)
+        progress = processed / total_points if total_points else 1.0
+        elapsed = time.monotonic() - start_time
+
+        if processed > 0:
+            avg_time_per_point = elapsed / processed
+            remaining = total_points - processed
+            eta = timedelta(seconds=int(remaining * avg_time_per_point))
+        else:
+            eta = timedelta(0)
+
+        progress_pct = int(progress * 100)
+
+        while progress_pct >= next_log:
+            logging.info(
+                "Similarity graph progress: %d%% (%d/%d, ETA %s)",
+                next_log,
+                processed,
+                total_points,
+                eta,
+            )
             next_log += 1
 
         if offset is None:

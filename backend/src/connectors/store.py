@@ -1,11 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
-import hashlib
 import logging
 import os
 from typing import List
 import uuid
-import shutil
+import time
 import threading
+from datetime import timedelta
 
 from treedex import TreeDex
 from langchain_community.vectorstores import Qdrant
@@ -265,10 +265,13 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
                 os.remove(index_path)
 
     # Read file chunks in batches
+    files_pending = len(files_to_add)
+    files_processed = 0
+    start_time = time.monotonic()
     docs_batch, pending_ids, chunk_idxs = [], [], []
 
     def flush(reason="batch"):
-        nonlocal docs_batch, chunk_idxs, pending_ids, manifest
+        nonlocal docs_batch, chunk_idxs, pending_ids, manifest, files_pending, files_processed, start_time
 
         if not docs_batch:
             return
@@ -306,11 +309,30 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
         manifest.add_chunks(len(docs_batch))
         manifest.save()
 
+        files_processed += len(pending_ids)
+
+        elapsed = time.monotonic() - start_time
+
+        progress = files_processed / files_pending if files_pending else 1.0
+
+        if files_processed > 0:
+            avg_time_per_file = elapsed / files_processed
+            remaining = files_pending - files_processed
+            eta_seconds = remaining * avg_time_per_file
+        else:
+            eta_seconds = 0
+
+        eta = str(timedelta(seconds=int(eta_seconds)))
+
         logging.info(
-            "Persisted %s chunks from source %s [%s]",
+            "Persisted %s chunks from source %s [%s] (%.1f%% - %d/%d files, ETA %s)",
             len(docs_batch),
             source,
             reason,
+            progress * 100,
+            files_processed,
+            files_pending,
+            eta,
         )
 
         docs_batch, pending_ids, chunk_idxs = [], [], []
@@ -362,7 +384,7 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
         pending_ids.append((f.metadata["id"], f.metadata["modifiedTime"]))
 
         if len(docs_batch) >= batch_size:
-            flush("lote")
+            flush("batch")
 
     if docs_batch:
         flush("final")
