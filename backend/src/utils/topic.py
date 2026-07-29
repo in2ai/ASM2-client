@@ -95,6 +95,24 @@ def get_doc_by_id(vdb: Qdrant, id):
     )
 
 
+def query_batch_with_retry(client, collection_name, requests, chunk_size=64, timeout=60, max_retries=3):
+    all_hits = []
+    for i in range(0, len(requests), chunk_size):
+        chunk = requests[i:i + chunk_size]
+        for attempt in range(max_retries):
+            try:
+                all_hits.extend(
+                    client.query_batch_points(collection_name, chunk, timeout=timeout)
+                )
+                break
+            except Exception as e:
+                logging.warning("chunk at %d failed (attempt %d/%d): %s", i, attempt + 1, max_retries, e)
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2 ** attempt)
+    return all_hits
+
+
 def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
     if not CALCULATE_TOPICS:
         return
@@ -135,19 +153,15 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
             models.QueryRequest(
                 query=i.vector['embedding'],
                 using='embedding',
-                limit=200,
+                limit=50,
                 with_payload=False,
                 with_vector=False,
                 params=APPROX_SEARCH_PARAMS
             )
             for i in batch
         ]
-
-        hits = vdb.client.query_batch_points(
-            vdb.collection_name,
-            requests,
-            timeout=600
-        )
+        
+        hits = query_batch_with_retry(vdb.client, vdb.collection_name, requests, chunk_size=64, timeout=600)
 
         for point, nearest in zip(batch, hits):
             ids.append(point.id)
