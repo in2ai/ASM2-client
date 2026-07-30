@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from datetime import timedelta
-from typing import Iterable
+from typing import Any, Iterable, Mapping
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -16,6 +16,7 @@ from qdrant_client.http import models
 
 from src.config.env import get_bool_env, get_float_env
 from src.config.config import APPROX_SEARCH_PARAMS
+from src.connectors.qdrant_ops import run_qdrant_write_with_retry
 from src.utils.nlp import SUPPORTED_LANGUAGES
 
 
@@ -23,6 +24,7 @@ TOPIC_RESOLUTION = get_float_env("TOPIC_RESOLUTION", 0.025)
 TOPIC_MIN_CONTRIB = get_float_env("TOPIC_MIN_CONTRIB", 0.3)
 TOPIC_MAPPING_FILENAME = "topics.json"
 CALCULATE_TOPICS = get_bool_env("CALCULATE_TOPICS")
+TOPIC_PAYLOAD_BATCH_SIZE = 256
 
 
 def get_topic_mapping_path(vdb_path: str) -> str:
@@ -111,6 +113,61 @@ def query_batch_with_retry(client, collection_name, requests, chunk_size=64, tim
                     raise
                 time.sleep(2 ** attempt)
     return all_hits
+
+
+def set_topic_payloads(
+    vdb: Qdrant,
+    topic_payloads: Mapping[Any, Mapping[Any, float]],
+    batch_size: int | None = None,
+) -> None:
+    """Persist per-point topic payloads in bounded, retryable Qdrant batches."""
+    effective_batch_size = max(
+        1, TOPIC_PAYLOAD_BATCH_SIZE if batch_size is None else batch_size
+    )
+    payload_items = list(topic_payloads.items())
+
+    if not payload_items:
+        return
+
+    total_batches = (
+        len(payload_items) + effective_batch_size - 1
+    ) // effective_batch_size
+    logging.info(
+        "Updating topic metadata for %d points in %d batches...",
+        len(payload_items),
+        total_batches,
+    )
+
+    for offset in range(0, len(payload_items), effective_batch_size):
+        batch_number = offset // effective_batch_size + 1
+        operations = [
+            models.SetPayloadOperation(
+                set_payload=models.SetPayload(
+                    key="metadata",
+                    payload={
+                        "topics": {
+                            str(topic): weight
+                            for topic, weight in topics.items()
+                        }
+                    },
+                    points=[point_id],
+                )
+            )
+            for point_id, topics in payload_items[
+                offset : offset + effective_batch_size
+            ]
+        ]
+
+        run_qdrant_write_with_retry(
+            lambda: vdb.client.batch_update_points(
+                collection_name=vdb.collection_name,
+                update_operations=operations,
+                wait=True,
+            ),
+            operation_name=(
+                f"update topic payload batch {batch_number}/{total_batches}"
+            ),
+        )
 
 
 def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
@@ -306,19 +363,7 @@ def extract_initial_topics(llm, vdb: Qdrant, vdb_path: str, pool=None):
             if weight >= TOPIC_MIN_CONTRIB:
                 aggregated_topics[v_name][t] = max(weight, aggregated_topics[v_name].get(t, 0.0))
 
-    # Update metadata
-    logging.info('Updating VDB metadata...')
-
-
-    for id, ts in aggregated_topics.items():
-        # Transform ints to strings for Qdrant compatibility reasons
-        topics_str_keys = {str(k): v for k, v in ts.items()}
-        vdb.client.set_payload(
-            collection_name=vdb.collection_name,
-            key='metadata',
-            payload={'topics': topics_str_keys},
-            points=[id]
-        )
+    set_topic_payloads(vdb, aggregated_topics)
 
     save_topic_mapping(vdb_path, topic_mapping, pool)
 
@@ -349,6 +394,8 @@ def assign_topics(vdb: Qdrant, ids):
         vdb.collection_name,
         requests
     )
+
+    topic_payloads = {}
 
     # Get topic connections
     for point, nearest in zip(ids, hits):
@@ -384,13 +431,9 @@ def assign_topics(vdb: Qdrant, ids):
             if weight >= TOPIC_MIN_CONTRIB:
                 topics_dict[t] = weight
 
-        # Save chunk to VDB
-        vdb.client.set_payload(
-            collection_name=vdb.collection_name,
-            key='metadata',
-            payload={'topics': topics_dict},
-            points=[point]
-        )
+        topic_payloads[point] = topics_dict
+
+    set_topic_payloads(vdb, topic_payloads)
 
 
 def get_topic(llm, texts):

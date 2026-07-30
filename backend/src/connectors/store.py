@@ -19,12 +19,14 @@ from src.config.env import get_bool_env, get_env, get_int_env
 from src.connectors.source import DataSource
 from src.connectors.llms import get_configured_long_context_llm
 from src.connectors.manifest import VDBManifest
+from src.connectors.qdrant_ops import run_qdrant_write_with_retry
 from src.connectors.vdb_file import VDBFile
 from src.indexing.deletion_guard import enforce_sources_deletion_guard
 from src.utils.topic import assign_topics, extract_initial_topics
 
 QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
 QDRANT_META_PATH = get_env("QDRANT_META_PATH", "/app/data/qdrant_meta")
+QDRANT_TIMEOUT = 600
 BM25_MODEL = "qdrant/bm25"
 VDB_LOCK = 'vdb.lock'
 
@@ -83,7 +85,8 @@ def get_vectordb(embeddings) -> Qdrant:
     client = QdrantClient(
         url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
-        prefer_grpc=True
+        prefer_grpc=True,
+        timeout=QDRANT_TIMEOUT,
     )
 
     vectorstore = Qdrant(client, QDRANT_COL, embeddings)
@@ -248,9 +251,12 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
         manifest.remove_processed_ids(source, files_to_delete)
         manifest.remove_chunks(num_ids_to_delete)
 
-        vectorstore.client.delete(
-            collection_name=vectorstore.collection_name,
-            points_selector=id_deletion_filter,
+        run_qdrant_write_with_retry(
+            lambda: vectorstore.client.delete(
+                collection_name=vectorstore.collection_name,
+                points_selector=id_deletion_filter,
+            ),
+            operation_name=f"delete stale entries for source {source}",
         )
 
         manifest.save()
@@ -300,7 +306,12 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
                 for uuid, emb, doc, c_idx in zip(new_ids, embs, sub_docs, idxs)
             ]
 
-            vectorstore.client.upsert(vectorstore.collection_name, points)
+            run_qdrant_write_with_retry(
+                lambda: vectorstore.client.upsert(
+                    vectorstore.collection_name, points
+                ),
+                operation_name=f"upsert chunks for source {source}",
+            )
 
             if manifest.has_topics():
                 assign_topics(vectorstore, new_ids)
@@ -447,11 +458,14 @@ def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
         return
 
     # Update the permissions in batch
-    vectorstore.client.set_payload(
-        collection_name=vectorstore.collection_name,
-        key="metadata.permissions",
-        payload=new_permissions,
-        points=id_filter,
+    run_qdrant_write_with_retry(
+        lambda: vectorstore.client.set_payload(
+            collection_name=vectorstore.collection_name,
+            key="metadata.permissions",
+            payload=new_permissions,
+            points=id_filter,
+        ),
+        operation_name=f"update permissions for file {file_id}",
     )
 
 
