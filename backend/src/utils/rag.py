@@ -151,6 +151,9 @@ def get_rag_system_prompt(lang_code: str) -> str:
     """Build the RAG system prompt with the detected language."""
     return (
         "You are a RAG conversational assistant. Use the available search tools when the user needs information from connected documents. "
+        "Use the vectordb_search tool when the user asks a question about the CONTENT of documents. "
+        "Use the list_documents tool when the user asks for a LIST of documents matching some criteria "
+        "(e.g. document type, topic in the file name or folder, or a date range), and present the results as a list. "
         "Respond EXCLUSIVELY in the language of the last message of the user, "
         f"which has been detected to have the following language code: {lang_code}. "
         "When you use retrieved context, answer only with information supported by it and do not improvise. "

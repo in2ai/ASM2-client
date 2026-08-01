@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 
 from src.config.env import get_env, get_bool_env
 from src.connectors.store import QDRANT_META_PATH
-from src.connectors.search import augment_chunks
+from src.connectors.search import augment_chunks, list_documents_by_metadata
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
@@ -16,8 +16,8 @@ from src.metrics.metrics import (
     register_topics,
     register_words,
 )
-from src.utils.nlp import extract_search_terms
-from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources
+from src.utils.nlp import extract_search_terms, detect_language
+from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources, _resolve_source_label
 from src.utils.topic import resolve_topic_names
 
 
@@ -140,4 +140,84 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     return {
         "chunks": formatted_chunks,
         "sources": available_sources
+    }
+
+
+@tool
+def list_documents(
+    query: str,
+    config: RunnableConfig,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    max_results: int = 20,
+) -> dict | str:
+    """Lists documents matching metadata criteria (file name, folder path,
+    modification date). Use this tool when the user asks for a LIST of
+    documents (e.g. "which documents...", "list the meeting minutes from
+    2025") instead of asking a question about their content.
+
+    Args:
+        query: keywords to match against the document name and folder path
+            (e.g. "actas reuniones"). Use an empty string to match all.
+        date_from: optional start date filter on the modification date;
+            accepts a year ("2025"), a month ("2025-03") or an ISO date.
+        date_to: optional end date filter, same formats as date_from.
+        max_results: maximum number of documents to return (default 20).
+    """
+
+    configurable = config.get("configurable", {})
+    vectorstore = configurable["vectorstore"]
+    sources = configurable["sources"]
+
+    try:
+        documents = list_documents_by_metadata(
+            vectorstore,
+            sources,
+            query=query,
+            date_from=date_from,
+            date_to=date_to,
+            max_results=max_results,
+        )
+
+    except Exception:
+        logging.exception("list_documents failed")
+        return "[Search error: the document listing is temporarily unavailable.]"
+
+    if not documents:
+        try:
+            lang_code = detect_language(query) if query.strip() else "es"
+        except Exception:
+            lang_code = "es"
+
+        fallback_messages = {
+            "es": "No encontré documentos que cumplan esos criterios en las fuentes disponibles.",
+            "en": "I couldn't find documents matching those criteria in the available sources.",
+            "gl": "Non atopei documentos que cumpran eses criterios nas fontes dispoñibles.",
+        }
+        return fallback_messages.get(lang_code, fallback_messages["es"])
+
+    formatted_docs = []
+
+    for doc in documents:
+        formatted_docs.append(
+            '['
+            f'file: {doc["path"]}; '
+            f'authors: {", ".join(doc["authors"])}; '
+            f'date: {doc["modifiedTime"]}'
+            ']'
+        )
+
+    available_sources = [
+        {
+            "id": doc["id"],
+            "title": doc["title"],
+            "source_type": _resolve_source_label(doc["source"], sources),
+            "link": doc["link"],
+        }
+        for doc in documents
+    ]
+
+    return {
+        "documents": formatted_docs,
+        "sources": available_sources,
     }
