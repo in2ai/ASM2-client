@@ -1,7 +1,10 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 import logging
 import os
+from typing import Annotated
 
+from pydantic import Field
 from treedex import TreeDex, OpenAILLM
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -22,7 +25,25 @@ from src.utils.topic import resolve_topic_names
 
 
 @tool
-def vectordb_search(query: str, config: RunnableConfig) -> str:
+def vectordb_search(
+    query: Annotated[
+        str,
+        Field(
+            description="Fully self-contained search query for the user's "
+            "information need."
+        ),
+    ],
+    config: RunnableConfig,
+    files: Annotated[
+        list[dict] | None,
+        Field(
+            description="Optional list of documents to restrict the search to, "
+            "as {'source': ..., 'id': ...} pairs taken from a previous "
+            "list_documents call. Use it to search content only within "
+            "documents the user has already identified."
+        ),
+    ] = None,
+) -> str:
     """Searches for documents relevant to the user's query through hybrid-search in a database."""
 
     configurable = config.get("configurable", {})
@@ -37,7 +58,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     try:
         with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value, actor=metrics_actor):
             chunks, lang_code = retrieve_and_rerank(
-                query, vectorstore, reranker, sources
+                query, vectorstore, reranker, sources, files=files
             )
 
     except Exception:
@@ -145,25 +166,40 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
 @tool
 def list_documents(
-    query: str,
+    query: Annotated[
+        str,
+        Field(
+            description="Keywords to match against the document name and folder "
+            "path (e.g. 'actas reuniones'). Use an empty string to match all."
+        ),
+    ],
     config: RunnableConfig,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    max_results: int = 20,
+    date_from: Annotated[
+        date | None,
+        Field(
+            description="Optional start date (ISO YYYY-MM-DD) to filter by "
+            "modification date. If the user asks for a whole year or month, "
+            "use its first day (e.g. 2025-01-01)."
+        ),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Field(
+            description="Optional end date (ISO YYYY-MM-DD) to filter by "
+            "modification date. If the user asks for a whole year or month, "
+            "use its last day (e.g. 2025-12-31)."
+        ),
+    ] = None,
+    max_results: Annotated[
+        int, Field(description="Maximum number of documents to return.")
+    ] = 20,
 ) -> dict | str:
     """Lists documents matching metadata criteria (file name, folder path,
     modification date). Use this tool when the user asks for a LIST of
     documents (e.g. "which documents...", "list the meeting minutes from
-    2025") instead of asking a question about their content.
-
-    Args:
-        query: keywords to match against the document name and folder path
-            (e.g. "actas reuniones"). Use an empty string to match all.
-        date_from: optional start date filter on the modification date;
-            accepts a year ("2025"), a month ("2025-03") or an ISO date.
-        date_to: optional end date filter, same formats as date_from.
-        max_results: maximum number of documents to return (default 20).
-    """
+    2025") instead of asking a question about their content. Each returned
+    document includes its id and source, which can be passed to
+    vectordb_search's files parameter to search content within them."""
 
     configurable = config.get("configurable", {})
     vectorstore = configurable["vectorstore"]
@@ -201,6 +237,8 @@ def list_documents(
     for doc in documents:
         formatted_docs.append(
             '['
+            f'id: {doc["id"]}; '
+            f'source: {doc["source"]}; '
             f'file: {doc["path"]}; '
             f'authors: {", ".join(doc["authors"])}; '
             f'date: {doc["modifiedTime"]}'

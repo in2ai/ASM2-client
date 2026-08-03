@@ -1,5 +1,6 @@
 import os
 import unittest
+from datetime import date
 from unittest.mock import patch
 
 from langchain_core.documents import Document
@@ -7,8 +8,11 @@ from qdrant_client.http.models import Filter
 
 from src.connectors.search import (
     MAX_LIST_RESULTS,
+    _day_end,
+    _day_start,
     _normalize_text,
-    _parse_date_bound,
+    build_files_filter,
+    combine_filters,
     list_documents_by_metadata,
 )
 
@@ -123,14 +127,22 @@ class ListDocumentsTests(unittest.TestCase):
 
     def test_year_range_filters_by_modified_time(self):
         result = run_listing(
-            DOCS, self.sources, query="acta", date_from="2025", date_to="2025"
+            DOCS,
+            self.sources,
+            query="acta",
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 12, 31),
         )
 
         self.assertEqual([d["id"] for d in result], ["doc-2", "doc-1"])
 
     def test_month_range(self):
         result = run_listing(
-            DOCS, self.sources, query="", date_from="2025-01", date_to="2025-01"
+            DOCS,
+            self.sources,
+            query="",
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 31),
         )
 
         self.assertEqual([d["id"] for d in result], ["doc-1"])
@@ -175,12 +187,35 @@ class ListDocumentsTests(unittest.TestCase):
 
         self.assertEqual(len(result), 3)
 
-    def test_parse_date_bound_year(self):
-        start = _parse_date_bound("2025", is_end=False)
-        end = _parse_date_bound("2025", is_end=True)
+    def test_day_bounds(self):
+        start = _day_start(date(2025, 3, 15))
+        end = _day_end(date(2025, 3, 15))
 
-        self.assertEqual((start.year, start.month, start.day), (2025, 1, 1))
-        self.assertEqual((end.year, end.month, end.day), (2025, 12, 31))
+        self.assertEqual((start.hour, start.minute, start.second), (0, 0, 0))
+        self.assertGreater(end, start)
+        self.assertEqual((end.year, end.month, end.day), (2025, 3, 15))
+
+    def test_build_files_filter_requires_source_and_id_pairs(self):
+        f = build_files_filter([
+            {"source": "drive", "id": "doc-1"},
+            {"source": "drive", "id": "doc-2"},
+        ])
+
+        self.assertIsNotNone(f)
+        self.assertEqual(len(f.should), 2)
+
+    def test_build_files_filter_skips_entries_without_id(self):
+        self.assertIsNone(build_files_filter([{"source": "drive"}]))
+        self.assertIsNone(build_files_filter(None))
+        self.assertIsNone(build_files_filter([]))
+
+    def test_combine_filters_and_semantics(self):
+        f1 = build_files_filter([{"id": "doc-1"}])
+        f2 = Filter()
+
+        self.assertIsNone(combine_filters(None, None))
+        self.assertIs(combine_filters(f1, None), f1)
+        self.assertEqual(len(combine_filters(f1, f2).must), 2)
 
 
 if __name__ == "__main__":

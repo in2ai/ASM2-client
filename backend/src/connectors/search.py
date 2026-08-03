@@ -1,5 +1,5 @@
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
@@ -19,6 +19,48 @@ def get_permission_filter(sources: dict[str, DataSource] | None = None):
 
     filters = [source.get_permissions_filter() for source in sources.values()]
     return Filter(should=filters) if filters else None
+
+
+def build_files_filter(files: list[dict] | None) -> Filter | None:
+    """Restrict a search to specific documents given as (source, id) pairs.
+
+    Used to chain list_documents into vectordb_search: the assistant lists
+    documents by metadata and then searches content only within them.
+    """
+    if not files:
+        return None
+
+    conditions = []
+
+    for f in files:
+        doc_id = f.get("id")
+        if not doc_id:
+            continue
+
+        must = [FieldCondition(key="metadata.id", match=MatchValue(value=doc_id))]
+
+        source = f.get("source")
+        if source:
+            must.append(
+                FieldCondition(key="metadata.source", match=MatchValue(value=source))
+            )
+
+        conditions.append(Filter(must=must))
+
+    return Filter(should=conditions) if conditions else None
+
+
+def combine_filters(*filters: Filter | None) -> Filter | None:
+    """AND several optional filters together."""
+    active = [f for f in filters if f is not None]
+
+    if not active:
+        return None
+
+    if len(active) == 1:
+        return active[0]
+
+    return Filter(must=active)
 
 
 def build_contiguous_chunk_filter(anchors: list[tuple[str, int]], num_previous: int, num_next: int) -> Filter:
@@ -117,12 +159,16 @@ def hybrid_search(
     k: int,
     prefetch_k: int,
     sources: dict[str, DataSource] | None = None,
+    files: list[dict] | None = None,
 ):
     # Embed query
     emb = vectorstore.embeddings.embed_query(query)
 
-    # Get permission filter
-    pfilter = get_permission_filter(sources)
+    # Get permission filter, optionally restricted to specific documents
+    pfilter = combine_filters(
+        get_permission_filter(sources),
+        build_files_filter(files),
+    )
 
     # Make search request to the server
     search_results = vectorstore.client.query_points(
@@ -167,32 +213,12 @@ def _normalize_text(text: str) -> str:
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
 
 
-def _parse_date_bound(value: str, is_end: bool) -> datetime:
-    """Parse a lenient date bound: '2025', '2025-03' or full ISO date/datetime.
+def _day_start(d: date) -> datetime:
+    return datetime.combine(d, time.min, tzinfo=timezone.utc)
 
-    Start bounds default to the earliest instant of the period, end bounds to
-    the latest, so '2025' as date_to covers the whole year.
-    """
-    value = value.strip()
-    parts = value.split("-")
 
-    if len(parts) == 1 and parts[0].isdigit() and len(parts[0]) == 4:
-        if is_end:
-            return datetime(int(parts[0]), 12, 31, 23, 59, 59, tzinfo=timezone.utc)
-        return datetime(int(parts[0]), 1, 1, tzinfo=timezone.utc)
-
-    if len(parts) == 2 and all(p.isdigit() for p in parts):
-        year, month = int(parts[0]), int(parts[1])
-        if is_end:
-            if month == 12:
-                return datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
-            return datetime(year, month + 1, 1, tzinfo=timezone.utc)
-        return datetime(year, month, 1, tzinfo=timezone.utc)
-
-    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
+def _day_end(d: date) -> datetime:
+    return datetime.combine(d, time.max, tzinfo=timezone.utc)
 
 
 def _parse_modified_time(value: str | None) -> datetime | None:
@@ -209,8 +235,8 @@ def list_documents_by_metadata(
     vectorstore: Qdrant,
     sources: dict[str, DataSource] | None = None,
     query: str = "",
-    date_from: str | None = None,
-    date_to: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     max_results: int = 20,
 ) -> list[dict]:
     """List distinct indexed documents matching metadata criteria.
@@ -222,8 +248,8 @@ def list_documents_by_metadata(
     max_results = max(1, min(int(max_results), MAX_LIST_RESULTS))
 
     query_terms = [t for t in _normalize_text(query).split() if t]
-    start = _parse_date_bound(date_from, is_end=False) if date_from else None
-    end = _parse_date_bound(date_to, is_end=True) if date_to else None
+    start = _day_start(date_from) if date_from else None
+    end = _day_end(date_to) if date_to else None
 
     # Fetch one representative chunk per document with a grouped query
     # (group_by document id), instead of scanning every chunk and

@@ -89,8 +89,12 @@ def rerank_documents(reranker, query: str, documents: list, top_k: int = None) -
     return reranked_docs
 
 
-def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataSource], k: int = 6) -> tuple:
+def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataSource], k: int = 6, files: list[dict] | None = None) -> tuple:
     """Retrieval-only function: hybrid search + permission filtering + reranking.
+
+    Args:
+        files: optional list of {'source', 'id'} pairs restricting the search
+            to specific documents (chaining from list_documents).
 
     Returns:
         (allowed_chunks, lang_code)
@@ -98,7 +102,7 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
     lang_code = detect_language(query)
 
     # Perform hybrid search
-    search_results = hybrid_search(vectordb, query, 25, 25, sources)
+    search_results = hybrid_search(vectordb, query, 25, 25, sources, files=files)
 
     # Filter by permissions
     allowed_chunks = []
@@ -154,6 +158,9 @@ def get_rag_system_prompt(lang_code: str) -> str:
         "Use the vectordb_search tool when the user asks a question about the CONTENT of documents. "
         "Use the list_documents tool when the user asks for a LIST of documents matching some criteria "
         "(e.g. document type, topic in the file name or folder, or a date range), and present the results as a list. "
+        "You can chain both tools: after listing documents with list_documents, if the user wants to query "
+        "the CONTENT of those documents, call vectordb_search passing its files parameter the "
+        "{'source', 'id'} pairs from the list_documents output. "
         "Respond EXCLUSIVELY in the language of the last message of the user, "
         f"which has been detected to have the following language code: {lang_code}. "
         "When you use retrieved context, answer only with information supported by it and do not improvise. "
