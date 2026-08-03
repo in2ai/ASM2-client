@@ -157,6 +157,9 @@ def hybrid_search(
 
 MAX_LIST_RESULTS = 50
 
+# Upper bound of document groups fetched in a single grouped query
+GROUP_QUERY_LIMIT = 10000
+
 
 def _normalize_text(text: str) -> str:
     """Lowercase and strip accents so queries match titles/paths loosely."""
@@ -222,16 +225,33 @@ def list_documents_by_metadata(
     start = _parse_date_bound(date_from, is_end=False) if date_from else None
     end = _parse_date_bound(date_to, is_end=True) if date_to else None
 
-    # Scroll the whole (permission-filtered) collection and keep one
-    # representative metadata record per document id.
+    # Fetch one representative chunk per document with a grouped query
+    # (group_by document id), instead of scanning every chunk and
+    # deduplicating client-side. query=None behaves as a traversal of the
+    # (permission-filtered) collection.
     pfilter = get_permission_filter(sources)
+    result = vectorstore.client.query_points_groups(
+        collection_name=vectorstore.collection_name,
+        group_by="metadata.id",
+        query=None,
+        query_filter=pfilter,
+        limit=GROUP_QUERY_LIMIT,
+        group_size=1,
+        with_payload=True,
+        with_vectors=False,
+        timeout=600,
+    )
+
     documents: dict[str, dict] = {}
 
-    for _, doc in iterate_qdrant_docs(vectorstore, scroll_filter=pfilter):
-        meta = doc.metadata
+    for group in result.groups:
+        if not group.hits:
+            continue
+
+        meta = (group.hits[0].payload or {}).get("metadata", {})
         doc_id = meta.get("id")
 
-        if not doc_id or doc_id in documents:
+        if not doc_id:
             continue
 
         haystack = _normalize_text(f'{meta.get("name", "")} {meta.get("path", "")}')

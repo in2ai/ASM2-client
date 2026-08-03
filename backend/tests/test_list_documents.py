@@ -52,12 +52,43 @@ class FakeSource:
         return file_id in self.allowed_ids
 
 
+class _FakeHit:
+    def __init__(self, metadata):
+        self.payload = {"metadata": metadata, "page_content": "chunk"}
+
+
+class _FakeGroup:
+    def __init__(self, doc_id, metadata):
+        self.id = doc_id
+        self.hits = [_FakeHit(metadata)]
+
+
+class _FakeGroupsResult:
+    def __init__(self, groups):
+        self.groups = groups
+
+
+class _FakeQdrantClient:
+    def __init__(self, docs):
+        self._docs = docs
+
+    def query_points_groups(self, **kwargs):
+        # Group chunks by document id, like Qdrant's group_by does
+        seen = {}
+        for doc in self._docs:
+            seen.setdefault(doc.metadata["id"], doc.metadata)
+        return _FakeGroupsResult([_FakeGroup(k, v) for k, v in seen.items()])
+
+
+class _FakeVectorstore:
+    collection_name = "documents"
+
+    def __init__(self, docs):
+        self.client = _FakeQdrantClient(docs)
+
+
 def run_listing(docs, sources, **kwargs):
-    with patch(
-        "src.connectors.search.iterate_qdrant_docs",
-        return_value=iter([(f"point-{i}", d) for i, d in enumerate(docs)]),
-    ):
-        return list_documents_by_metadata(object(), sources, **kwargs)
+    return list_documents_by_metadata(_FakeVectorstore(docs), sources, **kwargs)
 
 
 class ListDocumentsTests(unittest.TestCase):
