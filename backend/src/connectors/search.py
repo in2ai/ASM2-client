@@ -1,9 +1,13 @@
+import unicodedata
+from datetime import date, datetime, time, timezone
+
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 
 from qdrant_client.http.models import Filter
 from qdrant_client.http.models import Fusion, FusionQuery, Prefetch, FieldCondition, MatchValue, Range, Document as QDocument
 
+from src.config.env import get_bool_env
 from src.config.search_config import APPROX_SEARCH_PARAMS, PREV_CHUNKS, NEXT_CHUNKS
 from src.connectors.source import DataSource
 from src.connectors.store import BM25_MODEL, iterate_qdrant_docs
@@ -15,6 +19,48 @@ def get_permission_filter(sources: dict[str, DataSource] | None = None):
 
     filters = [source.get_permissions_filter() for source in sources.values()]
     return Filter(should=filters) if filters else None
+
+
+def build_files_filter(files: list[dict] | None) -> Filter | None:
+    """Restrict a search to specific documents given as (source, id) pairs.
+
+    Used to chain list_documents into vectordb_search: the assistant lists
+    documents by metadata and then searches content only within them.
+    """
+    if not files:
+        return None
+
+    conditions = []
+
+    for f in files:
+        doc_id = f.get("id")
+        if not doc_id:
+            continue
+
+        must = [FieldCondition(key="metadata.id", match=MatchValue(value=doc_id))]
+
+        source = f.get("source")
+        if source:
+            must.append(
+                FieldCondition(key="metadata.source", match=MatchValue(value=source))
+            )
+
+        conditions.append(Filter(must=must))
+
+    return Filter(should=conditions) if conditions else None
+
+
+def combine_filters(*filters: Filter | None) -> Filter | None:
+    """AND several optional filters together."""
+    active = [f for f in filters if f is not None]
+
+    if not active:
+        return None
+
+    if len(active) == 1:
+        return active[0]
+
+    return Filter(must=active)
 
 
 def build_contiguous_chunk_filter(anchors: list[tuple[str, int]], num_previous: int, num_next: int) -> Filter:
@@ -113,12 +159,16 @@ def hybrid_search(
     k: int,
     prefetch_k: int,
     sources: dict[str, DataSource] | None = None,
+    files: list[dict] | None = None,
 ):
     # Embed query
     emb = vectorstore.embeddings.embed_query(query)
 
-    # Get permission filter
-    pfilter = get_permission_filter(sources)
+    # Get permission filter, optionally restricted to specific documents
+    pfilter = combine_filters(
+        get_permission_filter(sources),
+        build_files_filter(files),
+    )
 
     # Make search request to the server
     search_results = vectorstore.client.query_points(
@@ -145,3 +195,134 @@ def hybrid_search(
     res = [d for _, d in search_results]
 
     return res
+
+
+# ---------------------------------
+# Document listing by metadata
+# ---------------------------------
+
+MAX_LIST_RESULTS = 50
+
+# Upper bound of document groups fetched in a single grouped query
+GROUP_QUERY_LIMIT = 10000
+
+
+def _normalize_text(text: str) -> str:
+    """Lowercase and strip accents so queries match titles/paths loosely."""
+    nfkd = unicodedata.normalize("NFKD", text or "")
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
+
+
+def _day_start(d: date) -> datetime:
+    return datetime.combine(d, time.min, tzinfo=timezone.utc)
+
+
+def _day_end(d: date) -> datetime:
+    return datetime.combine(d, time.max, tzinfo=timezone.utc)
+
+
+def _parse_modified_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def list_documents_by_metadata(
+    vectorstore: Qdrant,
+    sources: dict[str, DataSource] | None = None,
+    query: str = "",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    max_results: int = 20,
+) -> list[dict]:
+    """List distinct indexed documents matching metadata criteria.
+
+    Applies the same two-layer permission model as retrieval: a Qdrant
+    payload filter on the indexed ACLs, then a live `has_access` check per
+    candidate document against the source (skipped in benchmark mode).
+    """
+    max_results = max(1, min(int(max_results), MAX_LIST_RESULTS))
+
+    query_terms = [t for t in _normalize_text(query).split() if t]
+    start = _day_start(date_from) if date_from else None
+    end = _day_end(date_to) if date_to else None
+
+    # Fetch one representative chunk per document with a grouped query
+    # (group_by document id), instead of scanning every chunk and
+    # deduplicating client-side. query=None behaves as a traversal of the
+    # (permission-filtered) collection.
+    pfilter = get_permission_filter(sources)
+    result = vectorstore.client.query_points_groups(
+        collection_name=vectorstore.collection_name,
+        group_by="metadata.id",
+        query=None,
+        query_filter=pfilter,
+        limit=GROUP_QUERY_LIMIT,
+        group_size=1,
+        with_payload=True,
+        with_vectors=False,
+        timeout=600,
+    )
+
+    documents: dict[str, dict] = {}
+
+    for group in result.groups:
+        if not group.hits:
+            continue
+
+        meta = (group.hits[0].payload or {}).get("metadata", {})
+        doc_id = meta.get("id")
+
+        if not doc_id:
+            continue
+
+        haystack = _normalize_text(f'{meta.get("name", "")} {meta.get("path", "")}')
+
+        if query_terms and not all(t in haystack for t in query_terms):
+            continue
+
+        modified = _parse_modified_time(meta.get("modifiedTime"))
+
+        if start and (modified is None or modified < start):
+            continue
+
+        if end and (modified is None or modified > end):
+            continue
+
+        documents[doc_id] = {
+            "id": doc_id,
+            "title": meta.get("title") or meta.get("name") or "(sin titulo)",
+            "path": meta.get("path", ""),
+            "authors": meta.get("authors", []),
+            "mimeType": meta.get("mimeType"),
+            "modifiedTime": meta.get("modifiedTime"),
+            "link": meta.get("webViewLink"),
+            "source": meta.get("source"),
+            "_modified": modified or datetime.min.replace(tzinfo=timezone.utc),
+        }
+
+    # Most recently modified first
+    candidates = sorted(documents.values(), key=lambda d: d["_modified"], reverse=True)
+
+    # Live permission check per candidate, same as retrieve_and_rerank
+    allowed = []
+    check_live = not get_bool_env("BENCHMARK")
+
+    for doc in candidates:
+        if check_live:
+            source = sources.get(doc["source"]) if sources else None
+
+            if source is None or not source.has_access(doc["id"]):
+                continue
+
+        doc.pop("_modified")
+        allowed.append(doc)
+
+        if len(allowed) >= max_results:
+            break
+
+    return allowed

@@ -1,14 +1,17 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 import logging
 import os
+from typing import Annotated
 
+from pydantic import Field
 from treedex import TreeDex, OpenAILLM
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from src.config.env import get_env, get_bool_env
 from src.connectors.store import QDRANT_META_PATH
-from src.connectors.search import augment_chunks
+from src.connectors.search import augment_chunks, list_documents_by_metadata
 from src.metrics.metrics import (
     Metrics,
     TimedMetric,
@@ -16,13 +19,31 @@ from src.metrics.metrics import (
     register_topics,
     register_words,
 )
-from src.utils.nlp import extract_search_terms
-from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources
+from src.utils.nlp import extract_search_terms, detect_language
+from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources, _resolve_source_label
 from src.utils.topic import resolve_topic_names
 
 
 @tool
-def vectordb_search(query: str, config: RunnableConfig) -> str:
+def vectordb_search(
+    query: Annotated[
+        str,
+        Field(
+            description="Fully self-contained search query for the user's "
+            "information need."
+        ),
+    ],
+    config: RunnableConfig,
+    files: Annotated[
+        list[dict] | None,
+        Field(
+            description="Optional list of documents to restrict the search to, "
+            "as {'source': ..., 'id': ...} pairs taken from a previous "
+            "list_documents call. Use it to search content only within "
+            "documents the user has already identified."
+        ),
+    ] = None,
+) -> str:
     """Searches for documents relevant to the user's query through hybrid-search in a database."""
 
     configurable = config.get("configurable", {})
@@ -37,7 +58,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     try:
         with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value, actor=metrics_actor):
             chunks, lang_code = retrieve_and_rerank(
-                query, vectorstore, reranker, sources
+                query, vectorstore, reranker, sources, files=files
             )
 
     except Exception:
@@ -140,4 +161,101 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     return {
         "chunks": formatted_chunks,
         "sources": available_sources
+    }
+
+
+@tool
+def list_documents(
+    query: Annotated[
+        str,
+        Field(
+            description="Keywords to match against the document name and folder "
+            "path (e.g. 'actas reuniones'). Use an empty string to match all."
+        ),
+    ],
+    config: RunnableConfig,
+    date_from: Annotated[
+        date | None,
+        Field(
+            description="Optional start date (ISO YYYY-MM-DD) to filter by "
+            "modification date. If the user asks for a whole year or month, "
+            "use its first day (e.g. 2025-01-01)."
+        ),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Field(
+            description="Optional end date (ISO YYYY-MM-DD) to filter by "
+            "modification date. If the user asks for a whole year or month, "
+            "use its last day (e.g. 2025-12-31)."
+        ),
+    ] = None,
+    max_results: Annotated[
+        int, Field(description="Maximum number of documents to return.")
+    ] = 20,
+) -> dict | str:
+    """Lists documents matching metadata criteria (file name, folder path,
+    modification date). Use this tool when the user asks for a LIST of
+    documents (e.g. "which documents...", "list the meeting minutes from
+    2025") instead of asking a question about their content. Each returned
+    document includes its id and source, which can be passed to
+    vectordb_search's files parameter to search content within them."""
+
+    configurable = config.get("configurable", {})
+    vectorstore = configurable["vectorstore"]
+    sources = configurable["sources"]
+
+    try:
+        documents = list_documents_by_metadata(
+            vectorstore,
+            sources,
+            query=query,
+            date_from=date_from,
+            date_to=date_to,
+            max_results=max_results,
+        )
+
+    except Exception:
+        logging.exception("list_documents failed")
+        return "[Search error: the document listing is temporarily unavailable.]"
+
+    if not documents:
+        try:
+            lang_code = detect_language(query) if query.strip() else "es"
+        except Exception:
+            lang_code = "es"
+
+        fallback_messages = {
+            "es": "No encontré documentos que cumplan esos criterios en las fuentes disponibles.",
+            "en": "I couldn't find documents matching those criteria in the available sources.",
+            "gl": "Non atopei documentos que cumpran eses criterios nas fontes dispoñibles.",
+        }
+        return fallback_messages.get(lang_code, fallback_messages["es"])
+
+    formatted_docs = []
+
+    for doc in documents:
+        formatted_docs.append(
+            '['
+            f'id: {doc["id"]}; '
+            f'source: {doc["source"]}; '
+            f'file: {doc["path"]}; '
+            f'authors: {", ".join(doc["authors"])}; '
+            f'date: {doc["modifiedTime"]}'
+            ']'
+        )
+
+    available_sources = [
+        {
+            "id": doc["id"],
+            "title": doc["title"],
+            "source_type": _resolve_source_label(doc["source"], sources),
+            "link": doc["link"],
+        }
+        for doc in documents
+    ]
+
+    return {
+        "documents": formatted_docs,
+        "sources": available_sources,
     }

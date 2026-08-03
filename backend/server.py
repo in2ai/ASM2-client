@@ -577,7 +577,7 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
             continue
 
         for tool_call in message.tool_calls or []:
-            if tool_call.get("name") != "vectordb_search":
+            if tool_call.get("name") not in ("vectordb_search", "list_documents"):
                 continue
 
             call_id = tool_call.get("id")

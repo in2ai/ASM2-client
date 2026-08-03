@@ -14,5 +14,7 @@ export const logtoConfig: LogtoConfig = {
   endpoint,
   appId,
   resources: apiResource ? [apiResource] : [],
-  scopes: ['openid', 'profile', 'email', 'custom_data', 'identities', 'roles'],
+  // The API scope must be requested explicitly or the resource access token
+  // comes back with an empty scope and no roles claim (RBAC breaks).
+  scopes: ['openid', 'profile', 'email', 'custom_data', 'identities', 'roles', 'use:api'],
 }
