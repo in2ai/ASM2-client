@@ -171,6 +171,12 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
         # Create indexes
         vectorstore.client.create_payload_index(
             collection_name=QDRANT_COL,
+            field_name="metadata.topic_rep",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+        
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
             field_name="metadata.id",
             field_schema=PayloadSchemaType.KEYWORD,
         )
