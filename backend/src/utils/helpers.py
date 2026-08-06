@@ -1,13 +1,14 @@
 from contextlib import contextmanager
+import hashlib
 import logging
 import socket
 import ssl
+import threading
 import time
 
 from google.auth.exceptions import TransportError
 from googleapiclient.errors import HttpError
 from httplib2 import ServerNotFoundError
-
 
 RETRYABLE_HTTP_STATUSES = (500, 502, 503, 504)
 RETRYABLE_TRANSPORT_ERRORS = (
@@ -94,50 +95,56 @@ def safe_execute(request, retries=6, backoff=1.7, google_retries=1):
     raise RuntimeError("Google API: demasiados fallos consecutivos (5xx).") from last_http_error
 
 
+THREAD_LOCKS: dict[str, threading.Lock] = {}
+REGISTRY_GUARD = threading.Lock()
+
+
+def _thread_lock_for(key: str) -> threading.Lock:
+    with REGISTRY_GUARD:
+        return THREAD_LOCKS.setdefault(key, threading.Lock())
+
+
 @contextmanager
 def process_lock(lock_path: str):
     import fasteners
 
-    lock = fasteners.InterProcessLock(lock_path)
-    got = lock.acquire(blocking=False)
-
-    if not got:
+    tlock = _thread_lock_for(lock_path)
+    if not tlock.acquire(blocking=False):
         yield False
         return
 
     try:
-        yield True
+        plock = fasteners.InterProcessLock(lock_path)
+        if not plock.acquire(blocking=False):
+            yield False
+            return
 
-    finally:
         try:
-            lock.release()
+            yield True
+        finally:
+            plock.release()
+    finally:
+        tlock.release()
 
-        except Exception:
-            pass
 
-
-def periodic_task(job_func, interval: int, lock_name: str="", execute_once: bool=False):
-    import time
-    import hashlib
-
+def periodic_task(job_func, interval: int, lock_name: str = "", execute_once: bool = False) -> bool:
     if lock_name:
-        # Use shared lock name
         lock_path = f"/tmp/periodic-{lock_name}.lock"
-
     else:
-        # Generate a deterministic lock file across workers
         ident = f"{job_func.__module__}.{job_func.__qualname__}"
-        digest = hashlib.sha256(ident.encode()).hexdigest()[:16]
-        lock_path = f"/tmp/periodic-{digest}.lock"
+        lock_path = f"/tmp/periodic-{hashlib.sha256(ident.encode()).hexdigest()[:16]}.lock"
 
-    # Execution loop (use asyncio)
     while True:
-        with process_lock(lock_path) as locked:
-            if locked:
-                job_func()
+        acquired = False
+        try:
+            with process_lock(lock_path) as locked:   # held only for the run
+                if locked:
+                    acquired = True
+                    job_func()
+        except Exception:
+            logging.exception("Periodic job %s failed", lock_name or lock_path)
 
-                # Exit if the job only needed to execute once
-                if execute_once:
-                    return
+        if execute_once:
+            return acquired
 
-            time.sleep(interval)
+        time.sleep(interval)
