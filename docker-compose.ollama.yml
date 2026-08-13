@@ -1,0 +1,30 @@
+services:
+  ollama:
+    build:
+      context: ollama/.
+    image: ollama-openai-server:local
+    env_file:
+      - .env
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-11434}:11434"
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      LOCAL_HF_MODEL: ${LOCAL_HF_MODEL:-}
+      LOCAL_HF_MODEL_QUANT: ${LOCAL_HF_MODEL_QUANT:-}
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  ollama_data:
+
+secrets:
+  hf_token:
+    environment: HF_TOKEN

@@ -76,11 +76,21 @@ ALTER TABLE topic_counts SET (timescaledb.compress, timescaledb.compress_segment
 ALTER TABLE topic_intl SET (timescaledb.compress, timescaledb.compress_segmentby='topic_id,lang');
 ALTER TABLE user_activity SET (timescaledb.compress, timescaledb.compress_segmentby='user_id');
 
-SELECT add_compression_policy('metrics', INTERVAL '7 days');
-SELECT add_compression_policy('word_counts', INTERVAL '7 days');
-SELECT add_compression_policy('topic_counts', INTERVAL '7 days');
-SELECT add_compression_policy('topic_intl', INTERVAL '7 days');
-SELECT add_compression_policy('user_activity', INTERVAL '7 days');
+SELECT add_compression_policy(
+    'metrics', compress_after => INTERVAL '7 days', if_not_exists => TRUE
+);
+SELECT add_compression_policy(
+    'word_counts', compress_after => INTERVAL '7 days', if_not_exists => TRUE
+);
+SELECT add_compression_policy(
+    'topic_counts', compress_after => INTERVAL '7 days', if_not_exists => TRUE
+);
+SELECT add_compression_policy(
+    'topic_intl', compress_after => INTERVAL '7 days', if_not_exists => TRUE
+);
+SELECT add_compression_policy(
+    'user_activity', compress_after => INTERVAL '7 days', if_not_exists => TRUE
+);
 
 -- (Optional) auto-delete chunks older than 180 days. Disabled
 -- SELECT add_retention_policy('metrics', INTERVAL '180 days');

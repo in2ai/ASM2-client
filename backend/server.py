@@ -310,7 +310,7 @@ def update_vdb():
     def update():
         run_vdb_update_once()
 
-    periodic_task(update, 7000)  # Once an hour
+    periodic_task(update, 7000, lock_name='vdb-update')  # Once an hour
 
 
 def extract_usage_metrics():
@@ -351,7 +351,10 @@ async def start_vdb_update(auth: AdminAuth):
     if current_task is not None and not current_task.done():
         return
 
-    app.state.vdb_update_task = asyncio.create_task(asyncio.to_thread(run_vdb_update_once))
+    def update_vdb_once():
+        periodic_task(run_vdb_update_once, 100, lock_name='vdb-update', execute_once=True)
+
+    app.state.vdb_update_task = asyncio.create_task(asyncio.to_thread(update_vdb_once))
 
 
 @app.post("/stop-vdb-update", status_code=200)

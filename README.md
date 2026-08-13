@@ -33,7 +33,7 @@ El sistema se despliega mediante contenedores Docker orquestados:
 | `backend`      | API FastAPI para chat, métricas y conectores       |
 | `dashboard`    | SPA React servida por Caddy                        |
 | `qdrant`       | Base vectorial para búsqueda híbrida               |
-| `timescaledb`      | PostgreSQL + TimescaleDB: métricas, historial de chat, memoria del agente y checkpoints |
+| `timescaledb`      | Instancia PostgreSQL + TimescaleDB compartida: datos de la aplicación y base independiente de Logto |
 | `timescaledb-init` | Contenedor efímero para inicialización de esquemas |
 | `logto`        | Proveedor de autenticación local opcional          |
 
@@ -85,7 +85,7 @@ cp .env.example .env
 | `LOGTO_ENDPOINT` | Endpoint compartido de Logto usado por la SPA y por el backend |
 | `LOGTO_API_RESOURCE` | Audience del API compartido entre la SPA y la validación estricta en FastAPI |
 | `LOGTO_ADMIN_ENDPOINT` | Endpoint del panel de administración de Logto |
-| `LOGTO_POSTGRES_PASSWORD` | Contraseña de PostgreSQL usada por Logto self-hosted |
+| `LOGTO_POSTGRES_PASSWORD` | Contraseña del rol `logto` dentro de la instancia PostgreSQL compartida |
 | `LOGTO_MANAGEMENT_APP_ID` | Client ID opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_APP_SECRET` | Client secret opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_API_RESOURCE` | Resource opcional de la Management API de Logto |
@@ -275,7 +275,40 @@ Qdrant soporta aceleración GPU para indexación vectorial. Por defecto, se usa 
 - Dispositivos `/dev/kfd` y `/dev/dri` accesibles
 - Usuario en los grupos `video` y `render`
 
-### Opción 5: Desarrollo Local
+### Opción 5: Modelo local con Ollama
+
+El archivo base `docker-compose.ollama.yml` contiene la configuración compartida. Selecciona el acelerador con el argumento opcional de `--local-model`:
+
+Configura preferentemente un modelo del registro oficial de Ollama en `.env`:
+
+```dotenv
+USE_LOCAL_MODEL=true
+OLLAMA_MODEL=qwen3.5:27b
+LOCAL_HF_MODEL=
+LOCAL_HF_MODEL_QUANT=
+```
+
+`OLLAMA_MODEL` tiene prioridad. `LOCAL_HF_MODEL` y `LOCAL_HF_MODEL_QUANT` se mantienen como alternativa para repositorios GGUF alojados en Hugging Face.
+
+```bash
+# CPU
+./run.sh up --local-model cpu
+
+# GPU NVIDIA
+./run.sh up --local-model nvidia
+
+# GPU AMD con ROCm
+./run.sh up --local-model amd
+
+# Ollama y Qdrant sobre AMD
+./run.sh up --local-model amd --qdrant amd
+```
+
+Los overrides específicos son `docker-compose.ollama-nvidia.yml` y `docker-compose.ollama-amd.yml`. Si no se indica un acelerador, `--local-model` usa CPU.
+
+Para AMD se requieren ROCm y acceso a `/dev/kfd` y `/dev/dri`. Para NVIDIA se requieren los drivers y `nvidia-container-toolkit`.
+
+### Opción 6: Desarrollo Local
 
 #### Backend FastAPI
 
@@ -303,7 +336,7 @@ pnpm dev
 
 El dashboard estará disponible en `http://localhost:3001`.
 
-### Opción 6: Benchmark
+### Opción 7: Benchmark
 
 El modo `--bench` levanta el stack sustituyendo el servidor web del `backend` por el script de evaluación [`benchmark.py`](backend/benchmark.py), que mide la calidad del pipeline RAG con métricas de **RAGAS `0.4.3`** (`context_precision`, `context_recall`, `answer_relevancy`, `faithfulness`) además de los tiempos de cada evaluación (consulta RAG + cálculo de métricas) y de cada lote.
 
@@ -341,6 +374,7 @@ ASM2-client/
 ├── secrets/                # Credenciales y ficheros sensibles
 ├── img/                    # Imágenes y assets
 ├── qdrant_index/           # Estado auxiliar y manifest del índice vectorial
+├── questdb/               # Datos persistentes de QuestDB (generado)
 ├── benchmark/              # Datasets QA de entrada y resultados del benchmark de RAG
 ├── docker-compose.yml     # Stack base backend + SPA + qdrant con solo dashboard publicado en localhost
 ├── docker-compose.local.yml    # Infraestructura local (TimescaleDB + Logto) con Logto publicado en localhost

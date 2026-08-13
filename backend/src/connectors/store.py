@@ -1,13 +1,13 @@
 from concurrent.futures import ThreadPoolExecutor
-import hashlib
 import logging
 import os
 from typing import List
 import uuid
-import shutil
+import time
 import threading
+from datetime import timedelta
 
-from treedex import TreeDex, OpenAILLM
+from treedex import TreeDex
 from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -17,13 +17,16 @@ from qdrant_client.http.models import Document as QDocument
 
 from src.config.env import get_bool_env, get_env, get_int_env
 from src.connectors.source import DataSource
+from src.connectors.llms import get_configured_long_context_llm
 from src.connectors.manifest import VDBManifest
+from src.connectors.qdrant_ops import run_qdrant_write_with_retry
 from src.connectors.vdb_file import VDBFile
 from src.indexing.deletion_guard import enforce_sources_deletion_guard
 from src.utils.topic import assign_topics, extract_initial_topics
 
 QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
 QDRANT_META_PATH = get_env("QDRANT_META_PATH", "/app/data/qdrant_meta")
+QDRANT_TIMEOUT = 600
 BM25_MODEL = "qdrant/bm25"
 VDB_LOCK = 'vdb.lock'
 
@@ -82,7 +85,8 @@ def get_vectordb(embeddings) -> Qdrant:
     client = QdrantClient(
         url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
-        prefer_grpc=True
+        prefer_grpc=True,
+        timeout=QDRANT_TIMEOUT,
     )
 
     vectorstore = Qdrant(client, QDRANT_COL, embeddings)
@@ -133,7 +137,7 @@ def build_vectordb_from_sources(
     vectordb = None
 
     for name, files in grouped_files.items():
-        vectordb = build_vectorstore(embeddings, files, name)
+        vectordb = build_vectorstore(llm, embeddings, files, name)
 
     # Execute topic extraction
     extract_topics(llm, vectordb)
@@ -141,7 +145,7 @@ def build_vectordb_from_sources(
     return vectordb
 
 
-def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=200):
+def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_size=200):
     # Read status manifest file
     manifest = VDBManifest(QDRANT_META_PATH)
 
@@ -165,6 +169,12 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         logging.info('Creating Qdrant indexes...')
 
         # Create indexes
+        vectorstore.client.create_payload_index(
+            collection_name=QDRANT_COL,
+            field_name="metadata.topic_rep",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+        
         vectorstore.client.create_payload_index(
             collection_name=QDRANT_COL,
             field_name="metadata.id",
@@ -247,9 +257,12 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         manifest.remove_processed_ids(source, files_to_delete)
         manifest.remove_chunks(num_ids_to_delete)
 
-        vectorstore.client.delete(
-            collection_name=vectorstore.collection_name,
-            points_selector=id_deletion_filter,
+        run_qdrant_write_with_retry(
+            lambda: vectorstore.client.delete(
+                collection_name=vectorstore.collection_name,
+                points_selector=id_deletion_filter,
+            ),
+            operation_name=f"delete stale entries for source {source}",
         )
 
         manifest.save()
@@ -261,13 +274,16 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
             index_path = treedex_path + f'/{f}.json'
 
             if os.path.isfile(index_path):
-                os.delete(index_path)
+                os.remove(index_path)
 
     # Read file chunks in batches
+    files_pending = len(files_to_add)
+    files_processed = 0
+    start_time = time.monotonic()
     docs_batch, pending_ids, chunk_idxs = [], [], []
 
     def flush(reason="batch"):
-        nonlocal docs_batch, chunk_idxs, pending_ids, manifest
+        nonlocal docs_batch, chunk_idxs, pending_ids, manifest, files_pending, files_processed, start_time
 
         if not docs_batch:
             return
@@ -296,7 +312,12 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
                 for uuid, emb, doc, c_idx in zip(new_ids, embs, sub_docs, idxs)
             ]
 
-            vectorstore.client.upsert(vectorstore.collection_name, points)
+            run_qdrant_write_with_retry(
+                lambda: vectorstore.client.upsert(
+                    vectorstore.collection_name, points
+                ),
+                operation_name=f"upsert chunks for source {source}",
+            )
 
             if manifest.has_topics():
                 assign_topics(vectorstore, new_ids)
@@ -305,11 +326,30 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         manifest.add_chunks(len(docs_batch))
         manifest.save()
 
+        files_processed += len(pending_ids)
+
+        elapsed = time.monotonic() - start_time
+
+        progress = files_processed / files_pending if files_pending else 1.0
+
+        if files_processed > 0:
+            avg_time_per_file = elapsed / files_processed
+            remaining = files_pending - files_processed
+            eta_seconds = remaining * avg_time_per_file
+        else:
+            eta_seconds = 0
+
+        eta = str(timedelta(seconds=int(eta_seconds)))
+
         logging.info(
-            "Persisted %s chunks from source %s [%s]",
+            "Persisted %s chunks from source %s [%s] (%.1f%% - %d/%d files, ETA %s)",
             len(docs_batch),
             source,
             reason,
+            progress * 100,
+            files_processed,
+            files_pending,
+            eta,
         )
 
         docs_batch, pending_ids, chunk_idxs = [], [], []
@@ -361,15 +401,18 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
         pending_ids.append((f.metadata["id"], f.metadata["modifiedTime"]))
 
         if len(docs_batch) >= batch_size:
-            flush("lote")
+            flush("batch")
 
     if docs_batch:
         flush("final")
 
     if get_bool_env('LONG_CONTEXT'):
+        def generate_index(f):
+            return generate_treedex_index(llm, f)
+        
         # Generate long context
         with ThreadPoolExecutor() as executor:
-            list(executor.map(generate_treedex_index, files))
+            list(executor.map(generate_index, files))
 
     # Update status manifest
     manifest.add_completed_source(source)
@@ -380,12 +423,9 @@ def build_vectorstore(embeddings, files: List[VDBFile], source: str, batch_size=
     )
     return vectorstore
 
-def generate_treedex_index(file: VDBFile):
+def generate_treedex_index(llm, file: VDBFile):
     try:
-        llm = OpenAILLM(
-            api_key=get_env('OPENAI_API_KEY'),
-            model=get_env('OPENAI_MODEL')
-        )
+        llm = get_configured_long_context_llm(llm)
 
         treedex_path = QDRANT_META_PATH + '/treedex'
         index_path = treedex_path + f'/{file.metadata["id"]}.json'
@@ -424,11 +464,14 @@ def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
         return
 
     # Update the permissions in batch
-    vectorstore.client.set_payload(
-        collection_name=vectorstore.collection_name,
-        key="metadata.permissions",
-        payload=new_permissions,
-        points=id_filter,
+    run_qdrant_write_with_retry(
+        lambda: vectorstore.client.set_payload(
+            collection_name=vectorstore.collection_name,
+            key="metadata.permissions",
+            payload=new_permissions,
+            points=id_filter,
+        ),
+        operation_name=f"update permissions for file {file_id}",
     )
 
 
