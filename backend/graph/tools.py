@@ -1,11 +1,17 @@
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import os
+from pathlib import Path
+from typing import Annotated
 
 from treedex import TreeDex
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+from langgraph.prebuilt import InjectedState
 
+from src.generation.rendering import MarkdownRenderer, PdfRenderer, TxtRenderer
+from src.generation.llm import InsufficientContextError, generate_document_from_context
+from src.generation.model import DocumentGenerationSchema
 from src.config.env import get_env, get_bool_env
 from src.connectors.store import QDRANT_META_PATH
 from src.connectors.search import augment_chunks
@@ -25,6 +31,8 @@ from src.utils.topic import resolve_topic_names
 @tool
 def vectordb_search(query: str, config: RunnableConfig) -> str:
     """Searches for documents relevant to the user's query through hybrid-search in a database."""
+
+    logging.info(f'Searching: {query}')
 
     configurable = config.get("configurable", {})
     llm = configurable["llm"]
@@ -59,6 +67,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
     chunks = [c for c, ok in zip(chunks, relevance) if ok]
     available_sources = get_chunk_sources(chunks, sources)
+
+    logging.info(f'Found {len(chunks)} relevant chunks')
 
     if not USE_LONG_CONTEXT_BEFORE:
         long_context_sources = available_sources
@@ -139,3 +149,58 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         "chunks": formatted_chunks,
         "sources": available_sources
     }
+
+
+@tool(args_schema=DocumentGenerationSchema)
+def generate_document(
+        query: str,
+        format: str,
+        config: RunnableConfig,
+        messages: Annotated[list, InjectedState("messages")]
+    ) -> str:
+    """
+    Generates a document following user instructions. 
+    Should be done before any vectordb_search call, this tool will suggest search terms if needed.
+    Unless stated otherwise, generate a PDF by default.
+    """
+
+    logging.info("Generating document...")
+ 
+    # Get config
+    configurable = config.get("configurable", {})
+    llm = configurable["llm"]
+ 
+    # Generate document
+    try:
+        document = generate_document_from_context(llm, query, messages)
+
+    except InsufficientContextError as e:
+        searches = "\n".join(f"- {q}" for q in e.suggested_searches)
+        return (
+            "Not enough information in the current context to generate this document.\n"
+            f"Missing: {e.missing_info}\n"
+            "Run vectordb_search separately for each of these queries, then call generate_document again:\n"
+            f"{searches}"
+        )
+ 
+    # Render document
+    if format == 'txt':
+        renderer = TxtRenderer()
+    elif format == 'markdown':
+        renderer = MarkdownRenderer()
+    elif format == 'pdf':
+        renderer = PdfRenderer()
+    else:
+        raise ValueError(f"Unsupported document format: {format}")
+ 
+    doc_bytes = renderer.render(document)
+ 
+    # DEBUG: save document
+    filename = f"sample_document.{format}"
+    output_dir = Path("generated_documents")
+    output_dir.mkdir(parents=True, exist_ok=True)
+ 
+    output_path = output_dir / filename
+    output_path.write_bytes(doc_bytes)
+ 
+    return "Ok"
