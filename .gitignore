@@ -250,3 +250,8 @@ benchmark/dataset_generation/narrativeqa/*
 !benchmark/dataset_generation/squad2.0/
 benchmark/dataset_generation/squad2.0/*
 !benchmark/dataset_generation/squad2.0/dataset_generation_squad2.0.py
+
+
+
+.dev
+.env.remote
