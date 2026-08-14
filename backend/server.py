@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from psycopg_pool import AsyncConnectionPool
 
 from graph.model import get_llm_with_tools
+from src.connectors.search import merge_sources
 from src.connectors.embeddings import get_configured_embeddings
 from src.config.log import setup_logging
 from src.config.auth import (
@@ -560,7 +561,7 @@ def _get_chat_or_404(
     return chat
 
 
-def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None:
+def get_vectordb_search_sources_in_latest_turn(messages: list[Any]) -> list[dict]:
     last_human_index = next(
         (
             i
@@ -571,29 +572,40 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
     )
 
     if last_human_index == -1:
-        return None
+        return []
 
-    for i in range(last_human_index + 1, len(messages)):
-        message = messages[i]
+    turn = messages[last_human_index + 1:]
 
-        if not isinstance(message, AIMessage):
+    call_ids = {
+        tool_call["id"]
+        for message in turn
+        if isinstance(message, AIMessage)
+        for tool_call in (message.tool_calls or [])
+        if tool_call.get("name") == "vectordb_search" and tool_call.get("id")
+    }
+
+    collected = []
+
+    for message in turn:
+        if not isinstance(message, ToolMessage) or message.tool_call_id not in call_ids:
             continue
 
-        for tool_call in message.tool_calls or []:
-            if tool_call.get("name") != "vectordb_search":
-                continue
+        artifact = getattr(message, "artifact", None)
 
-            call_id = tool_call.get("id")
+        if isinstance(artifact, dict):
+            collected.append(artifact.get("sources") or [])
+            continue
 
-            for followup in messages[i + 1 :]:
-                if isinstance(followup, ToolMessage) and followup.tool_call_id == call_id:
-                    try:
-                        return json.loads(followup.content)
+        try:
+            payload = json.loads(message.content)
 
-                    except:
-                        return None
+            if isinstance(payload, dict):
+                collected.append(payload.get("sources") or [])
 
-    return None
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return merge_sources(*collected)
 
 
 @app.get("/chats/{chat_id}", response_model=ChatDetailModel)
@@ -673,12 +685,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     if not messages:
         raise HTTPException(status_code=500, detail="No response generated")
 
-    available_sources: list[dict[str, Any]] = []
-
-    search_results = get_vectordb_search_output_in_latest_turn(messages)
-
-    if search_results is not None:
-        available_sources = search_results['sources']
+    available_sources = get_vectordb_search_sources_in_latest_turn(messages)
 
     record_token_usage_metrics(pg_pool, messages, metrics_actor)
     return {

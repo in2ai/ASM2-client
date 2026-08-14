@@ -14,7 +14,7 @@ from src.generation.llm import InsufficientContextError, generate_document_from_
 from src.generation.model import DocumentGenerationSchema
 from src.config.env import get_env, get_bool_env
 from src.connectors.store import QDRANT_META_PATH
-from src.connectors.search import augment_chunks
+from src.connectors.search import augment_chunks, merge_sources
 from src.connectors.llms import get_configured_long_context_llm
 from src.metrics.metrics import (
     Metrics,
@@ -28,8 +28,8 @@ from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sou
 from src.utils.topic import resolve_topic_names
 
 
-@tool
-def vectordb_search(query: str, config: RunnableConfig) -> str:
+@tool(response_format="content_and_artifact")
+def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
     """Searches for documents relevant to the user's query through hybrid-search in a database."""
 
     logging.info(f'Searching: {query}')
@@ -51,8 +51,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
     except Exception:
         logging.exception("vectordb_search failed")
-        return "[Search error: the document search is temporarily unavailable.]"
-    
+        return "[Search error: the document search is temporarily unavailable.]", {"sources": []}
+
     USE_LONG_CONTEXT_BEFORE = get_bool_env('LONG_CONTEXT_BEFORE_FILTER')
 
     if USE_LONG_CONTEXT_BEFORE:
@@ -75,20 +75,22 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
     USE_LONG_CONTEXT = get_bool_env('LONG_CONTEXT')
     long_context = []
+    long_context_used = []
 
     if USE_LONG_CONTEXT:
-        llm = get_configured_long_context_llm(llm)
+        lc_llm = get_configured_long_context_llm(llm)
 
         for source in long_context_sources:
             treedex_path = QDRANT_META_PATH + f'/treedex/{source["id"]}.json'
 
             if os.path.isfile(treedex_path):
                 logging.info(f"Checking long context for {source['title']}")
-                index = TreeDex.load(treedex_path, llm=llm)
+                index = TreeDex.load(treedex_path, llm=lc_llm)
                 result = index.query(query, agentic=True)
 
                 header = f'[Long context summary for {source["title"]}]'
                 long_context.append(f'{header}\n\n{result}')
+                long_context_used.append(source)
 
     # Send usage metrics
     if pool is not None and metrics_actor is not None:
@@ -124,12 +126,9 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
     }
 
-    if not chunks:
-        return fallback_messages.get(lang_code, fallback_messages["es"])
-
     formatted_chunks = []
 
-    for chunk in augment_chunks(vectorstore, chunks):
+    for chunk in (augment_chunks(vectorstore, chunks) if chunks else []):
         meta = chunk.metadata
         header = (
             '['
@@ -142,13 +141,14 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
         formatted_chunks.append(f'{header}\n\n{chunk.page_content}')
 
-    for l in long_context:
-        formatted_chunks.append(l)
+    blocks = formatted_chunks + long_context
 
-    return {
-        "chunks": formatted_chunks,
-        "sources": available_sources
-    }
+    if not blocks:
+        return fallback_messages.get(lang_code, fallback_messages["es"]), {"sources": []}
+
+    cited_sources = merge_sources(available_sources, long_context_used)
+
+    return "\n\n".join(blocks), {"sources": cited_sources}
 
 
 @tool(args_schema=DocumentGenerationSchema)
