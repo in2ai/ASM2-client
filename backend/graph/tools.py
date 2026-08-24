@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Annotated
+import base64
 
 from treedex import TreeDex
 from langchain_core.runnables import RunnableConfig
@@ -151,25 +152,25 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
     return "\n\n".join(blocks), {"sources": cited_sources}
 
 
-@tool(args_schema=DocumentGenerationSchema)
+@tool(args_schema=DocumentGenerationSchema, response_format="content_and_artifact")
 def generate_document(
         query: str,
         format: str,
         config: RunnableConfig,
         messages: Annotated[list, InjectedState("messages")]
-    ) -> str:
+    ) -> tuple[str, dict | None]:
     """
-    Generates a document following user instructions. 
+    Generates a document following user instructions.
     Should be done before any vectordb_search call, this tool will suggest search terms if needed.
     Unless stated otherwise, generate a PDF by default.
     """
 
     logging.info("Generating document...")
- 
+
     # Get config
     configurable = config.get("configurable", {})
     llm = configurable["llm"]
- 
+
     # Generate document
     try:
         document = generate_document_from_context(llm, query, messages)
@@ -180,9 +181,10 @@ def generate_document(
             "Not enough information in the current context to generate this document.\n"
             f"Missing: {e.missing_info}\n"
             "Run vectordb_search separately for each of these queries, then call generate_document again:\n"
-            f"{searches}"
+            f"{searches}",
+            None,
         )
- 
+
     # Render document
     if format == 'txt':
         renderer = TxtRenderer()
@@ -192,15 +194,12 @@ def generate_document(
         renderer = PdfRenderer()
     else:
         raise ValueError(f"Unsupported document format: {format}")
- 
+
     doc_bytes = renderer.render(document)
- 
-    # DEBUG: save document
-    filename = f"sample_document.{format}"
-    output_dir = Path("generated_documents")
-    output_dir.mkdir(parents=True, exist_ok=True)
- 
-    output_path = output_dir / filename
-    output_path.write_bytes(doc_bytes)
- 
-    return "Ok"
+
+    artifact = {
+        "filename": f"sample_document.{format}",
+        "content": base64.b64encode(doc_bytes).decode("ascii"),
+    }
+
+    return "Ok", artifact

@@ -608,6 +608,20 @@ def get_vectordb_search_sources_in_latest_turn(messages: list[Any]) -> list[dict
     return merge_sources(*collected)
 
 
+def get_generated_document_in_latest_turn(messages: list) -> dict[str, Any] | None:
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            break
+        if not isinstance(message, ToolMessage):
+            continue
+        if message.name != 'generate_document':
+            continue
+        artifact = message.artifact
+        if isinstance(artifact, dict) and artifact.get("content"):
+            return artifact
+    return None
+
+
 @app.get("/chats/{chat_id}", response_model=ChatDetailModel)
 async def get_chat(auth: AuthenticatedAuth, chat_id: str):
     chat_store:PostgresChatStore = app.state.tsdb_chat_store
@@ -686,12 +700,14 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
         raise HTTPException(status_code=500, detail="No response generated")
 
     available_sources = get_vectordb_search_sources_in_latest_turn(messages)
+    document = get_generated_document_in_latest_turn(messages)
 
     record_token_usage_metrics(pg_pool, messages, metrics_actor)
     return {
         "answer": str(messages[-1].content),
         "detected_lang": str(result.get("detected_lang", "es")),
         "sources": available_sources,
+        "document": document,
     }
 
 
@@ -705,7 +721,7 @@ async def send_chat_message(
     if not content:
         raise HTTPException(status_code=422, detail="content must not be empty")
 
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
     _get_chat_or_404(chat_store, auth.sub, chat_id)
 
     try:
@@ -721,16 +737,22 @@ async def send_chat_message(
 
     result = await _run_chat_turn(auth, chat_id, content)
 
+    metadata: dict[str, Any] = {
+        "detected_lang": result["detected_lang"],
+        "sources": result["sources"],
+    }
+
+    document = result.get("document")
+    if document is not None:
+        metadata["document"] = document
+
     assistant_message = chat_store.append_message(
         auth.sub,
         chat_id,
         "assistant",
         result["answer"],
         status="complete",
-        metadata={
-            "detected_lang": result["detected_lang"],
-            "sources": result["sources"],
-        },
+        metadata=metadata,
     )
     chat = _get_chat_or_404(chat_store, auth.sub, chat_id)
 
