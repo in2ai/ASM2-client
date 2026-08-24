@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type {
   ButtonHTMLAttributes,
+  ComponentProps,
   ReactNode,
   TextareaHTMLAttributes,
 } from 'react'
@@ -35,13 +36,18 @@ vi.mock('@/components/ui/textarea', () => ({
 vi.mock('lucide-react', () => ({
   ArrowUp: () => null,
   Bot: () => null,
+  Download: () => null,
   ExternalLink: () => null,
+  FileText: () => null,
   Loader2: () => null,
   User2: () => null,
 }))
 
 const defaultLabels = {
   assistant: 'Assistant',
+  document: 'Generated document',
+  downloadDocument: 'Download',
+  downloadingDocument: 'Downloading',
   openSource: 'Open source',
   page: 'Page',
   pages: 'Pages',
@@ -76,7 +82,19 @@ function createChat(messages: ChatMessage[]): ChatDetail {
   }
 }
 
-function renderConversation(messages: ChatMessage[]) {
+type ConversationOverrides = Partial<
+  Pick<
+    ComponentProps<typeof ConversationView>,
+    | 'documentDownloadErrors'
+    | 'downloadingDocumentMessageIds'
+    | 'onDownloadDocument'
+  >
+>
+
+function renderConversation(
+  messages: ChatMessage[],
+  overrides: ConversationOverrides = {},
+) {
   return render(
     <ConversationView
       chat={createChat(messages)}
@@ -91,6 +109,7 @@ function renderConversation(messages: ChatMessage[]) {
       messageLabels={defaultLabels}
       onComposerChange={() => undefined}
       onSendMessage={() => undefined}
+      {...overrides}
     />,
   )
 }
@@ -254,5 +273,214 @@ describe('ConversationView markdown rendering', () => {
     expect(pre?.className).toContain('overflow-x-auto')
     expect(table?.parentElement?.className).toContain('overflow-x-auto')
     expect(table?.closest('.min-w-0')).toBeTruthy()
+  })
+})
+
+describe('ConversationView generated documents', () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('shows the generated document and asks to download it', () => {
+    const onDownloadDocument = vi.fn()
+    const message = createMessage({
+      content: 'Here is the report you asked for.',
+      id: 'assistant-with-document',
+      metadata: {
+        document: {
+          filename: 'quality-report-2026.pdf',
+          format: 'pdf',
+          mime_type: 'application/pdf',
+          size_bytes: 245_760,
+          title: 'Quality report 2026',
+        },
+      },
+      role: 'assistant',
+    })
+
+    renderConversation([message], { onDownloadDocument })
+
+    expect(screen.getByText('Generated document')).toBeTruthy()
+    expect(screen.getByText('Quality report 2026')).toBeTruthy()
+    expect(screen.getByText('PDF')).toBeTruthy()
+    expect(screen.getByText('240 KB')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+
+    expect(onDownloadDocument).toHaveBeenCalledTimes(1)
+    expect(onDownloadDocument.mock.calls[0][0]).toMatchObject({
+      id: 'assistant-with-document',
+    })
+  })
+
+  it('falls back to the filename when the document has no title', () => {
+    renderConversation([
+      createMessage({
+        content: 'Document ready.',
+        metadata: {
+          document: {
+            filename: 'notes.md',
+            format: 'markdown',
+            mime_type: 'text/markdown; charset=utf-8',
+            size_bytes: 512,
+          },
+        },
+        role: 'assistant',
+      }),
+    ])
+
+    expect(screen.getByText('notes.md')).toBeTruthy()
+    expect(screen.getByText('MD')).toBeTruthy()
+    expect(screen.getByText('512 B')).toBeTruthy()
+  })
+
+  it('reports the download as pending and surfaces its error', () => {
+    const message = createMessage({
+      content: 'Document ready.',
+      id: 'assistant-downloading',
+      metadata: {
+        document: {
+          filename: 'report.pdf',
+          format: 'pdf',
+          mime_type: 'application/pdf',
+          size_bytes: 1024,
+        },
+      },
+      role: 'assistant',
+    })
+
+    renderConversation([message], {
+      documentDownloadErrors: { 'assistant-downloading': 'Download failed' },
+      downloadingDocumentMessageIds: new Set(['assistant-downloading']),
+      onDownloadDocument: vi.fn(),
+    })
+
+    const downloadButton = screen.getByRole('button', { name: 'Downloading' })
+
+    expect(downloadButton).toHaveProperty('disabled', true)
+    expect(screen.getByText('Download failed')).toBeTruthy()
+  })
+
+  it('keeps a download error attached to the message that failed', () => {
+    const failing = createMessage({
+      content: 'First document.',
+      id: 'assistant-failed',
+      metadata: {
+        document: {
+          filename: 'first.pdf',
+          format: 'pdf',
+          mime_type: 'application/pdf',
+          size_bytes: 1024,
+        },
+      },
+      role: 'assistant',
+    })
+    const other = createMessage({
+      content: 'Second document.',
+      id: 'assistant-other',
+      metadata: {
+        document: {
+          filename: 'second.pdf',
+          format: 'pdf',
+          mime_type: 'application/pdf',
+          size_bytes: 2048,
+        },
+      },
+      role: 'assistant',
+    })
+
+    renderConversation([failing, other], {
+      documentDownloadErrors: { 'assistant-failed': 'Download failed' },
+    })
+
+    expect(screen.getAllByText('Download failed')).toHaveLength(1)
+  })
+
+  it('tracks concurrent downloads per message', () => {
+    const first = createMessage({
+      content: 'First document.',
+      id: 'assistant-first',
+      metadata: {
+        document: {
+          filename: 'first.pdf',
+          format: 'pdf',
+          mime_type: 'application/pdf',
+          size_bytes: 1024,
+        },
+      },
+      role: 'assistant',
+    })
+    const second = createMessage({
+      content: 'Second document.',
+      id: 'assistant-second',
+      metadata: {
+        document: {
+          filename: 'second.pdf',
+          format: 'pdf',
+          mime_type: 'application/pdf',
+          size_bytes: 2048,
+        },
+      },
+      role: 'assistant',
+    })
+
+    renderConversation([first, second], {
+      downloadingDocumentMessageIds: new Set([
+        'assistant-first',
+        'assistant-second',
+      ]),
+      onDownloadDocument: vi.fn(),
+    })
+
+    expect(screen.getAllByRole('button', { name: 'Downloading' })).toHaveLength(
+      2,
+    )
+    expect(screen.queryByRole('button', { name: 'Download' })).toBeNull()
+  })
+
+  it('ignores malformed document metadata', () => {
+    const invalidMetadata = {
+      document: {
+        filename: 'broken.pdf',
+        format: 'pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 'a lot',
+      },
+    } as unknown as ChatMessage['metadata']
+
+    renderConversation([
+      createMessage({
+        content: 'Assistant response.',
+        metadata: invalidMetadata,
+        role: 'assistant',
+      }),
+    ])
+
+    expect(screen.queryByText('Generated document')).toBeNull()
+    expect(screen.queryByText('broken.pdf')).toBeNull()
+  })
+
+  it('never renders a document attached to a user message', () => {
+    renderConversation([
+      createMessage({
+        content: 'My question.',
+        metadata: {
+          document: {
+            filename: 'user.pdf',
+            format: 'pdf',
+            mime_type: 'application/pdf',
+            size_bytes: 1024,
+          },
+        },
+        role: 'user',
+      }),
+    ])
+
+    expect(screen.queryByText('Generated document')).toBeNull()
   })
 })

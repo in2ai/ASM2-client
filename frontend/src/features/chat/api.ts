@@ -1,10 +1,12 @@
 import { API_RESOURCE, BACKEND_URL } from "@/lib/api";
 import { useLogto } from "@logto/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { saveBlobAsFile } from "./chat-document";
 import type {
   ChatDetail,
   ChatSummary,
   CreateChatInput,
+  DownloadDocumentInput,
   SendMessageInput,
   SendMessageResult,
   SourceLoginInfo,
@@ -58,6 +60,30 @@ export function useAuthorizedChatRequest() {
     }
 
     return JSON.parse(responseText) as T;
+  };
+}
+
+export function useAuthorizedChatDownload() {
+  const { getAccessToken } = useLogto();
+
+  return async function authorizedChatDownload(path: string) {
+    const token = await getAccessToken(API_RESOURCE);
+    if (!token) {
+      throw new Error("Missing access token");
+    }
+
+    const response = await fetch(`${BACKEND_URL}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        detail?: string;
+      } | null;
+      throw new Error(payload?.detail ?? `Request failed (${response.status})`);
+    }
+
+    return response.blob();
   };
 }
 
@@ -165,6 +191,23 @@ export function useSendMessageMutation() {
         body: JSON.stringify({ content }),
         method: "POST",
       }),
+  });
+}
+
+export function useDownloadDocumentMutation() {
+  const download = useAuthorizedChatDownload();
+
+  return useMutation({
+    mutationFn: async ({
+      chatId,
+      filename,
+      messageId,
+    }: DownloadDocumentInput) => {
+      const blob = await download(
+        `/chats/${chatId}/messages/${messageId}/document`,
+      );
+      saveBlobAsFile(blob, filename);
+    },
   });
 }
 

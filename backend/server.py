@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg_pool import AsyncConnectionPool
 
@@ -45,6 +45,7 @@ from src.connectors.store import (
     get_vectordb,
 )
 from src.connectors.manifest import VDBManifest
+from src.generation.artifact import to_stored_document
 from src.indexing.deletion_guard import DeletionThresholdExceeded
 
 from src.model.endpoints import *
@@ -614,9 +615,9 @@ def get_generated_document_in_latest_turn(messages: list) -> dict[str, Any] | No
             break
         if not isinstance(message, ToolMessage):
             continue
-        if message.name != 'generate_document':
+        if getattr(message, "name", None) != "generate_document":
             continue
-        artifact = message.artifact
+        artifact = getattr(message, "artifact", None)
         if isinstance(artifact, dict) and artifact.get("content"):
             return artifact
     return None
@@ -626,6 +627,29 @@ def get_generated_document_in_latest_turn(messages: list) -> dict[str, Any] | No
 async def get_chat(auth: AuthenticatedAuth, chat_id: str):
     chat_store:PostgresChatStore = app.state.tsdb_chat_store
     return _get_chat_or_404(chat_store, auth.sub, chat_id)
+
+
+@app.get("/chats/{chat_id}/messages/{message_id}/document")
+async def download_chat_document(
+    auth: AuthenticatedAuth, chat_id: str, message_id: str
+):
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
+    document = chat_store.get_message_document(auth.sub, chat_id, message_id)
+
+    if document is None:
+        raise HTTPException(
+            status_code=404, detail="This message has no generated document"
+        )
+
+    return Response(
+        content=document["content"],
+        media_type=document["mime_type"],
+        headers={
+            # Filenames are slugified to [a-z0-9-] when the document is generated.
+            "Content-Disposition": f'attachment; filename="{document["filename"]}"',
+            "Cache-Control": "private, max-age=86400",
+        },
+    )
 
 
 @app.delete("/chats/{chat_id}", status_code=204)
@@ -737,22 +761,17 @@ async def send_chat_message(
 
     result = await _run_chat_turn(auth, chat_id, content)
 
-    metadata: dict[str, Any] = {
-        "detected_lang": result["detected_lang"],
-        "sources": result["sources"],
-    }
-
-    document = result.get("document")
-    if document is not None:
-        metadata["document"] = document
-
     assistant_message = chat_store.append_message(
         auth.sub,
         chat_id,
         "assistant",
         result["answer"],
         status="complete",
-        metadata=metadata,
+        metadata={
+            "detected_lang": result["detected_lang"],
+            "sources": result["sources"],
+        },
+        document=to_stored_document(result.get("document")),
     )
     chat = _get_chat_or_404(chat_store, auth.sub, chat_id)
 

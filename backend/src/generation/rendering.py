@@ -22,8 +22,13 @@ from src.generation.model import Document
 
 
 class DocumentRenderer(ABC):
+    # Document-level metadata, for formats that can carry it. Set per render()
+    # rather than in reset(), which subclasses override without calling up.
+    document_title: str = ""
+
     def render(self, document: Document) -> bytes:
         self.reset()
+        self.document_title = document.title
         document.render(self)
         return self.finish()
 
@@ -194,6 +199,12 @@ class PdfRenderer(DocumentRenderer):
         buf = BytesIO()
         doc = SimpleDocTemplate(
             buf, pagesize=LETTER,
+            # Without these, ReportLab stamps its "(anonymous)" placeholders, and
+            # PDF viewers label the tab with that instead of the document title.
+            title=self.document_title,
+            author="",
+            subject="",
+            creator="ASM2",
             topMargin=0.9 * inch, bottomMargin=0.9 * inch,
             leftMargin=0.9 * inch, rightMargin=0.9 * inch,
         )

@@ -315,13 +315,17 @@
       "pages": "Páxinas",
       "sources": "Fontes",
       "sending": "Xerando resposta...",
-      "user": "Ti"
+      "user": "Ti",
+      "document": "Documento xerado",
+      "downloadDocument": "Descargar",
+      "downloadingDocument": "Descargando..."
     },
     "errors": {
       "title": "Non se puido cargar o chat",
       "loadFailed": "Non se puido cargar o espazo de chat. Téntao de novo.",
       "sendFailed": "Non se puido enviar a túa mensaxe. Téntao de novo.",
-      "deleteFailed": "Non se puido eliminar a conversa. Téntao de novo."
+      "deleteFailed": "Non se puido eliminar a conversa. Téntao de novo.",
+      "downloadFailed": "Non se puido descargar o documento. Téntao de novo."
     },
     "sources": {
       "openPanel": "Fontes",

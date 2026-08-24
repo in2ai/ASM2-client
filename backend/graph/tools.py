@@ -1,16 +1,14 @@
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import os
-from pathlib import Path
 from typing import Annotated
-import base64
 
 from treedex import TreeDex
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
-from src.generation.rendering import MarkdownRenderer, PdfRenderer, TxtRenderer
+from src.generation.artifact import build_document_artifact
 from src.generation.llm import InsufficientContextError, generate_document_from_context
 from src.generation.model import DocumentGenerationSchema
 from src.config.env import get_env, get_bool_env
@@ -186,20 +184,19 @@ def generate_document(
         )
 
     # Render document
-    if format == 'txt':
-        renderer = TxtRenderer()
-    elif format == 'markdown':
-        renderer = MarkdownRenderer()
-    elif format == 'pdf':
-        renderer = PdfRenderer()
-    else:
-        raise ValueError(f"Unsupported document format: {format}")
+    try:
+        artifact = build_document_artifact(document, format)
 
-    doc_bytes = renderer.render(document)
+    except ValueError:
+        logging.exception("Document rendering failed")
+        return (
+            f"The '{format}' format is not supported. Supported formats: pdf, markdown, txt.",
+            None,
+        )
 
-    artifact = {
-        "filename": f"sample_document.{format}",
-        "content": base64.b64encode(doc_bytes).decode("ascii"),
-    }
-
-    return "Ok", artifact
+    return (
+        f'Generated the {format} document "{document.title}". '
+        "It is attached to the reply so the user can download it; "
+        "tell them it is ready instead of repeating its full contents.",
+        artifact,
+    )

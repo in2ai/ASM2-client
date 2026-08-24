@@ -12,15 +12,26 @@ import {
   useChatsQuery,
   useCreateChatMutation,
   useDeleteChatMutation,
+  useDownloadDocumentMutation,
   useSendMessageMutation,
   useSourcesStatusQuery,
 } from "./api";
+import { getMessageDocument } from "./chat-document";
 import { ChatShell } from "./chat-shell";
 import { ChatSidebar } from "./chat-sidebar";
 import { ConversationView } from "./conversation-view";
 import { SourcesPanel } from "./sources-panel";
 import type { ChatMessage } from "./types";
 import { getChatTitle, toErrorMessage } from "./utils";
+
+function omitKey(source: Record<string, string>, key: string) {
+  if (!(key in source)) {
+    return source;
+  }
+
+  const { [key]: _removed, ...rest } = source;
+  return rest;
+}
 
 interface ChatPageProps {
   onSelectChat: (chatId?: string, options?: { replace?: boolean }) => void;
@@ -42,6 +53,12 @@ export function ChatPage({
   );
   const [sendingChatId, setSendingChatId] = useState<string | null>(null);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [documentDownloadErrors, setDocumentDownloadErrors] = useState<
+    Record<string, string>
+  >({});
+  const [downloadingDocumentIds, setDownloadingDocumentIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
 
   const queryClient = useQueryClient();
   const chatsQuery = useChatsQuery();
@@ -51,6 +68,7 @@ export function ChatPage({
   const createChatMutation = useCreateChatMutation();
   const deleteChatMutation = useDeleteChatMutation();
   const sendMessageMutation = useSendMessageMutation();
+  const downloadDocumentMutation = useDownloadDocumentMutation();
 
   useEffect(() => {
     if (!selectedChatId && chatsQuery.data?.[0]?.id) {
@@ -159,6 +177,36 @@ export function ChatPage({
       }
     } catch (error) {
       setComposerError(toErrorMessage(error, t("errors.deleteFailed")));
+    }
+  };
+
+  const handleDownloadDocument = async (message: ChatMessage) => {
+    const generatedDocument = getMessageDocument(message);
+
+    if (!generatedDocument) {
+      return;
+    }
+
+    setDocumentDownloadErrors((current) => omitKey(current, message.id));
+    setDownloadingDocumentIds((current) => new Set(current).add(message.id));
+
+    try {
+      await downloadDocumentMutation.mutateAsync({
+        chatId: message.chat_id,
+        filename: generatedDocument.filename,
+        messageId: message.id,
+      });
+    } catch (error) {
+      setDocumentDownloadErrors((current) => ({
+        ...current,
+        [message.id]: toErrorMessage(error, t("errors.downloadFailed")),
+      }));
+    } finally {
+      setDownloadingDocumentIds((current) => {
+        const next = new Set(current);
+        next.delete(message.id);
+        return next;
+      });
     }
   };
 
@@ -289,6 +337,8 @@ export function ChatPage({
           composerHint={composerHint}
           composerPlaceholder={t("composer.placeholder")}
           composerValue={composerValue}
+          documentDownloadErrors={documentDownloadErrors}
+          downloadingDocumentMessageIds={downloadingDocumentIds}
           emptyTitle={emptyTitle}
           emptyDescription={emptyDescription}
           emptyPrimaryActionLabel={emptyPrimaryActionLabel}
@@ -298,6 +348,9 @@ export function ChatPage({
           locale={locale}
           messageLabels={{
             assistant: t("messages.assistant"),
+            document: t("messages.document"),
+            downloadDocument: t("messages.downloadDocument"),
+            downloadingDocument: t("messages.downloadingDocument"),
             openSource: t("messages.openSource"),
             page: t("messages.page"),
             pages: t("messages.pages"),
@@ -305,6 +358,7 @@ export function ChatPage({
             sending: t("messages.sending"),
             user: t("messages.user"),
           }}
+          onDownloadDocument={(message) => void handleDownloadDocument(message)}
           onEmptyPrimaryAction={() => setSourcesOpen(true)}
           onComposerChange={setComposerValue}
           onSendMessage={() => void handleSendMessage()}

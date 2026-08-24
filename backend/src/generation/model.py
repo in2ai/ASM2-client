@@ -1,13 +1,12 @@
-import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field
 
 
 class DocumentGenerationSchema(BaseModel):
     query: str
-    format: Literal["pdf", "markdown", "txt", "docx", "csv"] = Field(
-        description="The action to perform"
+    format: Literal["pdf", "markdown", "txt"] = Field(
+        description="The file format to render the document in."
     )
 
 # Document model

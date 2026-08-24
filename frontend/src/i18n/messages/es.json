@@ -315,13 +315,17 @@
       "pages": "Páginas",
       "sources": "Fuentes",
       "sending": "Generando respuesta...",
-      "user": "Tú"
+      "user": "Tú",
+      "document": "Documento generado",
+      "downloadDocument": "Descargar",
+      "downloadingDocument": "Descargando..."
     },
     "errors": {
       "title": "No se pudo cargar el chat",
       "loadFailed": "No se pudo cargar el espacio de chat. Inténtalo de nuevo.",
       "sendFailed": "No se pudo enviar tu mensaje. Inténtalo de nuevo.",
-      "deleteFailed": "No se pudo eliminar la conversación. Inténtalo de nuevo."
+      "deleteFailed": "No se pudo eliminar la conversación. Inténtalo de nuevo.",
+      "downloadFailed": "No se pudo descargar el documento. Inténtalo de nuevo."
     },
     "sources": {
       "openPanel": "Fuentes",
