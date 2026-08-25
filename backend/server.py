@@ -647,7 +647,7 @@ async def download_chat_document(
         headers={
             # Filenames are slugified to [a-z0-9-] when the document is generated.
             "Content-Disposition": f'attachment; filename="{document["filename"]}"',
-            "Cache-Control": "private, max-age=86400",
+            "Cache-Control": "no-store",
         },
     )
 

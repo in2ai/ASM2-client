@@ -58,7 +58,7 @@ class DownloadChatDocumentTests(unittest.TestCase):
             response.headers["content-disposition"],
             'attachment; filename="quality-report-2026.pdf"',
         )
-        self.assertEqual(response.headers["cache-control"], "private, max-age=86400")
+        self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_scopes_the_lookup_to_the_authenticated_user(self):
         self.client.get("/chats/chat-1/messages/message-1/document")
