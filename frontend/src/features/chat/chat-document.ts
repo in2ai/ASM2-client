@@ -10,19 +10,21 @@ const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'] as const
  * validated before the conversation renders a download for it.
  */
 export function getMessageDocument(message: ChatMessage): ChatDocument | null {
-  const candidate = message.metadata?.document as
-    | Partial<ChatDocument>
-    | undefined
+  const candidate: unknown = message.metadata?.document
 
   if (!candidate || typeof candidate !== 'object') {
     return null
   }
 
   if (
+    !('filename' in candidate) ||
     typeof candidate.filename !== 'string' ||
     !candidate.filename.trim() ||
+    !('format' in candidate) ||
     typeof candidate.format !== 'string' ||
+    !('mime_type' in candidate) ||
     typeof candidate.mime_type !== 'string' ||
+    !('size_bytes' in candidate) ||
     typeof candidate.size_bytes !== 'number' ||
     !Number.isFinite(candidate.size_bytes) ||
     candidate.size_bytes < 0
@@ -30,7 +32,18 @@ export function getMessageDocument(message: ChatMessage): ChatDocument | null {
     return null
   }
 
-  return candidate as ChatDocument
+  const title = 'title' in candidate ? candidate.title : undefined
+  if (title !== undefined && title !== null && typeof title !== 'string') {
+    return null
+  }
+
+  return {
+    filename: candidate.filename,
+    format: candidate.format,
+    mime_type: candidate.mime_type,
+    size_bytes: candidate.size_bytes,
+    ...(typeof title === 'string' ? { title } : {}),
+  }
 }
 
 export function formatDocumentSize(bytes: number, locale: AppLocale) {

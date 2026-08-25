@@ -42,11 +42,17 @@ DEFAULT_DOCUMENT_STEM = "document"
 MAX_FILENAME_STEM_LENGTH = 60
 
 
+class UnsupportedDocumentFormatError(ValueError):
+    """The requested document format has no renderer."""
+
+
 def get_renderer(format: str) -> DocumentRenderer:
     spec = DOCUMENT_FORMATS.get(format)
 
     if spec is None:
-        raise ValueError(f"Unsupported document format: {format}")
+        raise UnsupportedDocumentFormatError(
+            f"Unsupported document format: {format}"
+        )
 
     return spec["renderer"]()
 
@@ -71,7 +77,9 @@ def build_document_artifact(document: Document, format: str) -> dict[str, Any]:
     spec = DOCUMENT_FORMATS.get(format)
 
     if spec is None:
-        raise ValueError(f"Unsupported document format: {format}")
+        raise UnsupportedDocumentFormatError(
+            f"Unsupported document format: {format}"
+        )
 
     doc_bytes = get_renderer(format).render(document)
 

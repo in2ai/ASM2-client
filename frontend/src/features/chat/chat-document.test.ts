@@ -43,6 +43,19 @@ describe('getMessageDocument', () => {
     ).toBeNull()
   })
 
+  it('treats a null title as absent', () => {
+    const metadata = {
+      document: { ...validDocument, title: null },
+    } as unknown as ChatMessage['metadata']
+
+    expect(getMessageDocument(createMessage(metadata))).toEqual({
+      filename: validDocument.filename,
+      format: validDocument.format,
+      mime_type: validDocument.mime_type,
+      size_bytes: validDocument.size_bytes,
+    })
+  })
+
   it('rejects descriptors with missing or wrongly typed fields', () => {
     const invalidDocuments = [
       { ...validDocument, filename: '' },
@@ -52,6 +65,7 @@ describe('getMessageDocument', () => {
       { ...validDocument, size_bytes: '2048' },
       { ...validDocument, size_bytes: Number.NaN },
       { ...validDocument, size_bytes: -1 },
+      { ...validDocument, title: 42 },
     ]
 
     for (const document of invalidDocuments) {

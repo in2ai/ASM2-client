@@ -6,6 +6,7 @@ import unittest
 from PyPDF2 import PdfReader
 
 from src.generation.artifact import (
+    UnsupportedDocumentFormatError,
     build_document_artifact,
     slugify_filename_stem,
     to_stored_document,
@@ -89,7 +90,7 @@ class BuildDocumentArtifactTests(unittest.TestCase):
     def test_rejects_unsupported_formats(self):
         document = build_document()
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(UnsupportedDocumentFormatError):
             build_document_artifact(document, "docx")
 
 

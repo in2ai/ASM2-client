@@ -8,7 +8,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
-from src.generation.artifact import build_document_artifact
+from src.generation.artifact import (
+    UnsupportedDocumentFormatError,
+    build_document_artifact,
+)
 from src.generation.llm import InsufficientContextError, generate_document_from_context
 from src.generation.model import DocumentGenerationSchema
 from src.config.env import get_env, get_bool_env
@@ -187,8 +190,8 @@ def generate_document(
     try:
         artifact = build_document_artifact(document, format)
 
-    except ValueError:
-        logging.exception("Document rendering failed")
+    except UnsupportedDocumentFormatError:
+        logging.warning("Unsupported document format requested: %s", format)
         return (
             f"The '{format}' format is not supported. Supported formats: pdf, markdown, txt.",
             None,

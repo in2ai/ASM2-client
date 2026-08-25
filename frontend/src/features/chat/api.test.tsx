@@ -133,9 +133,10 @@ describe('useAuthorizedChatDownload', () => {
     expect(requestUrl).toMatch(
       /\/chats\/chat-1\/messages\/message-1\/document$/,
     )
-    expect((init.headers as Record<string, string>).Authorization).toBe(
-      'Bearer chat-token',
-    )
+    const headers = new Headers(init.headers)
+
+    expect(headers.get('Authorization')).toBe('Bearer chat-token')
+    expect(headers.get('Content-Type')).toBeNull()
     expect(await blob.text()).toBe('%PDF-1.7')
   })
 
