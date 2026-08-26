@@ -14,7 +14,7 @@ from pptx import Presentation
 from PyPDF2 import PdfReader
 
 from src.config.search_config import GRAPH
-from src.utils.helpers import safe_execute
+from src.utils.helpers import safe_execute, safe_call
 
 
 def extract_docx_text(data: bytes) -> str:
@@ -241,56 +241,73 @@ class DropboxFile(VDBFile):
         super().__init__(metadata)
         self.service = service
 
-    def get_text(self) -> str | list[str]:
-        file_id = self.metadata["id"]
-        path_lower = self.metadata["path_lower"]
-        mime_type = self.metadata["mimeType"]
-
+    def get_data(self) -> bytes | None:
         try:
-            meta, resp = self.service.files_download(file_id or path_lower)
-            data = resp.content
+            _, response = safe_call(self.service.files_download, self.metadata["id"])
 
-            # Archivos PDF
-            if mime_type == "application/pdf":
-                return extract_pdf_text(data)
-
-            # Texto plano y Markdown
-            elif mime_type in ("text/plain", "text/markdown"):
-                return data.decode("utf-8", errors="ignore")
-
-            # Documentos Word
-            elif (
-                mime_type
-                == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            ):
-                return extract_docx_text(data)
-
-            # Presentaciones PowerPoint
-            elif (
-                mime_type
-                == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            ):
-                return extract_pptx_text(data)
-
-            # Hojas de cálculo Excel
-            elif (
-                mime_type
-                == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ):
-                return extract_excel_text(data)
-
-            # Archivos HTML
-            elif mime_type == "text/html":
-                return extract_html_text(data)
-
-            # Archivos CSV
-            elif mime_type == "text/csv":
-                return extract_csv_text(data)
+            return response.content
 
         except ApiError:
+            logging.warning("Dropbox download failed: %s", self.metadata["id"], exc_info=True)
+
             return None
 
+    def get_text(self) -> str | list[str] | None:
+        mime_type = self.metadata["mimeType"]
+        data = self.get_data()
+
+        if data is None:
+            return None
+
+        # Archivos PDF
+        if mime_type == "application/pdf":
+            return extract_pdf_text(data)
+
+        # Texto plano y Markdown
+        if mime_type in ("text/plain", "text/markdown"):
+            return data.decode("utf-8", errors="ignore")
+
+        # Documentos Word
+        if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            return extract_docx_text(data)
+
+        # Presentaciones PowerPoint
+        if mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+            return extract_pptx_text(data)
+
+        # Hojas de cálculo Excel
+        if mime_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+            return extract_excel_text(data)
+
+        # Archivos HTML
+        if mime_type == "text/html":
+            return extract_html_text(data)
+
+        # Archivos CSV
+        if mime_type == "text/csv":
+            return extract_csv_text(data)
+
+        # Tipo no soportado
         return None
+
+    def download(self, directory: str | Path) -> Path:
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+
+        data = self.get_data()
+
+        if data is None:
+            raise ValueError("No data available for download")
+
+        # Dropbox ids look like "id:AbCdEf"; the colon is not a valid filename
+        # character on Windows. The extension is always known here because the
+        # connector filters on it.
+        file_id = self.metadata["id"].replace(":", "_")
+        path = directory / f"{file_id}{Path(self.metadata['name']).suffix}"
+
+        path.write_bytes(data)
+
+        return path
 
 
 def _ms_headers(token_dict):

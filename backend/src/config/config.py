@@ -25,13 +25,14 @@ GDRIVE_EXCLUDE = set(i.strip() for i in get_env("GDRIVE_EXCLUDE", "").strip().sp
 
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
+# Dropbox
+DROPBOX_CLIENT_SECRET = get_env('DROPBOX_CLIENT_SECRET')
+DROPBOX_CLIENT_SECRET_FILE = get_env('DROPBOX_CLIENT_SECRET_FILE')
+DROPBOX_ROOTS = set(i.strip() for i in get_env("DROPBOX_ROOTS", '').strip().split(',') if i)
+DROPBOX_EXCLUDE = set(i.strip() for i in get_env("DROPBOX_EXCLUDE", '').strip().split(',') if i)
+
 # OpenAI
 OPENAI_API_KEY = get_env("OPENAI_API_KEY", "")
-
-# Dropbox
-DROPBOX_APP_KEY    = get_env("DROPBOX_APP_KEY", "")
-DROPBOX_APP_SECRET = get_env("DROPBOX_APP_SECRET", "")
-DROPBOX_ROOT       = get_env("DROPBOX_ROOT", "/")  # carpeta a indexar
 
 # OneDrive
 ONEDRIVE_CLIENT_ID = get_env("ONEDRIVE_CLIENT_ID", "")
