@@ -6,6 +6,7 @@ services:
       args:
         USE_LOCAL_EMB: ${USE_LOCAL_EMB:-false}
         LOCAL_EMB_REPO: ${LOCAL_EMB_REPO}
+        VISUAL_RAG: ${VISUAL_RAG:-false}
       secrets:
         - hf_token
     image: asm2-backend:latest

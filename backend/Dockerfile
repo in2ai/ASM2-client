@@ -4,6 +4,7 @@ FROM python:3.10-slim AS builder
 
 ARG USE_LOCAL_EMB=false
 ARG LOCAL_EMB_REPO=""
+ARG VISUAL_RAG=false
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -49,6 +50,12 @@ CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')"
 RUN if [ "$USE_LOCAL_EMB" = "true" ]; then \
       /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; \
 SentenceTransformer('$LOCAL_EMB_REPO')"; \
+    fi
+
+RUN --mount=type=secret,id=hf_token,env=HF_TOKEN \
+    if [ "$VISUAL_RAG" = "true" ]; then \
+      /opt/venv/bin/python -c "from huggingface_hub import snapshot_download; \
+snapshot_download(repo_id='Sahil-Kabir/colqwen2.5-v0.2-hf')"; \
     fi
 
 COPY server.py server.py

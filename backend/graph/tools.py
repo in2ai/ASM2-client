@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 
 from src.config.env import get_env, get_bool_env
 from src.connectors.store import QDRANT_META_PATH
-from src.connectors.search import augment_chunks
+from src.connectors.search import augment_chunks, visual_search
 from src.connectors.llms import get_configured_long_context_llm
 from src.metrics.metrics import (
     Metrics,
@@ -31,6 +31,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
     vectorstore = configurable["vectorstore"]
     sources = configurable["sources"]
     reranker = configurable["reranker"]
+    image_embedder = configurable.get("image_embedder")
     pool = configurable.get("pg_pool")
     metrics_actor = configurable.get("metrics_actor")
 
@@ -59,6 +60,38 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
     chunks = [c for c, ok in zip(chunks, relevance) if ok]
     available_sources = get_chunk_sources(chunks, sources)
+
+    images = []
+
+    if image_embedder is not None:
+        try:
+            visual_hits = visual_search(
+                vectorstore.client, image_embedder, query, sources=sources
+            )
+
+            images = [
+                {"id": img.file_id, "page": img.page, "is_anchor": img.is_anchor}
+                for img in visual_hits
+            ]
+
+            by_id = {s["id"]: s for s in available_sources}
+
+            for src in get_chunk_sources(visual_hits, sources):
+                existing = by_id.get(src["id"])
+
+                if existing is None:
+                    available_sources.append(src)
+                    by_id[src["id"]] = src
+
+                    continue
+
+                merged = set(existing.get("pages", [])) | set(src.get("pages", []))
+
+                if merged:
+                    existing["pages"] = sorted(merged)
+
+        except Exception:
+            logging.exception("visual_search failed")
 
     if not USE_LONG_CONTEXT_BEFORE:
         long_context_sources = available_sources
@@ -114,7 +147,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
         "gl": "Non atopei información relevante sobre ese tema nas fontes dispoñibles.",
     }
 
-    if not chunks:
+    if not chunks and not images:
         return fallback_messages.get(lang_code, fallback_messages["es"])
 
     formatted_chunks = []
@@ -137,5 +170,6 @@ def vectordb_search(query: str, config: RunnableConfig) -> str:
 
     return {
         "chunks": formatted_chunks,
-        "sources": available_sources
+        "sources": available_sources,
+        "images": images,
     }

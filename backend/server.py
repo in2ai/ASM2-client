@@ -14,6 +14,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
+from src.connectors.image_embeddings import get_image_embedder
 from src.config.log import setup_logging
 from src.config.auth import (
     add_credentials,
@@ -40,6 +41,7 @@ from src.config.sources import SOURCES
 from src.connectors.store import (
     QDRANT_META_PATH,
     VDB_LOCK,
+    VISUAL_RAG,
     build_vectordb_from_sources,
     get_vectordb,
 )
@@ -106,6 +108,15 @@ async def lifespan(app: FastAPI):
     app.state.vectorstore = get_vectordb(get_configured_embeddings())
     app.state.reranker = get_reranker()
     app.state.pg_pool = get_pg_pool()
+    app.state.image_embedder = None
+
+    if VISUAL_RAG:
+        try:
+            app.state.image_embedder = get_image_embedder()
+        except Exception:
+            logging.exception(
+                "Failed to load the visual embedder; visual RAG stays disabled"
+            )
 
     DATABASE_URL = (
         f"postgresql://{quote_plus(PG_USER)}:{quote_plus(PG_PASSWORD)}"
@@ -244,6 +255,7 @@ def run_vdb_update_once() -> None:
         pg_pool = app.state.pg_pool
         embeddings = vectorstore.embeddings
         llm = app.state.llm
+        image_embedder = app.state.image_embedder
 
         # Get admin authenticated sources and update DB
         sources = get_authenticated_admin_sources(pg_pool)
@@ -270,6 +282,7 @@ def run_vdb_update_once() -> None:
             embeddings,
             sources,
             deletion_threshold_percentage=deletion_threshold_percentage,
+            image_embedder=image_embedder,
         )
 
         if initial_build_in_progress:
@@ -639,6 +652,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "llm_with_tools": app.state.llm_with_tools,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
+            "image_embedder": app.state.image_embedder,
             "pg_pool": pg_pool,
             "sources": sources,
             "metrics_actor": metrics_actor,

@@ -3,8 +3,10 @@ import io
 import logging
 import mimetypes
 from pathlib import Path
+from typing import Iterable, Iterator
 
 import chardet
+import pypdfium2 as pdfium
 import requests
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
@@ -14,6 +16,7 @@ from pptx import Presentation
 from PyPDF2 import PdfReader
 
 from src.config.search_config import GRAPH
+from src.connectors.image_store import IMAGE_DPI
 from src.utils.helpers import safe_execute
 
 
@@ -120,12 +123,47 @@ def extract_pdf_text(data: bytes) -> list[str]:
         return None
 
 
+def render_pdf_images(data: bytes) -> Iterator[tuple[int, bytes]]:
+    """Rasterize a PDF to one PNG image per page."""
+    try:
+        pdf = pdfium.PdfDocument(data)
+
+    except Exception as e:
+        logging.error(f"Error while opening PDF: {e}")
+        return
+
+    try:
+        for idx in range(len(pdf)):
+            try:
+                # 1 PDF point = 1/72 inch
+                bitmap = pdf[idx].render(scale=IMAGE_DPI / 72)
+
+                buf = io.BytesIO()
+                bitmap.to_pil().save(buf, format="PNG")
+
+                yield idx + 1, buf.getvalue()
+
+            except Exception as e:
+                logging.error(f"Error while rendering PDF page {idx + 1}: {e}")
+
+    finally:
+        pdf.close()
+
+
 class VDBFile:
     def __init__(self, metadata):
         self.metadata = metadata
 
     def download(self, path: str) -> Path: ...
     def get_text(self) -> str | list[str]: ...
+
+    def get_images(self) -> Iterable[tuple[int, bytes]]:
+        """Render the file to one image per page."""
+        return []
+
+    def release(self) -> None:
+        """Release the cached bytes from the file."""
+        return None
 
 
 class GoogleDriveFile(VDBFile):
@@ -155,18 +193,28 @@ class GoogleDriveFile(VDBFile):
     def __init__(self, metadata, service):
         super().__init__(metadata)
         self.service = service
+        self._data: bytes | None = None
 
     def get_data(self):
+        if self._data is not None:
+            return self._data
+        
         file_id = self.metadata["id"]
         mime_type = self.metadata["mimeType"]
 
         if mime_type in self.GOOGLE_EXPORT_MIME:
             export_mime = self.GOOGLE_EXPORT_MIME[mime_type]
-            return safe_execute(
+            self._data = safe_execute(
                 self.service.files().export(fileId=file_id, mimeType=export_mime)
             )
+        else:
+            self._data = safe_execute(self.service.files().get_media(fileId=file_id))
 
-        return safe_execute(self.service.files().get_media(fileId=file_id))
+        return self._data
+
+    def release(self) -> None:
+        """Release the cached bytes from the file."""
+        self._data = None
 
     def get_text(self) -> str | list[str] | None:
         mime_type = self.metadata["mimeType"]
@@ -205,6 +253,21 @@ class GoogleDriveFile(VDBFile):
             return extract_csv_text(data)
 
         return None
+
+    def get_images(self) -> Iterable[tuple[int, bytes]]:
+        """Render the file to one image per page.
+
+        PDF only for now.
+        """
+        if self.metadata["mimeType"] != "application/pdf":
+            return []
+
+        data = self.get_data()
+
+        if data is None:
+            return []
+
+        return render_pdf_images(data)
 
     def _get_download_spec(self):
         file_id = self.metadata["id"]

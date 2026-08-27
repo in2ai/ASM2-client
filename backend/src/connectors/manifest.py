@@ -14,7 +14,8 @@ def load_manifest(path):
             pass
 
     return {
-        "processed_ids": {}, 
+        "processed_ids": {},
+        "image_ids": {},
         "total_chunks": 0, 
         "completed": {},
         "topics": False,
@@ -52,6 +53,27 @@ class VDBManifest:
 
         for id, time in processed_ids:
             self.manifest['processed_ids'][source][id] = time
+
+
+    def get_image_ids(self, source):
+        self.manifest.setdefault('image_ids', {})
+        self.manifest['image_ids'].setdefault(source, {})
+
+        return self.manifest['image_ids'][source]
+    
+
+    def add_image_ids(self, source, image_ids):
+        self.get_image_ids(source)
+
+        for id, time in image_ids:
+            self.manifest['image_ids'][source][id] = time
+
+
+    def remove_image_ids(self, source, image_ids):
+        self.get_image_ids(source)
+
+        for id in image_ids:
+            self.manifest['image_ids'][source].pop(id, '')
 
 
     def num_chunks(self):
