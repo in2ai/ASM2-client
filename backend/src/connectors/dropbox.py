@@ -10,8 +10,8 @@ import requests
 from dropbox.exceptions import ApiError
 
 from src.config.config import (
-    DROPBOX_CLIENT_SECRET,
-    DROPBOX_CLIENT_SECRET_FILE,
+    DROPBOX_APP_KEY,
+    DROPBOX_APP_SECRET,
     DROPBOX_ROOTS,
     DROPBOX_EXCLUDE,
 )
@@ -45,29 +45,12 @@ def guess_mime_from_name(name: str) -> str | None:
 
 
 def get_dropbox_client_config() -> dict[str, Any] | None:
-    payloads = []
+    # Unlike Google, Dropbox hands out the key and secret as two plain strings
+    # in the App Console, so there is no JSON payload to parse.
+    if not DROPBOX_APP_KEY or not DROPBOX_APP_SECRET:
+        return None
 
-    if DROPBOX_CLIENT_SECRET:
-        try:
-            payloads.append(json.loads(DROPBOX_CLIENT_SECRET))
-        except json.JSONDecodeError:
-            pass
-
-    if DROPBOX_CLIENT_SECRET_FILE and os.path.isfile(DROPBOX_CLIENT_SECRET_FILE):
-        try:
-            with open(DROPBOX_CLIENT_SECRET_FILE, "r", encoding="utf-8") as file:
-                payloads.append(json.load(file))
-        except (OSError, json.JSONDecodeError):
-            pass
-
-    for payload in payloads:
-        app_key = payload.get("app_key") or payload.get("client_id")
-        app_secret = payload.get("app_secret") or payload.get("client_secret")
-
-        if app_key and app_secret:
-            return {"app_key": app_key, "app_secret": app_secret}
-
-    return None
+    return {"app_key": DROPBOX_APP_KEY, "app_secret": DROPBOX_APP_SECRET}
 
 
 def get_dropbox_oauth_client_id() -> str | None:
