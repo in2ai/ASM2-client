@@ -50,7 +50,7 @@ export interface SendMessageResult {
   detected_lang: string
 }
 
-export type SourceProviderKey = 'drive'
+export type SourceProviderKey = 'drive' | 'dropbox'
 
 export interface SourceLoginInfo {
   auth_mode: 'authorization_code'

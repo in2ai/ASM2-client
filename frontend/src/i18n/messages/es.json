@@ -330,9 +330,11 @@
       "descriptionUser": "Conecta tus fuentes y marca cuáles quieres habilitar para tus conversaciones. Estas conexiones no inician ni modifican el indexado compartido.",
       "connected": "Conectado",
       "connectDrive": "Conectar Google Drive",
+      "connectDropbox": "Conectar Dropbox",
       "disconnect": "Desconectar",
       "notConfigured": "Este proveedor todavía no está configurado en el backend.",
       "googleDriveHelp": "El navegador inicia Google OAuth y luego el código de autorización devuelto se envía al backend y se almacena allí.",
+      "dropboxHelp": "El navegador inicia Dropbox OAuth y luego el código de autorización devuelto se envía al backend y se almacena allí.",
       "readyToChatTitle": "Inicia el indexado cuando tus fuentes estén listas",
       "readyToChatDescription": "Cuando termines de conectar fuentes, activa VDB para que el backend empiece a indexar el contenido conectado.",
       "vdb": {
@@ -361,14 +363,17 @@
         "finishAdmin": "Cuando acabes, activa VDB para que el backend empiece a indexar el contenido conectado.",
         "finishUser": "Marca la fuente para que tu chat pueda utilizarla en la recuperación del RAG."
       },
-      "callbackFailedTitle": "La conexión con Google Drive falló",
-      "callbackCancelled": "La autorización de Google Drive fue cancelada o falló.",
-      "callbackMissingCode": "Falta el código de autorización de Google Drive.",
-      "callbackInvalidState": "El estado de autorización de Google Drive es inválido o ha expirado.",
-      "callbackExchangeFailed": "No se pudo completar la conexión con Google Drive.",
+      "callbackFailedTitle": "La conexión falló",
+      "callbackCancelled": "La autorización de {provider} fue cancelada o falló.",
+      "callbackMissingCode": "Falta el código de autorización de {provider}.",
+      "callbackInvalidState": "El estado de autorización es inválido o ha expirado.",
+      "callbackExchangeFailed": "No se pudo completar la conexión con {provider}.",
       "providers": {
         "drive": {
           "description": "Conecta tus archivos de Google Drive para que el asistente pueda recuperarlos."
+        },
+        "dropbox": {
+          "description": "Conecta tus archivos de Dropbox para que el asistente pueda recuperarlos."
         }
       }
     }

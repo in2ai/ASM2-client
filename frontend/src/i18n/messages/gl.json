@@ -330,9 +330,11 @@
       "descriptionUser": "Conecta as túas fontes e marca cales queres habilitar nas túas conversas. Estas conexións non inician nin modifican o indexado compartido.",
       "connected": "Conectado",
       "connectDrive": "Conectar Google Drive",
+      "connectDropbox": "Conectar Dropbox",
       "disconnect": "Desconectar",
       "notConfigured": "Este provedor aínda non está configurado no backend.",
       "googleDriveHelp": "O navegador inicia Google OAuth e despois o código de autorización devolto envíase ao backend e gárdase alí.",
+      "dropboxHelp": "O navegador inicia Dropbox OAuth e despois o código de autorización devolto envíase ao backend e gárdase alí.",
       "readyToChatTitle": "Inicia o indexado cando as túas fontes estean listas",
       "readyToChatDescription": "Cando remates de conectar fontes, activa VDB para que o backend empece a indexar o contido conectado.",
       "vdb": {
@@ -361,14 +363,17 @@
         "finishAdmin": "Cando remates, activa VDB para que o backend empece a indexar o contido conectado.",
         "finishUser": "Marca a fonte para que o teu chat poida utilizala na recuperación do RAG."
       },
-      "callbackFailedTitle": "A conexión con Google Drive fallou",
-      "callbackCancelled": "A autorización de Google Drive foi cancelada ou fallou.",
-      "callbackMissingCode": "Falta o código de autorización de Google Drive.",
-      "callbackInvalidState": "O estado de autorización de Google Drive é inválido ou caducou.",
-      "callbackExchangeFailed": "Non se puido completar a conexión con Google Drive.",
+      "callbackFailedTitle": "A conexión fallou",
+      "callbackCancelled": "A autorización de {provider} foi cancelada ou fallou.",
+      "callbackMissingCode": "Falta o código de autorización de {provider}.",
+      "callbackInvalidState": "O estado de autorización é inválido ou caducou.",
+      "callbackExchangeFailed": "Non se puido completar a conexión con {provider}.",
       "providers": {
         "drive": {
           "description": "Conecta os teus ficheiros de Google Drive para que o asistente poida recuperalos."
+        },
+        "dropbox": {
+          "description": "Conecta os teus ficheiros de Dropbox para que o asistente poida recuperalos."
         }
       }
     }

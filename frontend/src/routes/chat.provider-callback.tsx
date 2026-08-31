@@ -2,9 +2,14 @@ import { LoadingState } from '@/app/_components/metrics/loading-state'
 import { ErrorState } from '@/components/error-state'
 import { useAuthorizedChatRequest } from '@/features/chat/api'
 import {
+  clearDropboxOAuthRequest,
+  readDropboxOAuthRequest,
+} from '@/features/chat/dropbox-auth'
+import {
   clearGoogleDriveOAuthRequest,
   readGoogleDriveOAuthRequest,
 } from '@/features/chat/google-drive-auth'
+import type { SourceProviderKey } from '@/features/chat/types'
 import { useLogto } from '@logto/react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useTranslations } from 'next-intl'
@@ -22,6 +27,106 @@ export const Route = createFileRoute('/chat/provider-callback')({
   validateSearch: callbackSearchSchema,
   component: ProviderCallbackRoute,
 })
+
+interface MatchedProviderRequest {
+  clear: () => void
+  displayName: string
+  redirectUri: string
+  returnTo: string
+  source: SourceProviderKey
+}
+
+// The callback path is shared by every provider's redirect_uri, so on return
+// the only way to tell which one sent us here is to see whose stored state
+// (written when the connect button was clicked) matches what came back.
+function resolveProviderRequest(
+  state: string | undefined,
+): MatchedProviderRequest | null {
+  if (!state) {
+    return null
+  }
+
+  const driveRequest = readGoogleDriveOAuthRequest()
+  if (driveRequest?.state === state) {
+    return {
+      ...driveRequest,
+      clear: clearGoogleDriveOAuthRequest,
+      displayName: 'Google Drive',
+      source: 'drive',
+    }
+  }
+
+  const dropboxRequest = readDropboxOAuthRequest()
+  if (dropboxRequest?.state === state) {
+    return {
+      ...dropboxRequest,
+      clear: clearDropboxOAuthRequest,
+      displayName: 'Dropbox',
+      source: 'dropbox',
+    }
+  }
+
+  return null
+}
+
+function clearAllProviderRequests() {
+  clearGoogleDriveOAuthRequest()
+  clearDropboxOAuthRequest()
+}
+
+type TranslateFn = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string
+
+type CallbackOutcome =
+  | { kind: 'error'; message: string }
+  | { kind: 'proceed'; authCode: string; match: MatchedProviderRequest }
+
+interface CallbackSearch {
+  code?: string
+  error?: string
+  error_description?: string
+  state?: string
+}
+
+// Priority mirrors the original single-provider flow: an explicit provider
+// error wins, then a missing code, then an unresolvable/expired state. Only
+// the last case is truly provider-agnostic (we never matched a stored
+// request), so it's the only one that skips the {provider} wording.
+function resolveCallbackOutcome(
+  search: CallbackSearch,
+  t: TranslateFn,
+): CallbackOutcome {
+  const matched = resolveProviderRequest(search.state)
+  const providerLabel = matched?.displayName
+
+  if (search.error) {
+    return {
+      kind: 'error',
+      message:
+        search.error_description ??
+        (providerLabel
+          ? t('sources.callbackCancelled', { provider: providerLabel })
+          : t('sources.callbackInvalidState')),
+    }
+  }
+
+  if (!search.code || !search.state) {
+    return {
+      kind: 'error',
+      message: providerLabel
+        ? t('sources.callbackMissingCode', { provider: providerLabel })
+        : t('sources.callbackInvalidState'),
+    }
+  }
+
+  if (!matched) {
+    return { kind: 'error', message: t('sources.callbackInvalidState') }
+  }
+
+  return { kind: 'proceed', authCode: search.code, match: matched }
+}
 
 function ProviderCallbackRoute() {
   const search = Route.useSearch()
@@ -46,52 +151,35 @@ function ProviderCallbackRoute() {
       return
     }
 
-    if (search.error) {
-      clearGoogleDriveOAuthRequest()
+    const outcome = resolveCallbackOutcome(search, t)
+
+    if (outcome.kind === 'error') {
+      clearAllProviderRequests()
       if (!didUnmountRef.current) {
-        setCallbackError(
-          search.error_description ?? t('sources.callbackCancelled'),
-        )
+        setCallbackError(outcome.message)
       }
       return
     }
 
-    if (!search.code || !search.state) {
-      clearGoogleDriveOAuthRequest()
-      if (!didUnmountRef.current) {
-        setCallbackError(t('sources.callbackMissingCode'))
-      }
-      return
-    }
-
-    const storedRequest = readGoogleDriveOAuthRequest()
-    if (!storedRequest || storedRequest.state !== search.state) {
-      clearGoogleDriveOAuthRequest()
-      if (!didUnmountRef.current) {
-        setCallbackError(t('sources.callbackInvalidState'))
-      }
-      return
-    }
-
+    const { authCode, match } = outcome
     hasStartedRef.current = true
     setIsSubmitting(true)
-    const authCode = search.code
 
     void (async () => {
       try {
         await request<void>('/login-source', {
           body: JSON.stringify({
-            source: 'drive',
+            source: match.source,
             payload: {
               auth_token: authCode,
-              redirect_uri: storedRequest.redirectUri,
+              redirect_uri: match.redirectUri,
             },
           }),
           method: 'POST',
         })
         if (!didUnmountRef.current) {
-          clearGoogleDriveOAuthRequest()
-          globalThis.location.replace(storedRequest.returnTo)
+          match.clear()
+          globalThis.location.replace(match.returnTo)
         }
       } catch (error: unknown) {
         hasStartedRef.current = false
@@ -100,7 +188,9 @@ function ProviderCallbackRoute() {
           setCallbackError(
             error instanceof Error
               ? error.message
-              : t('sources.callbackExchangeFailed'),
+              : t('sources.callbackExchangeFailed', {
+                  provider: match.displayName,
+                }),
           )
         }
       }

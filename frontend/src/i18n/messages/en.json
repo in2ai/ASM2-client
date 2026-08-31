@@ -330,9 +330,11 @@
       "descriptionUser": "Connect your sources and choose which ones should be available in your chats. These connections do not start or modify the shared indexing process.",
       "connected": "Connected",
       "connectDrive": "Connect Google Drive",
+      "connectDropbox": "Connect Dropbox",
       "disconnect": "Disconnect",
       "notConfigured": "This provider is not configured on the backend yet.",
       "googleDriveHelp": "The browser starts Google OAuth, then the returned authorization code is sent to the backend and stored there.",
+      "dropboxHelp": "The browser starts Dropbox OAuth, then the returned authorization code is sent to the backend and stored there.",
       "readyToChatTitle": "Start indexing when your sources are ready",
       "readyToChatDescription": "When you finish connecting sources, enable VDB so the backend starts indexing the connected content.",
       "vdb": {
@@ -361,14 +363,17 @@
         "finishAdmin": "When you are done, enable VDB so the backend starts indexing the connected content.",
         "finishUser": "Select the source so your chat can use it during RAG retrieval."
       },
-      "callbackFailedTitle": "Google Drive connection failed",
-      "callbackCancelled": "Google Drive authorization was cancelled or failed.",
-      "callbackMissingCode": "Missing Google Drive authorization code.",
-      "callbackInvalidState": "Google Drive authorization state is invalid or expired.",
-      "callbackExchangeFailed": "Unable to complete Google Drive connection.",
+      "callbackFailedTitle": "Connection failed",
+      "callbackCancelled": "{provider} authorization was cancelled or failed.",
+      "callbackMissingCode": "Missing {provider} authorization code.",
+      "callbackInvalidState": "The authorization state is invalid or expired.",
+      "callbackExchangeFailed": "Unable to complete the {provider} connection.",
       "providers": {
         "drive": {
           "description": "Connect your Google Drive files so the assistant can retrieve from them."
+        },
+        "dropbox": {
+          "description": "Connect your Dropbox files so the assistant can retrieve from them."
         }
       }
     }

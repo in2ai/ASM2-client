@@ -16,6 +16,7 @@ vi.mock('next-intl', () => ({
 
 vi.mock('lucide-react', () => ({
   CheckCircle2: () => null,
+  Cloud: () => null,
   CloudCog: () => null,
   Database: () => null,
   Loader2: () => null,
@@ -88,6 +89,13 @@ vi.mock('./google-drive-auth', () => ({
   persistGoogleDriveOAuthRequest: vi.fn(),
 }))
 
+vi.mock('./dropbox-auth', () => ({
+  DROPBOX_CALLBACK_PATH: '/chat/provider-callback',
+  buildDropboxAuthorizeUrl: vi.fn(() => 'https://dropbox.example.test'),
+  createDropboxOAuthState: vi.fn(() => 'dropbox-oauth-state'),
+  persistDropboxOAuthRequest: vi.fn(),
+}))
+
 describe('SourcesPanel', () => {
   beforeEach(() => {
     useSourceLoginInfoQueryMock.mockReturnValue({
@@ -143,6 +151,38 @@ describe('SourcesPanel', () => {
     expect((connectButton as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('renders an independent connect button for each provider', () => {
+    useVdbUpdateStatusQueryMock.mockReturnValue({
+      data: { active: false },
+      error: null,
+      isFetching: false,
+    })
+
+    render(
+      <SourcesPanel
+        isAdmin
+        open
+        onOpenChange={() => undefined}
+        status={{
+          can_chat: false,
+          vdb_indexing_active: false,
+          connected_sources: ['drive'],
+          selected_sources: [],
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByRole('checkbox', { name: 'sources.selectForChat' }),
+    ).toBeTruthy()
+
+    const dropboxConnectButton = screen.getByRole('button', {
+      name: 'sources.connectDropbox',
+    }) as HTMLButtonElement
+
+    expect(dropboxConnectButton.disabled).toBe(false)
+  })
+
   it('blocks new source connections while VDB indexing is active', () => {
     useVdbUpdateStatusQueryMock.mockReturnValue({
       data: { active: true },
@@ -164,12 +204,19 @@ describe('SourcesPanel', () => {
       />,
     )
 
-    const connectButton = screen.getByRole('button', {
+    const driveConnectButton = screen.getByRole('button', {
       name: 'sources.connectDrive',
     })
+    const dropboxConnectButton = screen.getByRole('button', {
+      name: 'sources.connectDropbox',
+    })
 
-    expect((connectButton as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText('sources.vdb.connectPrerequisite')).toBeTruthy()
+    expect((driveConnectButton as HTMLButtonElement).disabled).toBe(true)
+    expect((dropboxConnectButton as HTMLButtonElement).disabled).toBe(true)
+    // One prerequisite notice per locked, not-yet-connected provider card.
+    expect(screen.getAllByText('sources.vdb.connectPrerequisite')).toHaveLength(
+      2,
+    )
   })
 
   it('keeps source connection available for users while VDB indexing is active', () => {
