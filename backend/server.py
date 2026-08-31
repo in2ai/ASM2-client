@@ -8,11 +8,12 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg_pool import AsyncConnectionPool
 
 from graph.model import get_llm_with_tools
+from src.connectors.search import merge_sources
 from src.connectors.embeddings import get_configured_embeddings
 from src.config.log import setup_logging
 from src.config.auth import (
@@ -44,6 +45,7 @@ from src.connectors.store import (
     get_vectordb,
 )
 from src.connectors.manifest import VDBManifest
+from src.generation.artifact import to_stored_document
 from src.indexing.deletion_guard import DeletionThresholdExceeded
 
 from src.model.endpoints import *
@@ -560,7 +562,7 @@ def _get_chat_or_404(
     return chat
 
 
-def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None:
+def get_vectordb_search_sources_in_latest_turn(messages: list[Any]) -> list[dict]:
     last_human_index = next(
         (
             i
@@ -571,28 +573,53 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
     )
 
     if last_human_index == -1:
-        return None
+        return []
 
-    for i in range(last_human_index + 1, len(messages)):
-        message = messages[i]
+    turn = messages[last_human_index + 1:]
 
-        if not isinstance(message, AIMessage):
+    call_ids = {
+        tool_call["id"]
+        for message in turn
+        if isinstance(message, AIMessage)
+        for tool_call in (message.tool_calls or [])
+        if tool_call.get("name") == "vectordb_search" and tool_call.get("id")
+    }
+
+    collected = []
+
+    for message in turn:
+        if not isinstance(message, ToolMessage) or message.tool_call_id not in call_ids:
             continue
 
-        for tool_call in message.tool_calls or []:
-            if tool_call.get("name") != "vectordb_search":
-                continue
+        artifact = getattr(message, "artifact", None)
 
-            call_id = tool_call.get("id")
+        if isinstance(artifact, dict):
+            collected.append(artifact.get("sources") or [])
+            continue
 
-            for followup in messages[i + 1 :]:
-                if isinstance(followup, ToolMessage) and followup.tool_call_id == call_id:
-                    try:
-                        return json.loads(followup.content)
+        try:
+            payload = json.loads(message.content)
 
-                    except:
-                        return None
+            if isinstance(payload, dict):
+                collected.append(payload.get("sources") or [])
 
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return merge_sources(*collected)
+
+
+def get_generated_document_in_latest_turn(messages: list) -> dict[str, Any] | None:
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            break
+        if not isinstance(message, ToolMessage):
+            continue
+        if getattr(message, "name", None) != "generate_document":
+            continue
+        artifact = getattr(message, "artifact", None)
+        if isinstance(artifact, dict) and artifact.get("content"):
+            return artifact
     return None
 
 
@@ -600,6 +627,29 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> Any | None
 async def get_chat(auth: AuthenticatedAuth, chat_id: str):
     chat_store:PostgresChatStore = app.state.tsdb_chat_store
     return _get_chat_or_404(chat_store, auth.sub, chat_id)
+
+
+@app.get("/chats/{chat_id}/messages/{message_id}/document")
+async def download_chat_document(
+    auth: AuthenticatedAuth, chat_id: str, message_id: str
+):
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
+    document = chat_store.get_message_document(auth.sub, chat_id, message_id)
+
+    if document is None:
+        raise HTTPException(
+            status_code=404, detail="This message has no generated document"
+        )
+
+    return Response(
+        content=document["content"],
+        media_type=document["mime_type"],
+        headers={
+            # Filenames are slugified to [a-z0-9-] when the document is generated.
+            "Content-Disposition": f'attachment; filename="{document["filename"]}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.delete("/chats/{chat_id}", status_code=204)
@@ -673,18 +723,15 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     if not messages:
         raise HTTPException(status_code=500, detail="No response generated")
 
-    available_sources: list[dict[str, Any]] = []
-
-    search_results = get_vectordb_search_output_in_latest_turn(messages)
-
-    if search_results is not None:
-        available_sources = search_results['sources']
+    available_sources = get_vectordb_search_sources_in_latest_turn(messages)
+    document = get_generated_document_in_latest_turn(messages)
 
     record_token_usage_metrics(pg_pool, messages, metrics_actor)
     return {
         "answer": str(messages[-1].content),
         "detected_lang": str(result.get("detected_lang", "es")),
         "sources": available_sources,
+        "document": document,
     }
 
 
@@ -698,7 +745,7 @@ async def send_chat_message(
     if not content:
         raise HTTPException(status_code=422, detail="content must not be empty")
 
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
     _get_chat_or_404(chat_store, auth.sub, chat_id)
 
     try:
@@ -724,6 +771,7 @@ async def send_chat_message(
             "detected_lang": result["detected_lang"],
             "sources": result["sources"],
         },
+        document=to_stored_document(result.get("document")),
     )
     chat = _get_chat_or_404(chat_store, auth.sub, chat_id)
 

@@ -3,11 +3,15 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.store.postgres.aio import AsyncPostgresStore
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
+from langchain_core.runnables import RunnableConfig
 
 from .model import tool_list
 from .nodes import call_model as assistant
 from .nodes import detect_language_node, summarize_conversation
 from .state import State
+
+
+MAX_CONTEXT_TOKENS = 80_000
 
 
 def get_checkpointer(pool):
@@ -17,17 +21,18 @@ def get_store(pool):
     return AsyncPostgresStore(pool)
 
 
-def should_continue(state: State):
+def should_continue(state: State, config: RunnableConfig):
     """Return the next node to execute."""
     messages = state.messages
     last_message = messages[-1]
-
+ 
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
         return "tools"
-
-    if len(messages) > 6:
+ 
+    llm = config.get("configurable", {}).get("llm")
+    if llm.get_num_tokens_from_messages(messages) > MAX_CONTEXT_TOKENS:
         return "summarize_conversation"
-
+ 
     return END
 
 

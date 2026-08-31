@@ -3,7 +3,7 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
-import { useAuthorizedChatRequest } from './api'
+import { useAuthorizedChatDownload, useAuthorizedChatRequest } from './api'
 
 const mocks = vi.hoisted(() => ({
   getAccessToken: vi.fn(),
@@ -96,5 +96,75 @@ describe('useAuthorizedChatRequest', () => {
     await expect(
       result.current('/chats/chat-1', { method: 'DELETE' }),
     ).resolves.toBeUndefined()
+  })
+})
+
+describe('useAuthorizedChatDownload', () => {
+  beforeEach(() => {
+    mocks.getAccessToken.mockResolvedValue('chat-token')
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('requests the document as a blob with the access token', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('%PDF-1.7', {
+          headers: { 'Content-Type': 'application/pdf' },
+          status: 200,
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useAuthorizedChatDownload())
+    const blob = await result.current(
+      '/chats/chat-1/messages/message-1/document',
+    )
+
+    const [requestUrl, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ]
+
+    expect(requestUrl).toMatch(
+      /\/chats\/chat-1\/messages\/message-1\/document$/,
+    )
+    const headers = new Headers(init.headers)
+
+    expect(headers.get('Authorization')).toBe('Bearer chat-token')
+    expect(headers.get('Content-Type')).toBeNull()
+    expect(await blob.text()).toBe('%PDF-1.7')
+  })
+
+  it('uses backend detail messages for failed downloads', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({ detail: 'This message has no generated document' }, 404),
+      ),
+    )
+
+    const { result } = renderHook(() => useAuthorizedChatDownload())
+
+    await expect(
+      result.current('/chats/chat-1/messages/message-1/document'),
+    ).rejects.toThrow('This message has no generated document')
+  })
+
+  it('rejects before fetch when no access token is available', async () => {
+    const fetchMock = vi.fn()
+    mocks.getAccessToken.mockResolvedValue(null)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useAuthorizedChatDownload())
+
+    await expect(
+      result.current('/chats/chat-1/messages/message-1/document'),
+    ).rejects.toThrow('Missing access token')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

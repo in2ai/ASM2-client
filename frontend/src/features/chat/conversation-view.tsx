@@ -3,11 +3,24 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import type { AppLocale } from '@/i18n/config'
 import { cn } from '@/lib/utils'
-import { ArrowUp, Bot, ExternalLink, Loader2, User2 } from 'lucide-react'
+import {
+  ArrowUp,
+  Bot,
+  Download,
+  ExternalLink,
+  FileText,
+  Loader2,
+  User2,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { ChatConversationLoadingState } from './chat-loading-state'
+import {
+  formatDocumentSize,
+  getDocumentFormatLabel,
+  getMessageDocument,
+} from './chat-document'
 import { MessageMarkdown } from './message-markdown'
-import type { ChatDetail, ChatMessage, ChatSource } from './types'
+import type { ChatDetail, ChatDocument, ChatMessage, ChatSource } from './types'
 import { formatMessageTimestamp } from './utils'
 
 interface ConversationViewProps {
@@ -16,6 +29,8 @@ interface ConversationViewProps {
   composerHint?: string
   composerPlaceholder: string
   composerValue: string
+  documentDownloadErrors?: Readonly<Record<string, string>>
+  downloadingDocumentMessageIds?: ReadonlySet<string>
   emptyDescription: string
   emptyPrimaryActionLabel?: string
   emptyTitle: string
@@ -25,6 +40,9 @@ interface ConversationViewProps {
   locale: AppLocale
   messageLabels: {
     assistant: string
+    document: string
+    downloadDocument: string
+    downloadingDocument: string
     openSource: string
     page: string
     pages: string
@@ -32,6 +50,7 @@ interface ConversationViewProps {
     sending: string
     user: string
   }
+  onDownloadDocument?: (message: ChatMessage) => void
   onEmptyPrimaryAction?: () => void
   onComposerChange: (value: string) => void
   onSendMessage: () => void
@@ -44,6 +63,8 @@ export function ConversationView({
   composerHint,
   composerPlaceholder,
   composerValue,
+  documentDownloadErrors,
+  downloadingDocumentMessageIds,
   emptyDescription,
   emptyPrimaryActionLabel,
   emptyTitle,
@@ -52,6 +73,7 @@ export function ConversationView({
   isSending,
   locale,
   messageLabels,
+  onDownloadDocument,
   onEmptyPrimaryAction,
   onComposerChange,
   onSendMessage,
@@ -103,9 +125,14 @@ export function ConversationView({
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}
+                  documentDownloadError={documentDownloadErrors?.[message.id]}
+                  isDownloadingDocument={
+                    downloadingDocumentMessageIds?.has(message.id) ?? false
+                  }
                   locale={locale}
                   message={message}
                   labels={messageLabels}
+                  onDownloadDocument={onDownloadDocument}
                 />
               ))}
 
@@ -176,17 +203,24 @@ export function ConversationView({
 }
 
 function MessageBubble({
+  documentDownloadError,
+  isDownloadingDocument,
   locale,
   message,
   labels,
+  onDownloadDocument,
 }: Readonly<{
+  documentDownloadError?: string
+  isDownloadingDocument: boolean
   locale: AppLocale
   message: ChatMessage
   labels: ConversationViewProps['messageLabels']
+  onDownloadDocument?: (message: ChatMessage) => void
 }>) {
   const isUser = message.role === 'user'
   const authorLabel = isUser ? labels.user : labels.assistant
   const sources = getMessageSources(message)
+  const generatedDocument = isUser ? null : getMessageDocument(message)
 
   return (
     <div
@@ -217,6 +251,18 @@ function MessageBubble({
         ) : (
           <MessageMarkdown content={message.content} />
         )}
+        {generatedDocument ? (
+          <GeneratedDocumentCard
+            document={generatedDocument}
+            downloadError={documentDownloadError}
+            isDownloading={isDownloadingDocument}
+            labels={labels}
+            locale={locale}
+            onDownload={
+              onDownloadDocument ? () => onDownloadDocument(message) : undefined
+            }
+          />
+        ) : null}
         {!isUser && sources.length > 0 ? (
           <div className="mt-4 border-t pt-3">
             <p className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
@@ -236,6 +282,68 @@ function MessageBubble({
         ) : null}
       </div>
       {isUser ? <BubbleAvatar isUser={true} /> : null}
+    </div>
+  )
+}
+
+function GeneratedDocumentCard({
+  document: generatedDocument,
+  downloadError,
+  isDownloading,
+  labels,
+  locale,
+  onDownload,
+}: Readonly<{
+  document: ChatDocument
+  downloadError?: string
+  isDownloading: boolean
+  labels: Pick<
+    ConversationViewProps['messageLabels'],
+    'document' | 'downloadDocument' | 'downloadingDocument'
+  >
+  locale: AppLocale
+  onDownload?: () => void
+}>) {
+  return (
+    <div className="mt-4 border-t pt-3">
+      <p className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
+        {labels.document}
+      </p>
+      <div className="bg-muted/40 flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3">
+        <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+          <FileText className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">
+            {generatedDocument.title?.trim() || generatedDocument.filename}
+          </p>
+          <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
+            <span>{getDocumentFormatLabel(generatedDocument)}</span>
+            <span>
+              {formatDocumentSize(generatedDocument.size_bytes, locale)}
+            </span>
+          </p>
+        </div>
+        <Button
+          className="rounded-2xl"
+          disabled={isDownloading || !onDownload}
+          onClick={onDownload}
+          size="sm"
+          variant="outline"
+        >
+          {isDownloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          {isDownloading ? labels.downloadingDocument : labels.downloadDocument}
+        </Button>
+      </div>
+      {downloadError ? (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-300">
+          {downloadError}
+        </p>
+      ) : null}
     </div>
   )
 }
