@@ -24,7 +24,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from graph.agent import build_graph
 from graph.model import get_llm_with_tools
 from src.connectors.embeddings import get_configured_embeddings
-from src.connectors.llms import get_configured_llm
+from src.connectors.llms import get_configured_judge_llm, get_configured_llm
 from src.connectors.store import get_vectordb
 
 from src.metrics.connection import (
@@ -45,6 +45,7 @@ async def lifespan():
     # Global shared data
     llm = get_configured_llm()
     llm_with_tools = get_llm_with_tools(llm)
+    judge_llm = get_configured_judge_llm()
     vectorstore = get_vectordb(get_configured_embeddings())
     reranker = get_reranker()
     pg_pool = get_pg_pool()
@@ -52,9 +53,9 @@ async def lifespan():
     graph_working_memory_saver = MemorySaver()
     graph = build_graph(checkpointer=graph_working_memory_saver)
 
-    return llm, llm_with_tools, vectorstore, reranker, pg_pool, graph
+    return llm, llm_with_tools, judge_llm, vectorstore, reranker, pg_pool, graph
 
-LLM, LLM_WITH_TOOLS, VDB, RERANKER, PG_POOL, GRAPH = asyncio.run(lifespan())
+LLM, LLM_WITH_TOOLS, JUDGE_LLM, VDB, RERANKER, PG_POOL, GRAPH = asyncio.run(lifespan())
 ADMIN_SOURCES = {}
 
 QA_CSV_PATH = Path("/app/benchmark/data/dataset_asm2.csv")
@@ -252,6 +253,7 @@ def call_rag(query: str, thread_id: str) -> tuple[str, bool, Any | None]:
             "thread_id": thread_id,
             "llm": LLM,
             "llm_with_tools": LLM_WITH_TOOLS,
+            "judge_llm": JUDGE_LLM,
             "vectorstore": VDB,
             "reranker": RERANKER,
             "pg_pool": PG_POOL,

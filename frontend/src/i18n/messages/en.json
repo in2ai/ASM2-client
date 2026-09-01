@@ -334,7 +334,7 @@
       "disconnect": "Disconnect",
       "notConfigured": "This provider is not configured on the backend yet.",
       "googleDriveHelp": "The browser starts Google OAuth, then the returned authorization code is sent to the backend and stored there.",
-      "dropboxHelp": "The browser starts Dropbox OAuth, then the returned authorization code is sent to the backend and stored there.",
+      "dropboxHelp": "The browser starts Dropbox OAuth, then the returned authorization code is sent to the backend and stored there. You only see the documents your Dropbox account can already open.",
       "readyToChatTitle": "Start indexing when your sources are ready",
       "readyToChatDescription": "When you finish connecting sources, enable VDB so the backend starts indexing the connected content.",
       "vdb": {

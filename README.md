@@ -65,6 +65,10 @@ cp .env.example .env
 | `GOOGLE_CLIENT_SECRET_FILE` | Ruta opcional al fichero JSON del cliente OAuth cuando se monta en Docker | `/app/secrets/client_secret.json` |
 | `GDRIVE_ROOTS` | IDs de las carpetas raíz de Google Drive que se indexarán (separados por comas) | `folder_id_1,folder_id_2` |
 | `GDRIVE_EXCLUDE` | IDs de las carpetas de Google Drive que se excluirán de la indexación (separados por comas) | `folder_id_3,folder_id_4` |
+| `DROPBOX_APP_KEY` | App key de la app de Dropbox (*user-scoped*, sin team scopes) | `abc123def456ghi` |
+| `DROPBOX_APP_SECRET` | App secret de la misma app de Dropbox | `jkl789mno012pqr` |
+| `DROPBOX_ROOTS` | Rutas de las carpetas a indexar, relativas a la raíz del espacio de equipo (separadas por comas) | `Seguridad,Shared/Wiki` |
+| `DROPBOX_EXCLUDE` | Rutas de las carpetas de Dropbox que se excluirán de la indexación (separadas por comas) | `Seguridad/Drafts` |
 | `HF_TOKEN` | Token de Hugging Face opcional usado solo en tiempo de build del backend para acelerar la descarga de modelos (evita el rate limit anónimo). No se usa en runtime. | `hf_...` |
 
 #### TimescaleDB
@@ -132,6 +136,8 @@ Para el desarrollo del frontend fuera de Docker, usa `frontend/.env.local` con l
 El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el build, pero en este repositorio los archivos Docker Compose usan explícitamente `VITE_LOGTO_*` para el dashboard.
 
 > **Nota:** Para Google Drive, el backend puede leer el JSON del cliente desde la variable de entorno `CLIENT_SECRET` en `.env`, o usar el archivo `secrets/client_secret.json` montado en el contenedor mediante `GOOGLE_CLIENT_SECRET_FILE`.
+>
+> **Nota:** Dropbox usa una app *user-scoped*: cada usuario conecta su propia cuenta y no hace falta ser administrador del equipo de Dropbox. No marques ningún *team scope* en la App Console, o Dropbox exigirá un administrador al autorizar. El funcionamiento del conector y los pasos para crear la app se documentan en [DROPBOX_CONNECTOR.md](DROPBOX_CONNECTOR.md).
 
 ## Instalación y Uso
 

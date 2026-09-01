@@ -1,6 +1,7 @@
 from langchain_core.messages import HumanMessage, RemoveMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
+from src.utils.messages import message_text
 from src.utils.nlp import detect_language
 from src.utils.rag import get_rag_system_prompt
 from .state import State
@@ -54,8 +55,8 @@ def summarize_conversation(state: State, config: RunnableConfig):
 
     if len(human_indices) < 2:
         # Single-turn conversation: just update summary, don't delete messages
-        return {"summary": response.content}
+        return {"summary": message_text(response)}
 
     keep_from = human_indices[-1]
     delete_messages = [RemoveMessage(id=m.id) for m in state.messages[:keep_from]]
-    return {"summary": response.content, "messages": delete_messages}
+    return {"summary": message_text(response), "messages": delete_messages}

@@ -334,7 +334,7 @@
       "disconnect": "Desconectar",
       "notConfigured": "Este provedor aínda non está configurado no backend.",
       "googleDriveHelp": "O navegador inicia Google OAuth e despois o código de autorización devolto envíase ao backend e gárdase alí.",
-      "dropboxHelp": "O navegador inicia Dropbox OAuth e despois o código de autorización devolto envíase ao backend e gárdase alí.",
+      "dropboxHelp": "O navegador inicia Dropbox OAuth e despois o código de autorización devolto envíase ao backend e gárdase alí. Só verás os documentos que a túa conta de Dropbox xa pode abrir.",
       "readyToChatTitle": "Inicia o indexado cando as túas fontes estean listas",
       "readyToChatDescription": "Cando remates de conectar fontes, activa VDB para que o backend empece a indexar o contido conectado.",
       "vdb": {

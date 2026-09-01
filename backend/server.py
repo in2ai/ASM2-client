@@ -84,9 +84,10 @@ from src.metrics.dashboard_queries import (
 )
 from src.chat.store import ChatNotFoundError, PostgresChatStore
 from src.tracing import get_langfuse_handler
+from src.utils.messages import message_text
 from src.utils.nlp import init_nlp
 from src.utils.rag import get_reranker
-from src.connectors.llms import get_configured_llm
+from src.connectors.llms import get_configured_judge_llm, get_configured_llm
 
 from graph.agent import build_graph
 from graph import get_checkpointer, get_store
@@ -103,6 +104,7 @@ async def lifespan(app: FastAPI):
     # Global shared data
     app.state.llm = get_configured_llm()
     app.state.llm_with_tools = get_llm_with_tools(app.state.llm)
+    app.state.judge_llm = get_configured_judge_llm()
     app.state.vectorstore = get_vectordb(get_configured_embeddings())
     app.state.reranker = get_reranker()
     app.state.pg_pool = get_pg_pool()
@@ -637,6 +639,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             "thread_id": chat_id,
             "llm": app.state.llm,
             "llm_with_tools": app.state.llm_with_tools,
+            "judge_llm": app.state.judge_llm,
             "vectorstore": app.state.vectorstore,
             "reranker": app.state.reranker,
             "pg_pool": pg_pool,
@@ -682,7 +685,7 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
 
     record_token_usage_metrics(pg_pool, messages, metrics_actor)
     return {
-        "answer": str(messages[-1].content),
+        "answer": message_text(messages[-1]),
         "detected_lang": str(result.get("detected_lang", "es")),
         "sources": available_sources,
     }

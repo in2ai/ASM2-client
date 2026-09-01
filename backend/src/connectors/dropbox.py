@@ -1,8 +1,11 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+import hashlib
 import json
 import logging
 import os
-from typing import Any, List, Tuple
+import time
+from typing import Any
 from urllib.parse import quote
 
 import dropbox
@@ -22,6 +25,16 @@ from src.utils.helpers import safe_call
 
 TOKEN_URL = "https://api.dropboxapi.com/oauth2/token"
 
+# users_get_account_batch has no documented cap, so keep the batches modest
+ACCOUNT_BATCH_SIZE = 100
+
+# Every request rebuilds its sources from stored credentials, so without these
+# each chat message would re-run the account and shared folder lookups before it
+# reaches Qdrant.
+_CACHE_TTL_SECONDS = 300
+_ACCOUNT_CACHE: dict[str, tuple[float, "MemberContext"]] = {}
+_FOLDERS_CACHE: dict[str, tuple[float, tuple[str, ...]]] = {}
+
 # Dropbox returns no MIME type, so it is inferred from the extension. Anything
 # not listed is skipped, the equivalent of Drive's server-side MIME filter.
 SUPPORTED_MIMES = {
@@ -36,6 +49,20 @@ SUPPORTED_MIMES = {
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
+
+
+@dataclass(frozen=True)
+class MemberContext:
+    """Who the token belongs to, and where its paths resolve."""
+
+    account_id: str
+    email: str
+    display_name: str
+    # None for a personal account: there is simply no team principal to grant
+    team_id: str | None
+    # Team space namespace. Without it every path resolves inside the member's
+    # own folder and team folders are not addressable at all.
+    root_namespace_id: str | None
 
 
 def guess_mime_from_name(name: str) -> str | None:
@@ -99,7 +126,6 @@ def request_dropbox_token(**params) -> dict[str, Any] | None:
         ),
         "app_key": client_config["app_key"],
         "app_secret": client_config["app_secret"],
-        # Granted scopes, so the Team API can be skipped when it isn't reachable
         "scopes": payload.get("scope", "").split(),
     }
 
@@ -117,6 +143,78 @@ def build_dropbox_client(credentials: dict[str, Any]) -> dropbox.Dropbox:
     )
 
 
+def get_member_context(client: dropbox.Dropbox, access_token: str) -> MemberContext:
+    cache_key = hashlib.sha256(access_token.encode("utf-8")).hexdigest()
+    now = time.time()
+    cached = _ACCOUNT_CACHE.get(cache_key)
+
+    if cached and now < cached[0]:
+        return cached[1]
+
+    account = safe_call(client.users_get_current_account)
+    root_info = getattr(account, "root_info", None)
+
+    context = MemberContext(
+        account_id=account.account_id,
+        email=account.email,
+        display_name=account.name.display_name,
+        team_id=account.team.id if account.team else None,
+        root_namespace_id=root_info.root_namespace_id if root_info else None,
+    )
+
+    _ACCOUNT_CACHE[cache_key] = (now + _CACHE_TTL_SECONDS, context)
+
+    return context
+
+
+def get_accessible_folder_ids(client: dropbox.Dropbox, account_id: str) -> tuple[str, ...]:
+    """Every shared folder this token can actually read, as principals.
+
+    This is the whole permission model. Dropbox decides effective access itself,
+    so individual grants, group grants, team folder membership and nested
+    inheritance all collapse into "is this folder in my list?" - which is why the
+    connector needs no Team API and no Dropbox admin.
+    """
+    now = time.time()
+    cached = _FOLDERS_CACHE.get(account_id)
+
+    if cached and now < cached[0]:
+        return cached[1]
+
+    principals = set()
+
+    try:
+        resp = safe_call(client.sharing_list_folders, limit=100)
+
+        while True:
+            for folder in resp.entries:
+                access_type = folder.access_type
+
+                # traverse and no_access only expose the folder structure
+                if access_type and (access_type.is_traverse() or access_type.is_no_access()):
+                    continue
+
+                principals.add(f"dropbox:folder:{folder.shared_folder_id}")
+
+            cursor = getattr(resp, "cursor", None)
+
+            if not cursor:
+                break
+
+            resp = safe_call(client.sharing_list_folders_continue, cursor)
+
+    except ApiError:
+        # Better to under-share than to answer from a half-built list
+        logging.warning("Dropbox shared folder listing failed", exc_info=True)
+
+        return ()
+
+    result = tuple(sorted(principals))
+    _FOLDERS_CACHE[account_id] = (now + _CACHE_TTL_SECONDS, result)
+
+    return result
+
+
 class DropboxSource(DataSource):
     # Lowercase: this value is written to metadata.source and matched verbatim
     # by get_permissions_filter
@@ -128,6 +226,7 @@ class DropboxSource(DataSource):
         super().__init__(self.name, raw_creds, DROPBOX_ROOTS)
 
         self.credentials = None
+        self.context = None
         self.service = None
         self.account_name = None
         self.exclude = {"/" + p.strip("/").lower() for p in DROPBOX_EXCLUDE if p.strip("/")}
@@ -163,9 +262,15 @@ class DropboxSource(DataSource):
 
             self.credentials = creds_dict
             self.service = build_dropbox_client(creds_dict)
+            self.context = get_member_context(self.service, creds_dict["access_token"])
+            self.account_name = self.context.display_name
 
-            account = safe_call(self.service.users_get_current_account)
-            self.account_name = account.name.display_name
+            # Resolve paths against the team space rather than this member's own
+            # folder, so team folders are addressable by their plain name
+            if self.context.root_namespace_id:
+                self.service = self.service.with_path_root(
+                    dropbox.common.PathRoot.root(self.context.root_namespace_id)
+                )
 
             self.update_authenticated_principals()
 
@@ -173,6 +278,7 @@ class DropboxSource(DataSource):
 
         except Exception:
             self.service = None
+            self.context = None
             self.credentials = None
             logging.warning("Dropbox login failed", exc_info=True)
 
@@ -196,17 +302,16 @@ class DropboxSource(DataSource):
             refreshed["refresh_token"] = self.credentials["refresh_token"]
             refreshed["scopes"] = refreshed["scopes"] or self.credentials.get("scopes", [])
 
-            self.credentials = refreshed
             self.raw_creds = json.dumps(refreshed)
-            self.service = build_dropbox_client(refreshed)
 
-            return True
+            # Rebuilds the client against the new token
+            return self.login()
 
         except Exception:
             return False
 
 
-    def expiry(self) -> Tuple[datetime, datetime]:
+    def expiry(self) -> tuple[datetime, datetime]:
         raw_expiry = self.credentials.get("expiry")
         expiry = datetime.fromisoformat(raw_expiry) if raw_expiry else None
         needs_refresh_at = expiry - timedelta(minutes=20) if expiry is not None else None
@@ -214,89 +319,28 @@ class DropboxSource(DataSource):
         return needs_refresh_at, expiry
 
 
-    def get_authenticated_principals(self) -> List[str]:
-        result_tokens = set()
-        account_id = None
-        email = None
-        team_id = None
+    def identity_principals(self) -> list[str]:
+        # Everything that identifies the account itself, with no folder access
+        # implied. Also the fallback ACL for a file nobody else can reach.
+        return [
+            f"dropbox:user_id:{self.context.account_id}",
+            f"dropbox:user:{self.context.email.strip().lower()}",
+        ]
 
-        # 1) Basic identity via the current account endpoint
-        try:
-            account = safe_call(self.service.users_get_current_account)
-            account_id = account.account_id
-            email = account.email
-            team_id = account.team.id if account.team else None
 
-        except ApiError:
-            pass
+    def get_authenticated_principals(self) -> list[str]:
+        if self.context is None:
+            return []
 
-        if account_id:
-            result_tokens.add(f"dropbox:user_id:{account_id}")
-
-        if email:
-            result_tokens.add(f"dropbox:user:{email.strip().lower()}")
+        principals = set(self.identity_principals())
 
         # Team is the closest analogue to Drive's domain principal
-        if team_id:
-            result_tokens.add(f"dropbox:team:{team_id}")
+        if self.context.team_id:
+            principals.add(f"dropbox:team:{self.context.team_id}")
 
-        # Fetch groups via the Team API (requires a team-scoped token)
-        if account_id:
-            result_tokens |= self.get_group_principals(account_id, team_id)
+        principals.update(get_accessible_folder_ids(self.service, self.context.account_id))
 
-        return sorted(result_tokens)
-
-
-    def get_group_principals(self, account_id: str, team_id: str | None) -> set:
-        # No team or no groups.read means the Team API is unreachable, so don't
-        # spend a request finding out. Legacy tokens report no scopes at all, so
-        # those still get attempted.
-        scopes = self.credentials.get("scopes") or []
-
-        if not team_id or (scopes and "groups.read" not in scopes):
-            return set()
-
-        # Dropbox has no per-user group listing, so every team group gets walked
-        tokens = set()
-
-        try:
-            team = dropbox.DropboxTeam(
-                oauth2_access_token=self.credentials["access_token"],
-                oauth2_refresh_token=self.credentials.get("refresh_token"),
-                app_key=self.credentials.get("app_key"),
-                app_secret=self.credentials.get("app_secret"),
-            )
-
-            groups = []
-            resp = safe_call(team.team_groups_list, limit=100)
-
-            while True:
-                groups.extend(resp.groups)
-
-                if not resp.has_more:
-                    break
-
-                resp = safe_call(team.team_groups_list_continue, resp.cursor)
-
-            for group in groups:
-                selector = dropbox.team.GroupSelector.group_id(group.group_id)
-                members = safe_call(team.team_groups_members_list, selector, limit=100)
-
-                while True:
-                    if any(m.profile.account_id == account_id for m in members.members):
-                        tokens.add(f"dropbox:group:{group.group_id}")
-                        break
-
-                    if not members.has_more:
-                        break
-
-                    members = safe_call(team.team_groups_members_list_continue, members.cursor)
-
-        except Exception:
-            # Personal accounts and user-scoped tokens can't reach the Team API
-            logging.debug("Dropbox team groups unavailable", exc_info=True)
-
-        return tokens
+        return sorted(principals)
 
 
     def has_access(self, file_id: str) -> bool:
@@ -309,93 +353,109 @@ class DropboxSource(DataSource):
             return False
 
 
-    def get_file_principals(self, file_id: str):
-        # List all members, including those inherited from parent shared folders
-        users = []
-        groups = []
-
-        try:
-            resp = safe_call(
-                self.service.sharing_list_file_members,
-                file=file_id,
-                include_inherited=True,
-                limit=100,
-            )
-
-            while True:
-                users.extend(resp.users)
-                groups.extend(resp.groups)
-
-                if not resp.has_more:
-                    break
-
-                resp = safe_call(
-                    self.service.sharing_list_file_members_continue, cursor=resp.cursor
-                )
-
-        except ApiError:
-            # Files outside any shared folder have no member list at all, so the
-            # indexing account is the only principal that can reach them
-            return {"anyone": False, "allowed": list(self.authenticated_principals)}
+    def get_file_principals(self, entry, links_by_file) -> dict[str, Any]:
+        # Dropbox ACLs live on the shared folder, never on the file, and the
+        # folder id is already in the listing response. Naming the folder instead
+        # of expanding its members keeps indexing free of permission requests and
+        # lets each user match it against their own accessible folders.
+        folder_id = (
+            getattr(entry.sharing_info, "parent_shared_folder_id", None)
+            if entry.sharing_info
+            else None
+        )
+        principals = (
+            {f"dropbox:folder:{folder_id}"} if folder_id else set(self.identity_principals())
+        )
+        anyone = False
 
         # Shared links are what reveal 'anyone with the link' and team-wide access
-        try:
-            links = safe_call(
-                self.service.sharing_list_shared_links, path=file_id, direct_only=False
-            ).links
-
-        except ApiError:
-            links = []
-
-        return self._principals_from_members(users, groups, links)
-
-
-    @staticmethod
-    def _principals_from_members(users, groups, links):
-        # Transform members and links to unified format
-        acl_principals = set()
-        acl_anyone = False
-
-        for u in users:
-            # traverse and no_access only expose the folder structure, not content
-            if u.access_type.is_traverse() or u.access_type.is_no_access():
-                continue
-
-            acl_principals.add(f"dropbox:user_id:{u.user.account_id}")
-            acl_principals.add(f"dropbox:user:{u.user.email.strip().lower()}")
-
-        for g in groups:
-            if g.access_type.is_traverse() or g.access_type.is_no_access():
-                continue
-
-            # group_id, not name: the only identifier team_groups_list also returns
-            acl_principals.add(f"dropbox:group:{g.group.group_id}")
-
-        for link in links:
+        for link in links_by_file.get(entry.id, []):
             visibility = link.link_permissions.resolved_visibility
 
             if visibility is None:
                 continue
 
             if visibility.is_public():
-                acl_anyone = True
-                acl_principals.add("dropbox:anyone")
+                anyone = True
+                principals.add("dropbox:anyone")
 
-            elif visibility.is_team_only() and link.content_owner_team_info:
-                acl_principals.add(f"dropbox:team:{link.content_owner_team_info.id}")
+            elif visibility.is_team_only():
+                owner_team = getattr(link, "content_owner_team_info", None)
+                team_id = owner_team.id if owner_team else self.context.team_id
 
-        return {
-            "anyone": acl_anyone,
-            "allowed": sorted(acl_principals),
-        }
+                if team_id:
+                    principals.add(f"dropbox:team:{team_id}")
+
+        return {"anyone": anyone, "allowed": sorted(principals)}
 
 
-    def list_files(self):
-        # Discover all files. files_list_folder is recursive, so unlike Drive
-        # there is no BFS to run; exclusions are applied here instead
+    def list_shared_links(self) -> dict[str, list]:
+        # One paginated pass over the account's links rather than a
+        # sharing_list_shared_links call per file. Links created by other members
+        # are invisible here, so an unseen public link under-shares.
+        links_by_file = {}
+        cursor = None
+
+        try:
+            while True:
+                resp = safe_call(self.service.sharing_list_shared_links, cursor=cursor)
+
+                for link in resp.links:
+                    file_id = getattr(link, "id", None)
+
+                    if file_id:
+                        links_by_file.setdefault(file_id, []).append(link)
+
+                if not resp.has_more:
+                    break
+
+                cursor = resp.cursor
+
+        except ApiError:
+            logging.warning("Dropbox shared link listing failed", exc_info=True)
+
+        return links_by_file
+
+
+    def list_editor_names(self, account_ids) -> dict[str, str]:
+        # Dropbox exposes no file owner, so the last editor stands in for Drive's
+        # owners. Batched, because a big folder has few editors but many files.
+        names = {}
+        pending = sorted(account_ids)
+
+        for start in range(0, len(pending), ACCOUNT_BATCH_SIZE):
+            batch = pending[start:start + ACCOUNT_BATCH_SIZE]
+
+            try:
+                for account in safe_call(self.service.users_get_account_batch, batch):
+                    names[account.account_id] = account.name.display_name
+
+            except ApiError:
+                logging.warning("Dropbox account lookup failed", exc_info=True)
+
+        return names
+
+
+    def is_indexable(self, entry) -> bool:
+        if not isinstance(entry, dropbox.files.FileMetadata):
+            return False
+
+        if any(
+            entry.path_lower == x or entry.path_lower.startswith(x + "/")
+            for x in self.exclude
+        ):
+            return False
+
+        return guess_mime_from_name(entry.name) is not None
+
+
+    def list_entries(self):
+        # files_list_folder is recursive server-side, so unlike Drive there is no
+        # BFS to run; exclusions are applied to the flat result instead. Paths
+        # are relative to the team space, so "" walks everything reachable.
         entries = []
 
-        for raw_root in self.roots:
+        for raw_root in sorted(self.roots) or [""]:
             root = "/" + raw_root.strip("/") if raw_root.strip("/") else ""
 
             try:
@@ -407,20 +467,9 @@ class DropboxSource(DataSource):
                 )
 
                 while True:
-                    for e in resp.entries:
-                        if not isinstance(e, dropbox.files.FileMetadata):
-                            continue
-
-                        if any(
-                            e.path_lower == x or e.path_lower.startswith(x + "/")
-                            for x in self.exclude
-                        ):
-                            continue
-
-                        if guess_mime_from_name(e.name) is None:
-                            continue
-
-                        entries.append((root, e))
+                    entries.extend(
+                        (root, e) for e in resp.entries if self.is_indexable(e)
+                    )
 
                     if not resp.has_more:
                         break
@@ -430,22 +479,31 @@ class DropboxSource(DataSource):
             except ApiError:
                 logging.exception("Failed to list Dropbox root %s", raw_root)
 
+        return entries
+
+
+    def list_files(self):
+        # Discover all files
+        entries = self.list_entries()
+
+        # Both are one request set for the whole run, not one per file
+        links_by_file = self.list_shared_links()
+        editor_names = self.list_editor_names(
+            {
+                e.sharing_info.modified_by
+                for _, e in entries
+                if e.sharing_info and e.sharing_info.modified_by
+            }
+        )
+
         # Get metadata for each file
         res = []
         failed = 0
-        display_names = {}
 
         for root, e in entries:
             try:
-                # Dropbox exposes no file owner, so the last editor stands in for
-                # Drive's owners; files nobody else has touched fall back to us
                 editor = e.sharing_info.modified_by if e.sharing_info else None
-
-                if editor and editor not in display_names:
-                    account = safe_call(self.service.users_get_account, editor)
-                    display_names[editor] = account.name.display_name
-
-                author = display_names.get(editor) or self.account_name
+                author = editor_names.get(editor) or self.account_name
                 parent = e.path_display.rsplit("/", 1)[0]
 
                 res.append(
@@ -464,8 +522,7 @@ class DropboxSource(DataSource):
                             f"https://www.dropbox.com/home{quote(parent)}"
                             f"?preview={quote(e.name)}"
                         ),
-                        # Two requests per file: Dropbox has no inline ACL field
-                        "permissions": self.get_file_principals(e.id),
+                        "permissions": self.get_file_principals(e, links_by_file),
                     }
                 )
 
