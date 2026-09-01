@@ -1,21 +1,21 @@
-import { UserMenu } from "@/app/_components/app-layout";
-import { AreaSwitcher } from "@/app/_components/area-switcher";
-import { Button } from "@/components/ui/button";
-import { IndexingAlertCenter } from "@/features/indexing-alerts/indexing-alert-center";
-import type { LogtoUser } from "@/lib/auth";
-import { cn } from "@/lib/utils";
-import { Menu, MessageSquareText, X } from "lucide-react";
-import type { ReactNode } from "react";
-import { useState } from "react";
+import { UserMenu } from '@/app/_components/app-layout'
+import { AreaSwitcher } from '@/app/_components/area-switcher'
+import { Button } from '@/components/ui/button'
+import { IndexingAlertCenter } from '@/features/indexing-alerts/indexing-alert-center'
+import type { LogtoUser } from '@/lib/auth'
+import { cn } from '@/lib/utils'
+import { Menu, MessageSquareText, X } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { useState } from 'react'
 
 interface ChatShellProps {
-  closeSidebarLabel: string;
-  children: ReactNode;
-  headerActions?: ReactNode;
-  openSidebarLabel: string;
-  sidebar: ReactNode;
-  title: string;
-  user: LogtoUser;
+  closeSidebarLabel: string
+  children: ReactNode
+  headerActions?: ReactNode
+  openSidebarLabel: string
+  sidebar: ReactNode
+  title: string
+  user: LogtoUser
 }
 
 export function ChatShell({
@@ -27,7 +27,7 @@ export function ChatShell({
   title,
   user,
 }: Readonly<ChatShellProps>) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
     <div className="bg-background flex h-screen overflow-hidden">
@@ -42,8 +42,8 @@ export function ChatShell({
 
       <aside
         className={cn(
-          "bg-card/40 fixed inset-y-0 left-0 z-50 flex w-80 flex-col border-r shadow-xl backdrop-blur-xl transition-transform duration-300 lg:static lg:translate-x-0 lg:shadow-none",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          'bg-card/40 fixed inset-y-0 left-0 z-50 flex w-80 flex-col border-r shadow-xl backdrop-blur-xl transition-transform duration-300 lg:static lg:translate-x-0 lg:shadow-none',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         <div className="flex h-16 items-center px-6">
@@ -88,7 +88,7 @@ export function ChatShell({
             {headerActions}
             <IndexingAlertCenter user={user} />
             <AreaSwitcher activeArea="chat" user={user} />
-            {user.role === "admin" ? (
+            {user.role === 'admin' ? (
               <div className="bg-border mx-1 hidden h-6 w-px sm:block" />
             ) : null}
             <UserMenu user={user} showPreferences />
@@ -98,5 +98,5 @@ export function ChatShell({
         <main className="min-h-0 flex-1">{children}</main>
       </div>
     </div>
-  );
+  )
 }

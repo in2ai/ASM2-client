@@ -315,13 +315,17 @@
       "pages": "Pages",
       "sources": "Sources",
       "sending": "Generating response...",
-      "user": "You"
+      "user": "You",
+      "document": "Generated document",
+      "downloadDocument": "Download",
+      "downloadingDocument": "Downloading..."
     },
     "errors": {
       "title": "Unable to load chat",
       "loadFailed": "The chat workspace could not be loaded. Please try again.",
       "sendFailed": "Your message could not be sent. Please try again.",
-      "deleteFailed": "The conversation could not be deleted. Please try again."
+      "deleteFailed": "The conversation could not be deleted. Please try again.",
+      "downloadFailed": "The document could not be downloaded. Please try again."
     },
     "sources": {
       "openPanel": "Sources",

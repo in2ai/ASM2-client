@@ -7,8 +7,17 @@ export interface ChatSource {
   pages?: number[]
 }
 
+export interface ChatDocument {
+  filename: string
+  format: string
+  mime_type: string
+  size_bytes: number
+  title?: string
+}
+
 export interface ChatMessageMetadata {
   detected_lang?: string
+  document?: ChatDocument
   sources?: ChatSource[]
 }
 
@@ -41,6 +50,12 @@ export interface CreateChatInput {
 export interface SendMessageInput {
   chatId: string
   content: string
+}
+
+export interface DownloadDocumentInput {
+  chatId: string
+  filename: string
+  messageId: string
 }
 
 export interface SendMessageResult {

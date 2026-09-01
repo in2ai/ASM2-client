@@ -167,6 +167,7 @@ dependencies = [
     "ragas>=0.4.3",
     "pandas>=2.3.3",
     "llama-cpp-python>=0.3.34",
+    "reportlab>=5.0.0",
 ]
 
 [tool.uv]
