@@ -452,10 +452,20 @@ class DropboxSource(DataSource):
     def list_entries(self):
         # files_list_folder is recursive server-side, so unlike Drive there is no
         # BFS to run; exclusions are applied to the flat result instead. Paths
-        # are relative to the team space, so "" walks everything reachable.
+        # are relative to the team space, so "" walks everything reachable —
+        # which only the explicit "/" root asks for. Unset roots index nothing,
+        # so a missing config cannot quietly pull in every private file.
+        if not self.roots:
+            logging.warning(
+                "DROPBOX_ROOTS is empty, so no Dropbox file will be indexed. "
+                "Set it to the folder paths to index, or to / for the whole team space."
+            )
+
+            return []
+
         entries = []
 
-        for raw_root in sorted(self.roots) or [""]:
+        for raw_root in sorted(self.roots):
             root = "/" + raw_root.strip("/") if raw_root.strip("/") else ""
 
             try:

@@ -249,9 +249,15 @@ DROPBOX_EXCLUDE=Seguridad/Drafts
 Leading and trailing slashes are optional. `DROPBOX_EXCLUDE` uses the same paths
 and drops a folder and everything under it.
 
-**Leaving `DROPBOX_ROOTS` empty indexes everything the indexing account can
-reach**, including its own private files. Always set explicit roots in
-production.
+**Leaving `DROPBOX_ROOTS` empty indexes nothing**, and the indexing logs say so.
+Whole-space indexing — everything the account can reach, including its own
+private files — has to be asked for explicitly:
+
+```dotenv
+DROPBOX_ROOTS=/
+```
+
+Prefer explicit roots in production.
 
 Paths, not ids, because the App Console and web UI never show a folder id. The
 trade-off is that renaming a root folder in Dropbox silently stops indexing it —
@@ -310,8 +316,9 @@ it persists, confirm the four scopes in §6.2 are granted and the app is **Full
 Dropbox**, not App folder.
 
 **The connection succeeds but no files are indexed.**
-Check `DROPBOX_ROOTS`. Look for `Failed to list Dropbox root <name>` in the
-indexing logs, which means the path does not resolve — usually a rename, or a
+Check `DROPBOX_ROOTS`. `DROPBOX_ROOTS is empty` in the indexing logs means no
+root is configured, and nothing is indexed until one is. `Failed to list Dropbox
+root <name>` means the path does not resolve — usually a rename, or a
 member-folder path missing its member-name prefix.
 
 **A user sees no Dropbox documents.**

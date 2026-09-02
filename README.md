@@ -67,7 +67,7 @@ cp .env.example .env
 | `GDRIVE_EXCLUDE` | IDs de las carpetas de Google Drive que se excluirán de la indexación (separados por comas) | `folder_id_3,folder_id_4` |
 | `DROPBOX_APP_KEY` | App key de la app de Dropbox (*user-scoped*, sin team scopes) | `abc123def456ghi` |
 | `DROPBOX_APP_SECRET` | App secret de la misma app de Dropbox | `jkl789mno012pqr` |
-| `DROPBOX_ROOTS` | Rutas de las carpetas a indexar, relativas a la raíz del espacio de equipo (separadas por comas) | `Seguridad,Shared/Wiki` |
+| `DROPBOX_ROOTS` | Rutas de las carpetas a indexar, relativas a la raíz del espacio de equipo (separadas por comas). Vacío no indexa nada; `/` indexa todo el espacio de equipo | `Seguridad,Shared/Wiki` |
 | `DROPBOX_EXCLUDE` | Rutas de las carpetas de Dropbox que se excluirán de la indexación (separadas por comas) | `Seguridad/Drafts` |
 | `HF_TOKEN` | Token de Hugging Face opcional usado solo en tiempo de build del backend para acelerar la descarga de modelos (evita el rate limit anónimo). No se usa en runtime. | `hf_...` |
 
