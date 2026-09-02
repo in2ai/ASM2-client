@@ -30,6 +30,7 @@ from src.connectors.store import get_vectordb
 from src.metrics.connection import (
     get_pg_pool,
 )
+from src.utils.messages import message_text
 from src.utils.nlp import init_nlp
 
 from src.utils.rag import get_reranker
@@ -266,7 +267,7 @@ def call_rag(query: str, thread_id: str) -> tuple[str, bool, Any | None]:
     )
 
     messages = result.get("messages") or []
-    answer = str(messages[-1].content)
+    answer = message_text(messages[-1])
     retrieval_done, search_results = get_vectordb_search_output_in_latest_turn(messages)
 
     return answer, retrieval_done, search_results

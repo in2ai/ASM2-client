@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 import dropbox
 import requests
-from dropbox.exceptions import ApiError
+from dropbox.exceptions import DropboxException
 
 from src.config.config import (
     DROPBOX_APP_KEY,
@@ -52,6 +52,40 @@ SUPPORTED_MIMES = {
 
 
 @dataclass(frozen=True)
+class SharedLinkIndex:
+    """The account's shared links, in the two shapes a file lookup needs.
+
+    Dropbox grants a folder link to every file below it, and those files carry
+    ids of their own, so a folder link can only be matched to a file by path.
+    """
+
+    # Links whose target is the file itself, keyed by the linked file id
+    by_file_id: dict[str, list]
+    # Folder links as (folder path_lower, link), longest path first so the
+    # closest folder link to a file is the one reported for it
+    folder_links: tuple[tuple[str, Any], ...]
+
+    def for_file(self, entry) -> list[tuple[Any, str | None]]:
+        """Every link that grants this file, with the path each addresses it by.
+
+        The path is None for a direct file link, and the file's path relative to
+        the shared folder for a folder link - what get_shared_link_metadata's
+        `path` argument expects.
+        """
+        matches = [(link, None) for link in self.by_file_id.get(entry.id, [])]
+        path = (getattr(entry, "path_lower", None) or "").lower()
+
+        if not path:
+            return matches
+
+        for folder_path, link in self.folder_links:
+            if path.startswith(folder_path + "/"):
+                matches.append((link, path[len(folder_path):]))
+
+        return matches
+
+
+@dataclass(frozen=True)
 class MemberContext:
     """Who the token belongs to, and where its paths resolve."""
 
@@ -69,6 +103,21 @@ def guess_mime_from_name(name: str) -> str | None:
     _, extension = os.path.splitext((name or "").lower())
 
     return SUPPORTED_MIMES.get(extension)
+
+
+def link_audience_team_id(link) -> str | None:
+    """The team a team_only link admits: the link owner's, not the content's.
+
+    Dropbox only sets content_owner_team_info when the content owner's team
+    differs from the link owner's, so reading it names the wrong team in exactly
+    the cross-team case it exists for. team_member_info describes the link owner,
+    whose team is the audience. Neither present means the audience cannot be
+    established, and an unattributable link grants nothing.
+    """
+    member_info = getattr(link, "team_member_info", None)
+    team_info = getattr(member_info, "team_info", None)
+
+    return getattr(team_info, "id", None)
 
 
 def get_dropbox_client_config() -> dict[str, Any] | None:
@@ -203,7 +252,10 @@ def get_accessible_folder_ids(client: dropbox.Dropbox, account_id: str) -> tuple
 
             resp = safe_call(client.sharing_list_folders_continue, cursor)
 
-    except ApiError:
+    # DropboxException, not ApiError: safe_call re-raises the RateLimitError or
+    # InternalServerError it gave up on, and those are HttpError subclasses. Only
+    # the common base keeps an exhausted retry from escaping the fail-closed path.
+    except DropboxException:
         # Better to under-share than to answer from a half-built list
         logging.warning("Dropbox shared folder listing failed", exc_info=True)
 
@@ -343,17 +395,47 @@ class DropboxSource(DataSource):
         return sorted(principals)
 
 
-    def has_access(self, file_id: str) -> bool:
+    def has_access(self, file_id: str, metadata: dict[str, Any] | None = None) -> bool:
         try:
             safe_call(self.service.files_get_metadata, file_id)
 
             return True
 
-        except ApiError:
+        except DropboxException:
+            # A file id only resolves inside the caller's own namespace, so this
+            # fails for someone whose entitlement is a shared link rather than
+            # folder membership. The link is the only handle they have on the
+            # file, and it is the recorded justification for dropbox:anyone and
+            # for a link-derived dropbox:team, so re-check it before giving up.
+            permissions = (metadata or {}).get("permissions") or {}
+            link = permissions.get("link")
+
+            if not link:
+                return False
+
+            return self.has_link_access(file_id, link, permissions.get("link_path"))
+
+
+    def has_link_access(self, file_id: str, url: str, path: str | None = None) -> bool:
+        # Dropbox resolves the link's audience itself: a revoked link, or one
+        # narrowed to a team this caller is not in, comes back access_denied.
+        # `path` walks a folder link down to the file, which is the only way to
+        # address a file that a folder link, rather than its own link, grants.
+        try:
+            link_metadata = safe_call(
+                self.service.sharing_get_shared_link_metadata, url, path=path
+            )
+
+        except DropboxException:
             return False
 
+        # A link points at a path, and a path can end up holding a different
+        # file than the one indexed. Only the recorded file is granted, and an
+        # id-less response is treated as a mismatch rather than trusted.
+        return getattr(link_metadata, "id", None) == file_id
 
-    def get_file_principals(self, entry, links_by_file) -> dict[str, Any]:
+
+    def get_file_principals(self, entry, links: SharedLinkIndex) -> dict[str, Any]:
         # Dropbox ACLs live on the shared folder, never on the file, and the
         # folder id is already in the listing response. Naming the folder instead
         # of expanding its members keeps indexing free of permission requests and
@@ -367,9 +449,18 @@ class DropboxSource(DataSource):
             {f"dropbox:folder:{folder_id}"} if folder_id else set(self.identity_principals())
         )
         anyone = False
+        # The link the widened principals rest on, as the url plus the path that
+        # addresses this file through it. has_access needs both to verify
+        # link-only access at query time, and the url doubles as the citation
+        # link, since the path url only opens for someone with folder access.
+        # for_file yields the file's own links before folder ones and the
+        # innermost folder first, so the first url of each kind is the shortest
+        # way to the file and the one worth recording.
+        public_link = (None, None)
+        team_link = (None, None)
 
         # Shared links are what reveal 'anyone with the link' and team-wide access
-        for link in links_by_file.get(entry.id, []):
+        for link, link_path in links.for_file(entry):
             visibility = link.link_permissions.resolved_visibility
 
             if visibility is None:
@@ -379,21 +470,41 @@ class DropboxSource(DataSource):
                 anyone = True
                 principals.add("dropbox:anyone")
 
+                if public_link[0] is None and getattr(link, "url", None):
+                    public_link = (link.url, link_path)
+
             elif visibility.is_team_only():
-                owner_team = getattr(link, "content_owner_team_info", None)
-                team_id = owner_team.id if owner_team else self.context.team_id
+                team_id = link_audience_team_id(link)
 
                 if team_id:
                     principals.add(f"dropbox:team:{team_id}")
 
-        return {"anyone": anyone, "allowed": sorted(principals)}
+                    if team_link[0] is None and getattr(link, "url", None):
+                        team_link = (link.url, link_path)
+
+        # A public link admits every caller a team link would, so recording one
+        # is enough.
+        url, path = public_link if public_link[0] else team_link
+
+        return {
+            "anyone": anyone,
+            "allowed": sorted(principals),
+            # Both keys are always present, even as None: store.py refreshes
+            # metadata.permissions rather than replacing it, and a missing key
+            # would keep a revoked link alive in Qdrant.
+            "link": url,
+            # None for a link on the file itself; the file's path inside the
+            # shared folder for a folder link
+            "link_path": path,
+        }
 
 
-    def list_shared_links(self) -> dict[str, list]:
+    def list_shared_links(self) -> SharedLinkIndex:
         # One paginated pass over the account's links rather than a
         # sharing_list_shared_links call per file. Links created by other members
         # are invisible here, so an unseen public link under-shares.
-        links_by_file = {}
+        by_file_id = {}
+        folder_links = []
         cursor = None
 
         try:
@@ -401,20 +512,34 @@ class DropboxSource(DataSource):
                 resp = safe_call(self.service.sharing_list_shared_links, cursor=cursor)
 
                 for link in resp.links:
+                    if isinstance(link, dropbox.sharing.FolderLinkMetadata):
+                        # path_lower is absent for a folder outside this account's
+                        # own Dropbox, and there is nothing to match such a link
+                        # against, so it is dropped rather than guessed at.
+                        folder_path = (getattr(link, "path_lower", None) or "").rstrip("/")
+
+                        if folder_path:
+                            folder_links.append((folder_path, link))
+
+                        continue
+
                     file_id = getattr(link, "id", None)
 
                     if file_id:
-                        links_by_file.setdefault(file_id, []).append(link)
+                        by_file_id.setdefault(file_id, []).append(link)
 
                 if not resp.has_more:
                     break
 
                 cursor = resp.cursor
 
-        except ApiError:
+        except DropboxException:
             logging.warning("Dropbox shared link listing failed", exc_info=True)
 
-        return links_by_file
+        # Deepest first, so the innermost folder link wins the recorded url
+        folder_links.sort(key=lambda pair: len(pair[0]), reverse=True)
+
+        return SharedLinkIndex(by_file_id, tuple(folder_links))
 
 
     def list_editor_names(self, account_ids) -> dict[str, str]:
@@ -430,7 +555,7 @@ class DropboxSource(DataSource):
                 for account in safe_call(self.service.users_get_account_batch, batch):
                     names[account.account_id] = account.name.display_name
 
-            except ApiError:
+            except DropboxException:
                 logging.warning("Dropbox account lookup failed", exc_info=True)
 
         return names
@@ -486,7 +611,7 @@ class DropboxSource(DataSource):
 
                     resp = safe_call(self.service.files_list_folder_continue, resp.cursor)
 
-            except ApiError:
+            except DropboxException:
                 logging.exception("Failed to list Dropbox root %s", raw_root)
 
         return entries
@@ -497,7 +622,7 @@ class DropboxSource(DataSource):
         entries = self.list_entries()
 
         # Both are one request set for the whole run, not one per file
-        links_by_file = self.list_shared_links()
+        links = self.list_shared_links()
         editor_names = self.list_editor_names(
             {
                 e.sharing_info.modified_by
@@ -532,7 +657,7 @@ class DropboxSource(DataSource):
                             f"https://www.dropbox.com/home{quote(parent)}"
                             f"?preview={quote(e.name)}"
                         ),
-                        "permissions": self.get_file_principals(e, links_by_file),
+                        "permissions": self.get_file_principals(e, links),
                     }
                 )
 

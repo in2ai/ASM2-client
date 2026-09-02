@@ -88,7 +88,8 @@ admins. `list_files()` then:
 1. `list_entries()` — one `files_list_folder(recursive=True)` per configured root,
    dropping folders, excluded subtrees and unsupported extensions.
 2. `list_shared_links()` — **one** paginated pass over the account's shared links,
-   keyed by file id.
+   into a `SharedLinkIndex`: file links keyed by file id, folder links kept as
+   `(path, link)` pairs. See §4.2.
 3. `list_editor_names()` — the distinct last editors resolved in batches of 100
    through `users_get_account_batch`.
 4. `get_file_principals()` per file — pure local work, since the shared folder id
@@ -106,6 +107,8 @@ extra calls.
 3. `get_permissions_filter()` turns that set into the Qdrant filter.
 4. Retrieved chunks are re-checked with `has_access()`, a live
    `files_get_metadata` call as that same user.
+5. If that lookup fails and the chunk carries a recorded shared link, it falls
+   back to `sharing_get_shared_link_metadata()` on that link. See §4.1.
 
 ---
 
@@ -122,7 +125,7 @@ and matched against the querying user's set at query time.
 | `dropbox:team:<team_id>` | anyone in the team (Drive's `domain` analogue) |
 | `dropbox:anyone` | a public shared link exists |
 
-Two deliberate rules:
+Three deliberate rules:
 
 - **Folders with `traverse` or `no_access` are dropped** from a user's set. Those
   access levels expose the folder structure, not the content.
@@ -130,6 +133,78 @@ Two deliberate rules:
   its `user_id` and `user` principals, *never* `dropbox:team:<team_id>`. Every
   member carries the team principal, so using it as a fallback would publish a
   private file to the whole team. The connector under-shares instead.
+- **A `team_only` link's team is read off `team_member_info.team_info.id`**, the
+  link *owner's* team, which is the audience Dropbox scopes the link to. The
+  neighbouring `content_owner_team_info` is set only when the content owner's
+  team is a *different* one, so it names the wrong team in exactly the cross-team
+  case it exists for. A link with neither field grants no team principal: the
+  audience cannot be established, and the indexing account's own team is not a
+  safe stand-in.
+
+### 4.1 Why The Live Check Needs The Link
+
+A Dropbox file id only resolves inside the caller's own namespace. A public link
+grants no access by id — the only endpoints that honor a link are
+`sharing/get_shared_link_metadata` and `sharing/get_shared_link_file`, both keyed
+by **url**. So `files_get_metadata` fails for exactly the reader that
+`dropbox:anyone` or a link-derived `dropbox:team` was meant to admit, and without
+a second check those two principals would grant nothing that
+`dropbox:folder:<id>` did not already grant.
+
+Google Drive hides this: a global file id plus an `anyone` grant makes `files.get`
+succeed for any authenticated caller, so the same index-broad-then-verify-live
+pattern needs no fallback there.
+
+The connector therefore records the link the widened principals rest on as
+`metadata.permissions.link`, with `metadata.permissions.link_path` alongside it
+for a folder link (§4.2), and `has_access` retries against it:
+
+```
+files_get_metadata(id)          folder access, or the indexer's own file
+  └─ fails, link recorded ─►  sharing_get_shared_link_metadata(url, path)
+```
+
+Three properties of that fallback:
+
+- **Dropbox resolves the audience.** A revoked link, or one narrowed from public
+  to a team the caller is not in, comes back `shared_link_access_denied`. Nothing
+  in the index is trusted to decide access.
+- **The returned id must match the indexed file.** A link addresses a path, and a
+  path can end up holding a different file. An id-less response counts as a
+  mismatch rather than being trusted.
+- **The url lives inside `permissions`.** That is the payload
+  `update_file_permissions` refreshes on every indexing run, so a link created
+  after a file was indexed is picked up without waiting for the file to change.
+  Both keys are always written, `None` included — omitting one would leave a
+  revoked link in place, since `set_payload` only overwrites the keys it is given.
+
+The same url is preferred as the citation link in `get_chunk_sources`. The
+`webViewLink` fallback is a `dropbox.com/home/<path>` url built in the indexing
+account's namespace, which does not open for a reader who has only the link.
+
+### 4.2 Folder Links Are Matched By Path
+
+A shared link on a *folder* grants every file below it, but Dropbox reports it
+under the folder's own object id, and the files below carry ids of their own.
+Matching links to files by id alone therefore misses every one of them: a
+publicly linked folder would index as private.
+
+`SharedLinkIndex` keeps folder links as `(path_lower, link)` pairs and matches
+them by path prefix, deepest first, so a file inherits the innermost folder link
+above it. A file's own link is still preferred when it has one — it resolves in a
+single call, with no path to go stale.
+
+Inheritance carries into the live check as well. `sharing_get_shared_link_metadata`
+resolves a folder url to the *folder*, so re-checking a folder link against a
+file id would always mismatch. Its optional `path` argument walks the link down to
+the file, which is what `metadata.permissions.link_path` records — `None` for a
+link on the file itself, and the file's path relative to the shared folder
+otherwise. The id returned for that path still has to equal the indexed file id,
+so a file moved out from under the link stops matching.
+
+Folder links whose `path_lower` is missing are dropped. Dropbox omits it when the
+linked folder is not in the authenticated account's own Dropbox, and there is
+nothing to match such a link against.
 
 ---
 
@@ -151,7 +226,11 @@ run.
 
 A failed folder listing returns an empty set rather than a partial one, so a
 transient API error under-shares for that request instead of answering from a
-half-built list.
+half-built list. Every Dropbox call site catches `DropboxException`, the common
+base, rather than `ApiError`: `safe_call` re-raises the `RateLimitError` or
+`InternalServerError` it gave up on, and those are `HttpError` subclasses. Caught
+only as `ApiError`, an exhausted retry would escape the fail-closed path and fail
+the whole login or indexing run instead.
 
 ---
 
@@ -295,10 +374,14 @@ listing requests `include_non_downloadable_files=False`.
 4. **Files shared individually, outside any shared folder, reach only the indexer.**
    They have no `parent_shared_folder_id`, so there is no folder principal to
    grant. Put shared material in a shared folder.
-5. **Exclusions do not prune traversal.** `files_list_folder` is recursive
+5. **Link-only access costs one extra request per chunk.** `has_access` falls
+   back to `sharing_get_shared_link_metadata` only after the id lookup fails, so
+   a folder member pays nothing; a reader arriving through a link pays one
+   sharing call per retrieved file.
+6. **Exclusions do not prune traversal.** `files_list_folder` is recursive
    server-side, so excluded subtrees are still listed and then discarded. Correct,
    but it costs listing requests.
-6. **No file owner.** Dropbox exposes no owner field, so the last editor
+7. **No file owner.** Dropbox exposes no owner field, so the last editor
    (`sharing_info.modified_by`) stands in for Drive's `owners`. Files nobody else
    has touched are attributed to the indexing account.
 
