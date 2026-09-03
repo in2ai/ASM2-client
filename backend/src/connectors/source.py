@@ -40,7 +40,9 @@ class DataSource:
         ...
 
 
-    def has_access(self, file_id: str) -> bool:
+    # metadata is the indexed chunk payload, so a source can re-check an
+    # entitlement that its live id lookup cannot see
+    def has_access(self, file_id: str, metadata: dict[str, Any] | None = None) -> bool:
         ...
 
 

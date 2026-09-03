@@ -121,7 +121,7 @@ export function ChatSidebar({
                     className="min-w-0 flex-1 cursor-pointer px-4 py-3 text-left"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <p className="line-clamp-1 font-semibold tracking-tight">
+                      <p className="line-clamp-1 min-w-0 font-semibold tracking-tight">
                         {getChatTitle(chat.title)}
                       </p>
                       <span className="text-muted-foreground shrink-0 text-xs">
