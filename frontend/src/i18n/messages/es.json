@@ -436,6 +436,63 @@
       "enabled": "Notificaciones del navegador activadas."
     }
   },
+  "IndexingProgress": {
+    "unavailable": "Estado no disponible",
+    "lastKnownState": "Último estado conocido",
+    "lastKnownDescription": "Último estado comunicado: {status}. Esta información puede estar desactualizada.",
+    "open": "Abrir el estado del indexado de Qdrant",
+    "openRunning": "Indexado de Qdrant en curso: {status}",
+    "title": "Indexado de Qdrant",
+    "description": "Estado del trabajo que mantiene actualizada la base de datos vectorial.",
+    "loading": "Cargando el estado del indexado…",
+    "loadFailed": "No se ha podido consultar el estado del indexado.",
+    "inProgress": "En curso",
+    "runningDescription": "Qdrant se está actualizando ahora mismo.",
+    "indeterminateLabel": "Indexado en curso sin recuento de ficheros",
+    "barLabel": "Ficheros indexados en la fuente actual",
+    "files": "{processed} de {total} ficheros",
+    "eta": "Tiempo restante: {eta}",
+    "sources": "Fuentes",
+    "sourcesValue": "{completed} de {total} completadas",
+    "currentSource": "Fuente actual",
+    "noSource": "Ninguna",
+    "chunks": "Fragmentos indexados en esta ejecución",
+    "automatic": "Indexado",
+    "automaticEnabled": "Activado",
+    "automaticDisabled": "Desactivado",
+    "startedAt": "Inicio",
+    "finishedAt": "Fin",
+    "lastUpdate": "Última actualización",
+    "never": "—",
+    "status": {
+      "idle": "Todavía no se ha ejecutado el indexado",
+      "running": "Actualizando Qdrant",
+      "completed": "Última ejecución completada",
+      "failed": "La última ejecución falló",
+      "blocked": "La última ejecución se detuvo por seguridad",
+      "interrupted": "La última ejecución se interrumpió",
+      "unknown": "Estado desconocido"
+    },
+    "statusDescription": {
+      "idle": "Qdrant no se ha actualizado desde que arrancó el servidor.",
+      "running": "Qdrant se está actualizando ahora mismo.",
+      "completed": "Qdrant está al día con las fuentes indexadas.",
+      "failed": "El trabajo se detuvo por un error. Revisa el detalle inferior.",
+      "blocked": "La protección ante borrados detuvo la ejecución antes de modificar Qdrant.",
+      "interrupted": "El servidor se reinició mientras el trabajo estaba en marcha.",
+      "unknown": "El backend informó de un estado que esta versión no conoce."
+    },
+    "phase": {
+      "listing_sources": "Listando los ficheros de las fuentes",
+      "preflight": "Comprobando los borrados antes de escribir",
+      "permissions": "Actualizando los permisos de los ficheros",
+      "deleting": "Eliminando las entradas obsoletas",
+      "indexing": "Indexando documentos",
+      "long_context": "Generando los índices de contexto largo",
+      "topics": "Extrayendo temas",
+      "unknown": "En curso"
+    }
+  },
   "SignInPage": {
     "description": "Inicia sesión para acceder al dashboard de métricas",
     "signInButton": "Iniciar sesión"

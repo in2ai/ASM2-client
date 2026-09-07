@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ChartVisibilityProvider } from '@/contexts/chart-visibility-context'
 import { IndexingAlertCenter } from '@/features/indexing-alerts/indexing-alert-center'
+import { IndexingProgressIndicator } from '@/features/indexing-progress/indexing-progress-indicator'
 import type { LogtoUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { useLogto } from '@logto/react'
@@ -163,6 +164,7 @@ export function AppLayout({
               {view !== 'overview' ? (
                 <ChartVisibilityControls view={view} />
               ) : null}
+              <IndexingProgressIndicator user={user} />
               <IndexingAlertCenter user={user} />
               <AreaSwitcher activeArea="dashboard" user={user} />
               <div className="bg-border mx-1 hidden h-6 w-px sm:block" />

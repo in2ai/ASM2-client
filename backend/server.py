@@ -26,12 +26,15 @@ from src.config.auth import (
 )
 from src.config.logto_auth import AuthInfo, has_role
 from src.config.indexing import (
+    PostgresIndexingProgress,
     consume_deletion_guard_override,
     create_indexing_alert,
     dismiss_all_indexing_alerts,
     dismiss_indexing_alert,
     get_deletion_guard_config,
+    get_indexing_progress,
     list_indexing_alerts,
+    mark_running_indexing_progress_interrupted,
     set_deletion_guard_override,
     set_deletion_threshold_percentage,
 )
@@ -45,6 +48,11 @@ from src.connectors.store import (
 )
 from src.connectors.manifest import VDBManifest
 from src.indexing.deletion_guard import DeletionThresholdExceeded
+from src.indexing.progress import (
+    STATUS_BLOCKED,
+    STATUS_COMPLETED,
+    STATUS_FAILED,
+)
 
 from src.model.endpoints import *
 from src.utils.helpers import periodic_task
@@ -121,6 +129,15 @@ async def lifespan(app: FastAPI):
     await app.state.async_pg_pool.open()
 
     app.state.tsdb_chat_store = PostgresChatStore(app.state.pg_pool)
+
+    # A run reported as active by a process that is gone would never end.
+    # A stale row is cosmetic, so it must not keep the app from starting.
+    try:
+        if mark_running_indexing_progress_interrupted(app.state.pg_pool):
+            logging.warning("Closed an indexing run left running by a previous process")
+
+    except Exception:
+        logging.exception("Unable to close a stale indexing run")
 
     # Async periodic jobs
     jobs = [
@@ -236,6 +253,9 @@ def run_vdb_update_once() -> None:
 
     logging.info("Updating VDB...")
 
+    pg_pool = app.state.pg_pool
+    progress = PostgresIndexingProgress(pg_pool)
+
     try:
         start_time = time.time()
 
@@ -243,7 +263,6 @@ def run_vdb_update_once() -> None:
         manifest = VDBManifest(QDRANT_META_PATH)
         initial_build_in_progress = not manifest.is_initialized()
 
-        pg_pool = app.state.pg_pool
         embeddings = vectorstore.embeddings
         llm = app.state.llm
 
@@ -255,6 +274,8 @@ def run_vdb_update_once() -> None:
             len(sources),
             [source.name for source in sources],
         )
+
+        progress.start([source.name for source in sources])
 
         deletion_threshold_percentage = get_deletion_guard_config(pg_pool)[
             "threshold_percentage"
@@ -272,6 +293,7 @@ def run_vdb_update_once() -> None:
             embeddings,
             sources,
             deletion_threshold_percentage=deletion_threshold_percentage,
+            progress=progress,
         )
 
         if initial_build_in_progress:
@@ -281,6 +303,8 @@ def run_vdb_update_once() -> None:
 
         elapsed = time.time() - start_time
 
+        progress.finish(STATUS_COMPLETED)
+
         logging.info(f"VDB update job finished in {elapsed} seconds")
 
     except DeletionThresholdExceeded as exc:
@@ -288,6 +312,8 @@ def run_vdb_update_once() -> None:
             os.remove(VDB_LOCK)
         except FileNotFoundError:
             pass
+
+        progress.finish(STATUS_BLOCKED)
 
         try:
             create_indexing_alert(app.state.pg_pool, exc.impact)
@@ -304,7 +330,9 @@ def run_vdb_update_once() -> None:
             exc.impact.threshold_percentage,
         )
 
-    except Exception:
+    except Exception as exc:
+        progress.finish(STATUS_FAILED, detail=f"{type(exc).__name__}: {exc}")
+
         logging.exception("VDB update job failed")
 
 
@@ -415,6 +443,18 @@ async def update_indexing_deletion_guard_override(
             )
 
     return set_deletion_guard_override(app.state.pg_pool, body.override_pending)
+
+
+@app.get(
+    "/indexing/progress",
+    response_model=IndexingProgressModel,
+    status_code=200,
+)
+async def get_indexing_progress_status(auth: IndexingManagementAuth):
+    return {
+        **get_indexing_progress(app.state.pg_pool),
+        "indexing_enabled": os.path.isfile(VDB_LOCK),
+    }
 
 
 @app.get(

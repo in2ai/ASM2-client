@@ -436,6 +436,63 @@
       "enabled": "Browser notifications enabled."
     }
   },
+  "IndexingProgress": {
+    "unavailable": "Status unavailable",
+    "lastKnownState": "Last known state",
+    "lastKnownDescription": "Last reported status: {status}. This information may be out of date.",
+    "open": "Open Qdrant indexing status",
+    "openRunning": "Qdrant indexing in progress: {status}",
+    "title": "Qdrant indexing",
+    "description": "State of the job that keeps the vector database up to date.",
+    "loading": "Loading indexing status…",
+    "loadFailed": "The indexing status could not be checked.",
+    "inProgress": "Working",
+    "runningDescription": "Qdrant is being updated right now.",
+    "indeterminateLabel": "Indexing in progress without a file count",
+    "barLabel": "Files indexed in the current source",
+    "files": "{processed} of {total} files",
+    "eta": "Time remaining: {eta}",
+    "sources": "Sources",
+    "sourcesValue": "{completed} of {total} completed",
+    "currentSource": "Current source",
+    "noSource": "None",
+    "chunks": "Fragments indexed in this run",
+    "automatic": "Indexing",
+    "automaticEnabled": "Enabled",
+    "automaticDisabled": "Disabled",
+    "startedAt": "Started",
+    "finishedAt": "Finished",
+    "lastUpdate": "Last update",
+    "never": "—",
+    "status": {
+      "idle": "No indexing run yet",
+      "running": "Updating Qdrant",
+      "completed": "Last run completed",
+      "failed": "Last run failed",
+      "blocked": "Last run stopped for safety",
+      "interrupted": "Last run was interrupted",
+      "unknown": "Unknown state"
+    },
+    "statusDescription": {
+      "idle": "Qdrant has not been updated since the server started.",
+      "running": "Qdrant is being updated right now.",
+      "completed": "Qdrant is up to date with the indexed sources.",
+      "failed": "The job stopped because of an error. Check the detail below.",
+      "blocked": "The deletion guard stopped the run before changing Qdrant.",
+      "interrupted": "The server restarted while the job was running.",
+      "unknown": "The backend reported a state this version does not know."
+    },
+    "phase": {
+      "listing_sources": "Listing source files",
+      "preflight": "Checking deletions before writing",
+      "permissions": "Updating file permissions",
+      "deleting": "Removing outdated entries",
+      "indexing": "Indexing documents",
+      "long_context": "Building long-context indexes",
+      "topics": "Extracting topics",
+      "unknown": "Working"
+    }
+  },
   "SignInPage": {
     "description": "Sign in to access the metrics dashboard",
     "signInButton": "Sign in"
