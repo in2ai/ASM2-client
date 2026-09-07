@@ -217,3 +217,100 @@ def is_relevant_source(llm, query, chunk):
     ans = llm_judge.invoke([SystemMessage(content=system), HumanMessage(content=user)])
 
     return ans
+
+
+class SubQueries(BaseModel):
+    queries: list[str]
+ 
+ 
+def generate_subqueries(llm, query, previous_queries, reason=""):
+    # LLM with function call
+    llm_planner = llm.with_structured_output(SubQueries)
+ 
+    # Prompt
+    system = """
+    You are a query planner for RAG.
+ 
+    Given a user question, decompose it into the search queries needed to answer it. Emit
+    as many as the question actually requires and no more: one query for a question about
+    a single topic, ten for a question spanning ten topics.
+ 
+    Rules:
+    - Write every query in the same language as the user question. Never translate.
+    - One topic per query. Split anything joined by a conjunction: "company structure and
+      staff" becomes "company structure" and "company staff".
+    - Keep each query short. Emit the terms a document would use, not a sentence.
+    - Each query must stand on its own: no pronouns, no references to the other queries.
+    - Do not emit paraphrases of the same search.
+ 
+    You may also receive the queries already searched and the reason why their results
+    were not enough. In that case:
+    - Never repeat an already searched query, not even reworded.
+    - Target the gap described in the reason, and nothing else.
+    - If a previous query was on the right track but too broad or too narrow, rewrite it
+      with different terms instead of jumping to an unrelated angle.
+    """
+ 
+    user = f"""
+    Question:
+    {query}
+ 
+    Already searched:
+    {previous_queries}
+ 
+    Why the results were not enough:
+    {reason}
+    """
+ 
+    ans = llm_planner.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+ 
+    return ans
+ 
+ 
+class ContextSufficiency(BaseModel):
+    is_enough: bool
+    reason: str
+ 
+ 
+def is_context_enough(llm, query, context):
+    # LLM with function call
+    llm_judge = llm.with_structured_output(ContextSufficiency)
+ 
+    # Prompt
+    system = """
+    You are a sufficiency classifier for RAG.
+ 
+    Given:
+    1) a user question
+    2) the context retrieved so far
+ 
+    Decide whether the context is enough to write a complete, grounded answer.
+ 
+    Mark is_enough = true if every part of the question can be answered from the context.
+    An answer stating that the sources do not cover something also counts as complete, as
+    long as the context is what makes that clear.
+ 
+    Mark is_enough = false if:
+    - part of the question is left unanswered
+    - the context only supports a partial or hedged answer
+    - answering would require filling gaps with outside knowledge
+ 
+    Judge only whether an answer can be written from the context, not whether it is the
+    answer the user was hoping for.
+ 
+    In reason, when is_enough is false, name the specific piece of information that is
+    missing instead of restating that the context is insufficient. That text is the only
+    input used to plan the next round of searches.
+    """
+ 
+    user = f"""
+    Question:
+    {query}
+ 
+    Context:
+    {context}
+    """
+ 
+    ans = llm_judge.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+ 
+    return ans
