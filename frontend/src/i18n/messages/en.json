@@ -348,7 +348,8 @@
         "connectPrerequisite": "Stop VDB indexing before connecting or refreshing providers.",
         "startRequiresSelection": "Select at least one connected source for chat retrieval before starting indexing.",
         "startUpdate": "Start indexing",
-        "stopUpdate": "Stop indexing"
+        "stopUpdate": "Stop indexing",
+        "reindexNow": "Reindex now"
       },
       "selectForChat": "Use this source for chat retrieval",
       "selectionSaving": "Saving...",

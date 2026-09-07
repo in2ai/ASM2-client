@@ -348,7 +348,8 @@
         "connectPrerequisite": "Detén o indexado VDB antes de conectar ou refrescar provedores.",
         "startRequiresSelection": "Selecciona polo menos unha fonte conectada para a recuperación do chat antes de iniciar o indexado.",
         "startUpdate": "Iniciar indexado",
-        "stopUpdate": "Deter indexado"
+        "stopUpdate": "Deter indexado",
+        "reindexNow": "Reindexar agora"
       },
       "selectForChat": "Usar esta fonte para a recuperación do chat",
       "selectionSaving": "Gardando...",

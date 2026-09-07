@@ -188,6 +188,7 @@ function VdbActionButtons({
   stopPending,
   startLabel,
   stopLabel,
+  reindexLabel,
 }: Readonly<{
   actionPending: boolean
   canStartIndexing: boolean
@@ -198,6 +199,7 @@ function VdbActionButtons({
   stopPending: boolean
   startLabel: string
   stopLabel: string
+  reindexLabel: string
 }>) {
   const primaryAction = isActive
     ? {
@@ -221,6 +223,16 @@ function VdbActionButtons({
         ) : null}
         {primaryAction.label}
       </Button>
+      {isActive ? (
+        <Button
+          variant="outline"
+          disabled={actionPending || !canStartIndexing}
+          onClick={onStart}
+        >
+          {startPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {reindexLabel}
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -494,6 +506,7 @@ function VdbUpdateCard({
           stopPending={stopVdbUpdateMutation.isPending}
           startLabel={t('sources.vdb.startUpdate')}
           stopLabel={t('sources.vdb.stopUpdate')}
+          reindexLabel={t('sources.vdb.reindexNow')}
         />
       </CardContent>
     </Card>

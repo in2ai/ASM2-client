@@ -282,6 +282,92 @@ describe('SourcesPanel', () => {
     expect(screen.getByText('sources.selectionSaving')).toBeTruthy()
   })
 
+  it.each([
+    {
+      isAdmin: true,
+      active: true,
+      pending: false,
+      selected: true,
+      visible: true,
+      enabled: true,
+    },
+    {
+      isAdmin: true,
+      active: true,
+      pending: true,
+      selected: true,
+      visible: true,
+      enabled: false,
+    },
+    {
+      isAdmin: true,
+      active: true,
+      pending: false,
+      selected: false,
+      visible: true,
+      enabled: false,
+    },
+    {
+      isAdmin: true,
+      active: false,
+      pending: false,
+      selected: true,
+      visible: false,
+      enabled: false,
+    },
+    {
+      isAdmin: false,
+      active: true,
+      pending: false,
+      selected: true,
+      visible: false,
+      enabled: false,
+    },
+  ])(
+    'handles reindex availability: %j',
+    ({ isAdmin, active, pending, selected, visible, enabled }) => {
+      const mutate = vi.fn()
+      useStartVdbUpdateMutationMock.mockReturnValue({
+        error: null,
+        isPending: pending,
+        mutate,
+      })
+      useVdbUpdateStatusQueryMock.mockReturnValue({
+        data: { active },
+        error: null,
+        isFetching: false,
+      })
+
+      render(
+        <SourcesPanel
+          isAdmin={isAdmin}
+          open
+          onOpenChange={() => undefined}
+          status={{
+            can_chat: true,
+            vdb_indexing_active: active,
+            connected_sources: ['drive'],
+            selected_sources: selected ? ['drive'] : [],
+          }}
+        />,
+      )
+
+      const button = screen.queryByRole('button', {
+        name: 'sources.vdb.reindexNow',
+      })
+      if (!visible) {
+        expect(button).toBeNull()
+        return
+      }
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error('Expected a reindex button')
+      }
+      expect(button.disabled).toBe(!enabled)
+      fireEvent.click(button)
+      expect(mutate).toHaveBeenCalledTimes(enabled ? 1 : 0)
+    },
+  )
+
   it('disables start indexing when no source is selected for retrieval', () => {
     useVdbUpdateStatusQueryMock.mockReturnValue({
       data: { active: false },
