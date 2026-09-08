@@ -1,6 +1,7 @@
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from typing import Optional, List
+import threading
 
 from pydantic import BaseModel, Field
 from typing import Dict, Optional
@@ -54,7 +55,11 @@ def _resolve_source_label(source_key: str, sources: Dict[str, DataSource]) -> st
 # ---------------------------------
 
 def get_reranker():
-    return CrossEncoder("cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+    return CrossEncoder(
+        "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1", 
+        model_kwargs={"torch_dtype": "float16"}
+    )
+
 
 
 def rerank_documents(reranker, query: str, documents: list, top_k: int = None) -> list:
@@ -89,6 +94,9 @@ def rerank_documents(reranker, query: str, documents: list, top_k: int = None) -
     return reranked_docs
 
 
+PERMISSIONS_LOCK = threading.Lock()
+
+
 def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataSource], k: int = 6) -> tuple:
     """Retrieval-only function: hybrid search + permission filtering + reranking.
 
@@ -110,8 +118,9 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
             if source not in sources:
                 continue
 
-            if not sources[source].has_access(file_id):
-                continue
+            with PERMISSIONS_LOCK:
+                if not sources[source].has_access(file_id):
+                    continue
 
         allowed_chunks.append(f)
 

@@ -93,10 +93,13 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
             batch, pending = pending, []
             executed += batch
  
-            # retrieve_and_rerank is not thread-safe (googleapiclient), so it runs serially
-            results = [retrieve_safely(q, vectorstore, reranker, sources) for q in batch]
+            with ThreadPoolExecutor() as executor:
+                results = list(executor.map(
+                    lambda q: retrieve_safely(q, vectorstore, reranker, sources), batch
+                ))
+
             results = [r for r in results if r]
- 
+
             if not results:
                 if not chunks:
                     return "[Search error: the document search is temporarily unavailable.]", {"sources": []}
