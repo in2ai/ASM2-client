@@ -6,6 +6,7 @@ import logging
 import os
 import time
 from typing import Any
+import unicodedata
 from urllib.parse import quote
 
 import dropbox
@@ -33,7 +34,7 @@ ACCOUNT_BATCH_SIZE = 100
 # reaches Qdrant.
 _CACHE_TTL_SECONDS = 300
 _ACCOUNT_CACHE: dict[str, tuple[float, "MemberContext"]] = {}
-_FOLDERS_CACHE: dict[str, tuple[float, tuple[str, ...]]] = {}
+_FOLDERS_CACHE: dict[str, tuple[float, tuple["AccessibleFolder", ...]]] = {}
 
 # Dropbox returns no MIME type, so it is inferred from the extension. Anything
 # not listed is skipped, the equivalent of Drive's server-side MIME filter.
@@ -97,6 +98,64 @@ class MemberContext:
     # Team space namespace. Without it every path resolves inside the member's
     # own folder and team folders are not addressable at all.
     root_namespace_id: str | None
+    # The member's own folder. Equal to root_namespace_id on a personal account,
+    # where there is no team space above it and so nothing to fall back to.
+    home_namespace_id: str | None
+
+
+@dataclass(frozen=True)
+class AccessibleFolder:
+    """A shared folder this token can read, by id, by name and by mount point.
+
+    The id doubles as the folder's namespace id, which is the same value for
+    every member - the closest Dropbox has to Drive's account-independent
+    folder id.
+    """
+
+    shared_folder_id: str
+    name: str
+    # Where the member mounted it, in their path root. None when unmounted, and
+    # a different path for every member who moved it.
+    path_display: str | None
+
+
+@dataclass(frozen=True)
+class ResolvedRoot:
+    """A configured root as one account can reach it.
+
+    A Dropbox path only means something inside a namespace, so one DROPBOX_ROOTS
+    entry resolves differently for each connected account, or not at all. The
+    client travels with the path because it carries the path root the path is
+    relative to.
+    """
+
+    # The DROPBOX_ROOTS entry, absolute and NFC, "" for the whole path root
+    config: str
+    # What to pass to files_list_folder, relative to `client`'s path root
+    path: str
+    client: dropbox.Dropbox
+    # Prepended to a listed path to name the file where the web UI shows it,
+    # since a namespace-relative path is not what /home addresses
+    display_prefix: str
+    # Which step of the chain matched, for the indexing logs
+    how: str
+
+
+def normalize_config_path(value: str) -> str:
+    """A DROPBOX_ROOTS or DROPBOX_EXCLUDE entry as an absolute, NFC path.
+
+    NFC because Dropbox stores composed forms: a name typed or pasted in a
+    decomposed locale is a different string to the API and an identical one in
+    the logs, which is a hard mismatch to see. "" for the whole path root.
+    """
+    trimmed = unicodedata.normalize("NFC", value or "").strip().strip("/")
+
+    return "/" + trimmed if trimmed else ""
+
+
+def normalize_name(value: str) -> str:
+    """A folder name as it should be compared: NFC, case-folded like Dropbox."""
+    return unicodedata.normalize("NFC", value or "").strip().lower()
 
 
 def guess_mime_from_name(name: str) -> str | None:
@@ -209,6 +268,7 @@ def get_member_context(client: dropbox.Dropbox, access_token: str) -> MemberCont
         display_name=account.name.display_name,
         team_id=account.team.id if account.team else None,
         root_namespace_id=root_info.root_namespace_id if root_info else None,
+        home_namespace_id=root_info.home_namespace_id if root_info else None,
     )
 
     _ACCOUNT_CACHE[cache_key] = (now + _CACHE_TTL_SECONDS, context)
@@ -216,13 +276,17 @@ def get_member_context(client: dropbox.Dropbox, access_token: str) -> MemberCont
     return context
 
 
-def get_accessible_folder_ids(client: dropbox.Dropbox, account_id: str) -> tuple[str, ...]:
-    """Every shared folder this token can actually read, as principals.
+def get_accessible_folders(
+    client: dropbox.Dropbox,
+    account_id: str,
+) -> tuple[AccessibleFolder, ...]:
+    """Every shared folder this token can actually read.
 
     This is the whole permission model. Dropbox decides effective access itself,
     so individual grants, group grants, team folder membership and nested
     inheritance all collapse into "is this folder in my list?" - which is why the
-    connector needs no Team API and no Dropbox admin.
+    connector needs no Team API and no Dropbox admin. It is also how a root is
+    resolved to a folder every member names the same way.
     """
     now = time.time()
     cached = _FOLDERS_CACHE.get(account_id)
@@ -230,7 +294,7 @@ def get_accessible_folder_ids(client: dropbox.Dropbox, account_id: str) -> tuple
     if cached and now < cached[0]:
         return cached[1]
 
-    principals = set()
+    folders = []
 
     try:
         resp = safe_call(client.sharing_list_folders, limit=100)
@@ -243,7 +307,13 @@ def get_accessible_folder_ids(client: dropbox.Dropbox, account_id: str) -> tuple
                 if access_type and (access_type.is_traverse() or access_type.is_no_access()):
                     continue
 
-                principals.add(f"dropbox:folder:{folder.shared_folder_id}")
+                folders.append(
+                    AccessibleFolder(
+                        shared_folder_id=folder.shared_folder_id,
+                        name=folder.name,
+                        path_display=getattr(folder, "path_display", None),
+                    )
+                )
 
             cursor = getattr(resp, "cursor", None)
 
@@ -261,10 +331,20 @@ def get_accessible_folder_ids(client: dropbox.Dropbox, account_id: str) -> tuple
 
         return ()
 
-    result = tuple(sorted(principals))
+    result = tuple(sorted(folders, key=lambda f: f.shared_folder_id))
     _FOLDERS_CACHE[account_id] = (now + _CACHE_TTL_SECONDS, result)
 
     return result
+
+
+def get_accessible_folder_ids(client: dropbox.Dropbox, account_id: str) -> tuple[str, ...]:
+    """The readable shared folders as principals."""
+    return tuple(
+        sorted(
+            f"dropbox:folder:{folder.shared_folder_id}"
+            for folder in get_accessible_folders(client, account_id)
+        )
+    )
 
 
 class DropboxSource(DataSource):
@@ -281,7 +361,18 @@ class DropboxSource(DataSource):
         self.context = None
         self.service = None
         self.account_name = None
-        self.exclude = {"/" + p.strip("/").lower() for p in DROPBOX_EXCLUDE if p.strip("/")}
+        # Where the member folder sits in the path root, resolved once on the
+        # first root that lands there and shared by the rest
+        self.home_prefix = None
+
+        # Both are absolute and NFC from here on, so a root and an exclusion
+        # under it are comparable no matter which namespace the root resolves in
+        self.roots = {normalize_config_path(p) for p in DROPBOX_ROOTS}
+        self.exclude = {
+            normalize_config_path(p).lower()
+            for p in DROPBOX_EXCLUDE
+            if normalize_config_path(p)
+        }
 
 
     def login_info() -> dict[str, Any] | None:
@@ -549,37 +640,277 @@ class DropboxSource(DataSource):
         pending = sorted(account_ids)
 
         for start in range(0, len(pending), ACCOUNT_BATCH_SIZE):
-            batch = pending[start:start + ACCOUNT_BATCH_SIZE]
-
-            try:
-                for account in safe_call(self.service.users_get_account_batch, batch):
-                    names[account.account_id] = account.name.display_name
-
-            except DropboxException:
-                logging.warning("Dropbox account lookup failed", exc_info=True)
+            names.update(self.resolve_account_names(pending[start:start + ACCOUNT_BATCH_SIZE]))
 
         return names
 
 
-    def is_indexable(self, entry) -> bool:
+    def resolve_account_names(self, batch: list[str]) -> dict[str, str]:
+        """One batch of display names, minus the ids Dropbox cannot resolve.
+
+        users_get_account_batch is all or nothing: a single departed member or
+        someone from another team fails the whole call, and a batch is up to a
+        hundred files' worth of authors. The error names the id it choked on, so
+        dropping that one and asking again keeps the rest.
+        """
+        remaining = list(batch)
+        unresolvable = []
+        names = {}
+
+        while remaining:
+            try:
+                accounts = safe_call(self.service.users_get_account_batch, remaining)
+                names = {a.account_id: a.name.display_name for a in accounts}
+
+                break
+
+            except dropbox.exceptions.ApiError as ex:
+                error = getattr(ex, "error", None)
+                missing = (
+                    error.get_no_account()
+                    if error is not None and error.is_no_account()
+                    else None
+                )
+
+                # Anything but a named id is a failure of the call itself
+                if missing not in remaining:
+                    logging.warning("Dropbox account lookup failed", exc_info=True)
+
+                    return {}
+
+                remaining.remove(missing)
+                unresolvable.append(missing)
+
+            except DropboxException:
+                logging.warning("Dropbox account lookup failed", exc_info=True)
+
+                return {}
+
+        if unresolvable:
+            logging.info(
+                "Dropbox has no account for %d of the ids that last edited these "
+                "files, so they are attributed to %s: %s",
+                len(unresolvable),
+                self.account_name,
+                ", ".join(unresolvable),
+            )
+
+        return names
+
+
+    def account_label(self) -> str:
+        # Every root resolves per account, so a log line about one is unreadable
+        # without saying whose namespace it was looked up in
+        if self.context is None:
+            return "an unauthenticated Dropbox account"
+
+        return f"{self.context.display_name} <{self.context.email}>"
+
+
+    def folder_at(self, client: dropbox.Dropbox, path: str):
+        """The folder at `path` in `client`'s path root, or None.
+
+        ApiError is the answer here rather than a failure: not_found is the
+        common case with several admins connected, and every other path error
+        (restricted_content, a malformed path) equally means the root is not
+        usable. Rate limits and server errors are HttpError, so they still
+        propagate and are reported as failures.
+        """
+        try:
+            meta = safe_call(client.files_get_metadata, path)
+
+        except dropbox.exceptions.ApiError:
+            return None
+
+        return meta if isinstance(meta, dropbox.files.FolderMetadata) else None
+
+
+    def path_root_prefix(self, folder) -> str:
+        """Where a namespace-relative folder sits in the account's path root.
+
+        Only the path root's own coordinates address a folder in the web UI, so
+        a listing made inside another namespace needs this prepended to every
+        path before a link is built from it. The same folder fetched by id from
+        the default client reports its path root path, and the tail of that is
+        the path the namespace reported.
+        """
+        local = folder.path_display or ""
+
+        try:
+            rooted = safe_call(self.service.files_get_metadata, folder.id)
+
+        except DropboxException:
+            logging.warning(
+                "Could not place Dropbox folder %s in the path root of %s, "
+                "so its file links may not open",
+                local,
+                self.account_label(),
+                exc_info=True,
+            )
+
+            return ""
+
+        rooted_path = rooted.path_display or ""
+
+        if not local or not rooted_path.lower().endswith(local.lower()):
+            return ""
+
+        return rooted_path[: len(rooted_path) - len(local)]
+
+
+    def resolve_root(self, config: str) -> ResolvedRoot | None:
+        """A configured root as this account can reach it, or None.
+
+        A path is only meaningful inside a namespace, so the same entry has to
+        be looked for in each of the places an account can hold the folder it
+        names. None is an ordinary outcome: with several admins connected a root
+        belongs to some of them and not the others.
+        """
+        # "/" asks for the whole path root, which needs no lookup and has no
+        # metadata to fetch
+        if not config:
+            return ResolvedRoot(config, "", self.service, "", "path root")
+
+        # 1. The path as written, in the account's own path root: a team folder,
+        #    or a member folder path spelled out in full
+        if self.folder_at(self.service, config) is not None:
+            return ResolvedRoot(config, config, self.service, "", "path root")
+
+        # 2. The same path inside the account's own folder. This is what makes
+        #    one entry mean "each admin's own copy": PathRoot.home is whoever is
+        #    asking, so the member folder never has to be named in the config.
+        if self.context.home_namespace_id != self.context.root_namespace_id:
+            home = self.service.with_path_root(dropbox.common.PathRoot.home)
+            folder = self.folder_at(home, config)
+
+            if folder is not None:
+                if self.home_prefix is None:
+                    self.home_prefix = self.path_root_prefix(folder)
+
+                return ResolvedRoot(
+                    config, config, home, self.home_prefix, "member folder"
+                )
+
+        # 3. A shared folder, addressed by its namespace
+        return self.resolve_shared_root(config)
+
+
+    def resolve_shared_root(self, config: str) -> ResolvedRoot | None:
+        """The root as a shared folder namespace, or None.
+
+        A shared folder's id is the same value for every member while its mount
+        point is not, so going through the namespace reaches the folder wherever
+        the member keeps it - and reaches it at all when they never mounted it.
+        """
+        segments = config.strip("/").split("/")
+        # The root itself as a shared folder, then its outermost segment as one
+        # with the rest of the path inside
+        candidates = [(segments[-1], "")]
+
+        if len(segments) > 1:
+            candidates.append((segments[0], "/" + "/".join(segments[1:])))
+
+        folders = get_accessible_folders(self.service, self.context.account_id)
+
+        for name, inner in candidates:
+            matches = (f for f in folders if normalize_name(f.name) == normalize_name(name))
+
+            for folder in matches:
+                client = self.service.with_path_root(
+                    dropbox.common.PathRoot.namespace_id(folder.shared_folder_id)
+                )
+
+                if inner and self.folder_at(client, inner) is None:
+                    continue
+
+                return ResolvedRoot(
+                    config,
+                    inner,
+                    client,
+                    folder.path_display or "",
+                    f"shared folder {folder.name!r}",
+                )
+
+        return None
+
+
+    def relative_excludes(self, config: str) -> tuple[str, ...]:
+        """The exclusions under this root, as paths relative to it.
+
+        Exclusions are configured in the same coordinates as roots, but a root
+        can resolve inside a namespace where neither path applies. What survives
+        the move is the path from the root down, so that is what is compared.
+        An exclusion outside every root never matched anything anyway.
+        """
+        prefix = config.lower()
+
+        if not prefix:
+            return tuple(sorted(self.exclude))
+
+        return tuple(
+            sorted(
+                path[len(prefix):]
+                for path in self.exclude
+                if path.startswith(prefix + "/")
+            )
+        )
+
+
+    def is_indexable(self, entry, relative_path: str, excludes) -> bool:
         if not isinstance(entry, dropbox.files.FileMetadata):
             return False
 
         if any(
-            entry.path_lower == x or entry.path_lower.startswith(x + "/")
-            for x in self.exclude
+            relative_path == x or relative_path.startswith(x + "/")
+            for x in excludes
         ):
             return False
 
         return guess_mime_from_name(entry.name) is not None
 
 
+    def list_root(self, root: ResolvedRoot, seen: set) -> list:
+        """Every indexable file under one resolved root, as (root, entry).
+
+        `seen` spans the whole account: two roots can resolve to the same folder
+        for one member, and the caller only dedupes across members.
+        """
+        excludes = self.relative_excludes(root.config)
+        found = []
+
+        resp = safe_call(
+            root.client.files_list_folder,
+            root.path,
+            recursive=True,
+            include_non_downloadable_files=False,
+        )
+
+        while True:
+            for e in resp.entries:
+                if e.id in seen:
+                    continue
+
+                relative = (getattr(e, "path_lower", None) or "")[len(root.path):]
+
+                if not self.is_indexable(e, relative, excludes):
+                    continue
+
+                seen.add(e.id)
+                found.append((root, e))
+
+            if not resp.has_more:
+                break
+
+            resp = safe_call(root.client.files_list_folder_continue, resp.cursor)
+
+        return found
+
+
     def list_entries(self):
         # files_list_folder is recursive server-side, so unlike Drive there is no
-        # BFS to run; exclusions are applied to the flat result instead. Paths
-        # are relative to the team space, so "" walks everything reachable —
-        # which only the explicit "/" root asks for. Unset roots index nothing,
-        # so a missing config cannot quietly pull in every private file.
+        # BFS to run; exclusions are applied to the flat result instead. Unset
+        # roots index nothing, so a missing config cannot quietly pull in every
+        # private file.
         if not self.roots:
             logging.warning(
                 "DROPBOX_ROOTS is empty, so no Dropbox file will be indexed. "
@@ -589,30 +920,57 @@ class DropboxSource(DataSource):
             return []
 
         entries = []
+        seen = set()
+        resolved = 0
 
-        for raw_root in sorted(self.roots):
-            root = "/" + raw_root.strip("/") if raw_root.strip("/") else ""
+        for config in sorted(self.roots):
+            label = config or "/"
 
             try:
-                resp = safe_call(
-                    self.service.files_list_folder,
-                    root,
-                    recursive=True,
-                    include_non_downloadable_files=False,
-                )
-
-                while True:
-                    entries.extend(
-                        (root, e) for e in resp.entries if self.is_indexable(e)
-                    )
-
-                    if not resp.has_more:
-                        break
-
-                    resp = safe_call(self.service.files_list_folder_continue, resp.cursor)
+                root = self.resolve_root(config)
 
             except DropboxException:
-                logging.exception("Failed to list Dropbox root %s", raw_root)
+                logging.exception(
+                    "Failed to resolve Dropbox root %s for %s", label, self.account_label()
+                )
+
+                continue
+
+            if root is None:
+                # Expected, not a misconfiguration: a root is indexed by the
+                # admins who can reach it and skipped by the rest
+                logging.info(
+                    "Dropbox root %s is out of reach for %s, so it contributes nothing",
+                    label,
+                    self.account_label(),
+                )
+
+                continue
+
+            resolved += 1
+
+            logging.info(
+                "Dropbox root %s resolved for %s via %s",
+                label,
+                self.account_label(),
+                root.how,
+            )
+
+            try:
+                entries.extend(self.list_root(root, seen))
+
+            except DropboxException:
+                logging.exception(
+                    "Failed to list Dropbox root %s for %s", label, self.account_label()
+                )
+
+        if not resolved:
+            logging.warning(
+                "No configured Dropbox root is reachable by %s, so this account "
+                "adds nothing to the index. Configured roots: %s",
+                self.account_label(),
+                ", ".join(sorted(c or "/" for c in self.roots)),
+            )
 
         return entries
 
@@ -639,14 +997,18 @@ class DropboxSource(DataSource):
             try:
                 editor = e.sharing_info.modified_by if e.sharing_info else None
                 author = editor_names.get(editor) or self.account_name
-                parent = e.path_display.rsplit("/", 1)[0]
+                # The listing reports paths inside whichever namespace the root
+                # resolved in, and only path root coordinates address a file in
+                # the web UI
+                rooted = root.display_prefix + e.path_display
+                parent = rooted.rsplit("/", 1)[0]
 
                 res.append(
                     {
                         # Addressed by id everywhere, like Drive: paths move, ids don't
                         "id": e.id,
                         "name": e.name,
-                        "path": e.path_display[len(root):].strip("/"),
+                        "path": e.path_display[len(root.path):].strip("/"),
                         "authors": [author] if author else [],
                         "mimeType": guess_mime_from_name(e.name),
                         # server_modified, since client_modified is device-reported
