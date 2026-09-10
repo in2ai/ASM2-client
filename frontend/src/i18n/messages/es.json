@@ -351,6 +351,7 @@
         "inactiveDescription": "El indexado está desactivado. Ahora puedes conectar o refrescar fuentes.",
         "connectPrerequisite": "Detén el indexado VDB antes de conectar o refrescar proveedores.",
         "startRequiresSelection": "Selecciona al menos una fuente conectada para la recuperación del chat antes de iniciar el indexado.",
+        "runInProgress": "Ya hay un indexado en curso. Espera a que termine antes de iniciar otro.",
         "startUpdate": "Iniciar indexado",
         "stopUpdate": "Detener indexado",
         "reindexNow": "Reindexar ahora"

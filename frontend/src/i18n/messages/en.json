@@ -351,6 +351,7 @@
         "inactiveDescription": "Indexing is off. You can connect or refresh sources now.",
         "connectPrerequisite": "Stop VDB indexing before connecting or refreshing providers.",
         "startRequiresSelection": "Select at least one connected source for chat retrieval before starting indexing.",
+        "runInProgress": "An indexing run is already working. Wait for it to finish before starting another one.",
         "startUpdate": "Start indexing",
         "stopUpdate": "Stop indexing",
         "reindexNow": "Reindex now"

@@ -11,6 +11,7 @@ import type {
   SendMessageResult,
   SourceLoginInfo,
   SourcesStatus,
+  StartVdbUpdateResult,
   VdbUpdateStatus,
 } from './types'
 
@@ -139,7 +140,11 @@ export function useVdbUpdateStatusQuery(enabled: boolean) {
     enabled,
     queryKey: chatQueryKeys.vdbUpdate,
     queryFn: () => request<VdbUpdateStatus>('/vdb-update-status'),
-    refetchInterval: (query) => (query.state.data?.active ? 5000 : false),
+    refetchInterval: (query) => {
+      const status = query.state.data
+      // A run stopped mid-way keeps working with indexing already off.
+      return status?.active || status?.running ? 5000 : false
+    },
   })
 }
 
@@ -228,7 +233,7 @@ export function useStartVdbUpdateMutation() {
 
   return useMutation({
     mutationFn: () =>
-      request<void>('/start-vdb-update', {
+      request<StartVdbUpdateResult>('/start-vdb-update', {
         method: 'POST',
       }),
     onSuccess: async () => {

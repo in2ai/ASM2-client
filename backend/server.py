@@ -54,6 +54,7 @@ from src.indexing.progress import (
     STATUS_BLOCKED,
     STATUS_COMPLETED,
     STATUS_FAILED,
+    STATUS_RUNNING,
 )
 
 from src.model.endpoints import *
@@ -374,19 +375,44 @@ def extract_usage_metrics():
 # App endpoints
 # ---------------------------------
 
+def is_vdb_run_in_progress() -> bool:
+    """Whether a run is in flight, so scheduling another one would do nothing.
+
+    Manual and periodic runs share the `vdb-update` process lock, so a second
+    run started while one is working never gets past that lock. The task this
+    process started covers the window before the job reports itself, and the
+    stored progress covers runs this process did not start.
+    """
+    current_task = getattr(app.state, "vdb_update_task", None)
+    if current_task is not None and not current_task.done():
+        return True
+
+    # An unreadable progress row must not block an otherwise valid request.
+    try:
+        return get_indexing_progress(app.state.pg_pool)["status"] == STATUS_RUNNING
+
+    except Exception:
+        logging.exception("Unable to read the indexing progress status")
+
+        return False
+
+
 @app.post("/start-vdb-update", status_code=200)
 async def start_vdb_update(auth: AdminAuth):
     with open(VDB_LOCK, "w+"):
         pass
 
-    current_task = getattr(app.state, "vdb_update_task", None)
-    if current_task is not None and not current_task.done():
-        return
+    # Indexing is enabled either way; only the extra run is dropped, and the
+    # caller is told so instead of reading the empty success as a new run.
+    if is_vdb_run_in_progress():
+        return {"active": True, "scheduled": False}
 
     def update_vdb_once():
         periodic_task(run_vdb_update_once, 100, lock_name='vdb-update', execute_once=True)
 
     app.state.vdb_update_task = asyncio.create_task(asyncio.to_thread(update_vdb_once))
+
+    return {"active": True, "scheduled": True}
 
 
 @app.post("/stop-vdb-update", status_code=200)
@@ -400,7 +426,10 @@ async def stop_vdb_update(auth: AdminAuth):
 
 @app.get("/vdb-update-status", status_code=200)
 async def is_vdb_update_active(auth: AdminAuth):
-    return {"active": os.path.isfile(VDB_LOCK)}
+    return {
+        "active": os.path.isfile(VDB_LOCK),
+        "running": is_vdb_run_in_progress(),
+    }
 
 
 @app.get(
