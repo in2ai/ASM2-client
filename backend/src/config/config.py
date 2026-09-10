@@ -28,7 +28,7 @@ logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 # Dropbox
 DROPBOX_APP_KEY = get_env('DROPBOX_APP_KEY')
 DROPBOX_APP_SECRET = get_env('DROPBOX_APP_SECRET')
-DROPBOX_ROOTS = set(i.strip() for i in get_env("DROPBOX_ROOTS", '').strip().split(',') if i)
+DROPBOX_ROOTS = set(i.strip() for i in get_env("DROPBOX_ROOTS", '').strip().split(',') if i.strip())
 DROPBOX_EXCLUDE = set(i.strip() for i in get_env("DROPBOX_EXCLUDE", '').strip().split(',') if i)
 
 # OpenAI
