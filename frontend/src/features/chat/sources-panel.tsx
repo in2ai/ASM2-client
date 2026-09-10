@@ -184,20 +184,24 @@ function VdbActionButtons({
   isActive,
   onStart,
   onStop,
+  runInProgress,
   startPending,
   stopPending,
   startLabel,
   stopLabel,
+  reindexLabel,
 }: Readonly<{
   actionPending: boolean
   canStartIndexing: boolean
   isActive: boolean
   onStart: () => void
   onStop: () => void
+  runInProgress: boolean
   startPending: boolean
   stopPending: boolean
   startLabel: string
   stopLabel: string
+  reindexLabel: string
 }>) {
   const primaryAction = isActive
     ? {
@@ -221,6 +225,18 @@ function VdbActionButtons({
         ) : null}
         {primaryAction.label}
       </Button>
+      {isActive ? (
+        <Button
+          variant="outline"
+          // A second run cannot start while one works, so the backend would
+          // drop this request: the action stays out of reach until it ends.
+          disabled={actionPending || !canStartIndexing || runInProgress}
+          onClick={onStart}
+        >
+          {startPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {reindexLabel}
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -440,6 +456,7 @@ function VdbUpdateCard({
     statusError: vdbStatusQuery.error,
   })
   const vdbUpdateActive = vdbStatusQuery.data?.active ?? false
+  const vdbRunInProgress = vdbStatusQuery.data?.running ?? false
   const vdbStatusPending = vdbStatusQuery.isFetching
   const vdbActionPending =
     startVdbUpdateMutation.isPending || stopVdbUpdateMutation.isPending
@@ -482,6 +499,12 @@ function VdbUpdateCard({
           </p>
         ) : null}
 
+        {vdbRunInProgress ? (
+          <p className="text-muted-foreground text-sm">
+            {t('sources.vdb.runInProgress')}
+          </p>
+        ) : null}
+
         {vdbError ? <p className="text-sm text-red-500">{vdbError}</p> : null}
 
         <VdbActionButtons
@@ -490,10 +513,12 @@ function VdbUpdateCard({
           isActive={vdbUpdateActive}
           onStart={() => startVdbUpdateMutation.mutate()}
           onStop={() => stopVdbUpdateMutation.mutate()}
+          runInProgress={vdbRunInProgress}
           startPending={startVdbUpdateMutation.isPending}
           stopPending={stopVdbUpdateMutation.isPending}
           startLabel={t('sources.vdb.startUpdate')}
           stopLabel={t('sources.vdb.stopUpdate')}
+          reindexLabel={t('sources.vdb.reindexNow')}
         />
       </CardContent>
     </Card>

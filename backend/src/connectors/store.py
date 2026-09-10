@@ -22,6 +22,17 @@ from src.connectors.manifest import VDBManifest
 from src.connectors.qdrant_ops import run_qdrant_write_with_retry
 from src.connectors.vdb_file import VDBFile
 from src.indexing.deletion_guard import enforce_sources_deletion_guard
+from src.indexing.progress import (
+    PHASE_DELETING,
+    PHASE_INDEXING,
+    PHASE_LISTING_SOURCES,
+    PHASE_LONG_CONTEXT,
+    PHASE_PERMISSIONS,
+    PHASE_PREFLIGHT,
+    PHASE_TOPICS,
+    IndexingProgress,
+    estimate_eta_seconds,
+)
 from src.utils.topic import assign_topics, extract_initial_topics
 
 QDRANT_HOST = get_env("QDRANT_HOST", "qdrant")
@@ -98,7 +109,10 @@ def build_vectordb_from_sources(
     embeddings,
     sources: List[DataSource],
     deletion_threshold_percentage: float | None,
+    progress: IndexingProgress | None = None,
 ):
+    progress = progress or IndexingProgress()
+
     # Group sources by name
     grouped_sources = {}
 
@@ -109,6 +123,8 @@ def build_vectordb_from_sources(
     grouped_files = {}
 
     for name, source_list in grouped_sources.items():
+        progress.set_phase(PHASE_LISTING_SOURCES, source=name)
+
         files = grouped_files.setdefault(name, [])
         seen = set()
 
@@ -120,6 +136,8 @@ def build_vectordb_from_sources(
     # Preflight the aggregate snapshot before any Qdrant or manifest mutation.
     # Counts remain namespaced per source, then are summed for the global ratio.
     if deletion_threshold_percentage is not None:
+        progress.set_phase(PHASE_PREFLIGHT)
+
         manifest = VDBManifest(QDRANT_META_PATH)
         enforce_sources_deletion_guard(
             (
@@ -137,15 +155,26 @@ def build_vectordb_from_sources(
     vectordb = None
 
     for name, files in grouped_files.items():
-        vectordb = build_vectorstore(llm, embeddings, files, name)
+        vectordb = build_vectorstore(llm, embeddings, files, name, progress=progress)
+        progress.complete_source()
 
     # Execute topic extraction
+    progress.set_phase(PHASE_TOPICS)
     extract_topics(llm, vectordb)
 
     return vectordb
 
 
-def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_size=200):
+def build_vectorstore(
+    llm,
+    embeddings,
+    files: List[VDBFile],
+    source: str,
+    batch_size=200,
+    progress: IndexingProgress | None = None,
+):
+    progress = progress or IndexingProgress()
+
     # Read status manifest file
     manifest = VDBManifest(QDRANT_META_PATH)
 
@@ -205,16 +234,14 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
         embedding_dim = vectorstore.embeddings.dims()
 
         if embedding_dim != qdrant_dim:
-            logging.error(
-                "Embedding dimension mismatch: got %s, expected %s. The embedding model may have changed.",
-                embedding_dim,
-                qdrant_dim,
+            raise ValueError(
+                f"Embedding dimension mismatch: got {embedding_dim}, expected {qdrant_dim}. "
+                "The embedding model may have changed."
             )
-
-            return vectorstore
 
 
     # Update file permissions
+    progress.set_phase(PHASE_PERMISSIONS, source=source)
     logging.info("Updating file permissions for source %s...", source)
 
     for file in files:
@@ -253,6 +280,7 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
     ).count
 
     if num_ids_to_delete > 0:
+        progress.set_phase(PHASE_DELETING, source=source)
         logging.info("Deleting VDB stale entries for source %s", source)
         manifest.remove_processed_ids(source, files_to_delete)
         manifest.remove_chunks(num_ids_to_delete)
@@ -280,6 +308,7 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
     files_pending = len(files_to_add)
     files_processed = 0
     start_time = time.monotonic()
+    progress.set_phase(PHASE_INDEXING, source=source, files_total=files_pending)
     docs_batch, pending_ids, chunk_idxs = [], [], []
 
     def flush(reason="batch"):
@@ -330,23 +359,23 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
 
         elapsed = time.monotonic() - start_time
 
-        progress = files_processed / files_pending if files_pending else 1.0
+        completed_ratio = files_processed / files_pending if files_pending else 1.0
+        eta_seconds = estimate_eta_seconds(files_processed, files_pending, elapsed)
+        eta = str(timedelta(seconds=int(eta_seconds or 0)))
 
-        if files_processed > 0:
-            avg_time_per_file = elapsed / files_processed
-            remaining = files_pending - files_processed
-            eta_seconds = remaining * avg_time_per_file
-        else:
-            eta_seconds = 0
-
-        eta = str(timedelta(seconds=int(eta_seconds)))
+        progress.report_files(
+            files_processed=files_processed,
+            files_total=files_pending,
+            chunks=len(docs_batch),
+            elapsed_seconds=elapsed,
+        )
 
         logging.info(
             "Persisted %s chunks from source %s [%s] (%.1f%% - %d/%d files, ETA %s)",
             len(docs_batch),
             source,
             reason,
-            progress * 100,
+            completed_ratio * 100,
             files_processed,
             files_pending,
             eta,
@@ -369,6 +398,14 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
                 source, [(f.metadata["id"], f.metadata["modifiedTime"])]
             )
             manifest.save()
+
+            files_processed += 1
+            progress.report_files(
+                files_processed=files_processed,
+                files_total=files_pending,
+                chunks=0,
+                elapsed_seconds=time.monotonic() - start_time,
+            )
             continue
 
         # Compute page offsets
@@ -407,6 +444,8 @@ def build_vectorstore(llm, embeddings, files: List[VDBFile], source: str, batch_
         flush("final")
 
     if get_bool_env('LONG_CONTEXT'):
+        progress.set_phase(PHASE_LONG_CONTEXT, source=source)
+
         def generate_index(f):
             return generate_treedex_index(llm, f)
         

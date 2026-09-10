@@ -305,32 +305,77 @@ any account that knows the link — no per-team enablement step.
 
 ## 7. Configuring The Roots
 
-`DROPBOX_ROOTS` is a comma-separated list of **paths relative to the team space
-root** — the level the Dropbox web UI shows as *All files*.
-
-Given this in the web UI:
-
-```
-All files
-├── Seguridad                      <- a team folder
-└── Marcos Javier Magni Mattoni    <- a member folder
-    └── Seguridad
-```
-
-- the team folder is `Seguridad`
-- the folder inside the member folder is `Marcos Javier Magni Mattoni/Seguridad`
+`DROPBOX_ROOTS` is a comma-separated list of folder paths. Leading and trailing
+slashes are optional, and accents are normalized, so a path pasted from a
+decomposed-locale filename still matches.
 
 ```dotenv
 DROPBOX_ROOTS=Seguridad,Shared/Wiki
 DROPBOX_EXCLUDE=Seguridad/Drafts
 ```
 
-Leading and trailing slashes are optional. `DROPBOX_EXCLUDE` uses the same paths
-and drops a folder and everything under it.
+### How a root is resolved
+
+Every admin who connects Dropbox becomes an indexing account, and one path does
+not name one folder across accounts: a Dropbox path is only meaningful inside a
+namespace, and each member has their own. So each account resolves each root
+itself, trying in order:
+
+1. **The path root** — the level the web UI shows as *All files*. A team folder,
+   or a member folder path written out in full, is found here.
+2. **The account's own folder** — the same path inside the member folder, which
+   is what makes one entry mean *each admin's own copy of this folder*. The
+   member folder never has to be named in the config.
+3. **A shared folder namespace** — the last path segment matched against the
+   shared folders the account can read, then the first segment with the rest of
+   the path inside it. A shared folder's id is the same value for every member
+   while its mount point is not, so this reaches the folder wherever the member
+   filed it, and reaches it at all when they never mounted it.
+
+Given `DROPBOX_ROOTS=Seguridad` and three connected admins, all three of these
+resolve and their results are merged, deduplicated by file id:
+
+```
+Marcos    -> /Marcos Javier Magni Mattoni/Seguridad   (2, member folder)
+Cristina  -> shared folder "Seguridad", mounted at
+             /Cristina Pérez/Proyectos/Seguridad      (3, shared folder)
+Álvaro    -> shared folder "Seguridad", mounted at
+             /Álvaro Pérez Pozo/Proyectos/Seguridad   (3, shared folder)
+```
+
+Each account contributes only the files it can read, so coverage is the union of
+what the connected admins can see — the same model as `GDRIVE_ROOTS`, which gets
+this for free because a Drive folder id is already account-independent.
+
+**A root that resolves for nobody is the misconfiguration; a root that resolves
+for some accounts and not others is normal.** The indexing logs say which of the
+two happened, per account:
+
+```
+[INFO]    Dropbox root /Seguridad resolved for <account> via member folder
+[INFO]    Dropbox root /Ofertas is out of reach for <account>, so it contributes nothing
+[WARNING] No configured Dropbox root is reachable by <account>, so this account
+          adds nothing to the index. Configured roots: /Ofertas
+[ERROR]   Failed to list Dropbox root /Seguridad for <account>
+```
+
+Only the last one is an API failure. A root the account simply cannot reach is
+an `INFO` line, because with several admins connected that is the expected
+outcome for most of them.
+
+### Exclusions
+
+`DROPBOX_EXCLUDE` uses the same paths as the roots and drops a folder and
+everything under it. It is matched on the path **below the root**, so
+`DROPBOX_EXCLUDE=Seguridad/Drafts` excludes `Drafts` from every account's
+`Seguridad`, however that account resolved it. An exclusion that is not under
+any root matches nothing.
+
+### Whole-space indexing
 
 **Leaving `DROPBOX_ROOTS` empty indexes nothing**, and the indexing logs say so.
-Whole-space indexing — everything the account can reach, including its own
-private files — has to be asked for explicitly:
+Everything each connected account can reach, including its own private files,
+has to be asked for explicitly:
 
 ```dotenv
 DROPBOX_ROOTS=/
@@ -339,9 +384,9 @@ DROPBOX_ROOTS=/
 Prefer explicit roots in production.
 
 Paths, not ids, because the App Console and web UI never show a folder id. The
-trade-off is that renaming a root folder in Dropbox silently stops indexing it —
-check the indexing logs for `Failed to list Dropbox root` after any folder
-reorganization.
+trade-off is that renaming a root folder in Dropbox silently stops indexing it
+for the accounts that reached it by path — check the indexing logs for `is out
+of reach` after any folder reorganization.
 
 ---
 
@@ -360,10 +405,13 @@ listing requests `include_non_downloadable_files=False`.
 
 ## 9. Known Limitations
 
-1. **Indexing coverage is whatever the indexing account can see.** Without a team
-   admin there is no way to reach a team folder nobody has joined. Add the
-   indexing account to every folder that should be searchable — a dedicated
-   service account added to all of them is the cleanest arrangement.
+1. **Indexing coverage is the union of what the connected admins can see.** Every
+   admin who connects Dropbox becomes an indexing account and resolves the roots
+   in their own namespace (§7), so adding an admin widens coverage and removing
+   one narrows it. Without a team admin there is still no way to reach a team
+   folder nobody has joined. A dedicated service account added to every folder
+   that should be searchable remains the most predictable arrangement, since it
+   does not change as people connect and disconnect.
 2. **Each user must connect Dropbox themselves.** Resolving another person's
    access requires the Team API, so per-user OAuth is unavoidable here. It is also
    what the Google Drive connector already does.
@@ -384,6 +432,12 @@ listing requests `include_non_downloadable_files=False`.
 7. **No file owner.** Dropbox exposes no owner field, so the last editor
    (`sharing_info.modified_by`) stands in for Drive's `owners`. Files nobody else
    has touched are attributed to the indexing account.
+8. **A recorded `webViewLink` is only valid for accounts that address the file
+   the same way.** `/home/...` is relative to the viewer's own path root, so a
+   file in a member folder, or in a shared folder each member mounted somewhere
+   different, has no single URL. The link stored is the one belonging to
+   whichever connected admin listed the file first, which is why a team folder —
+   at the same path for everyone — gives the most useful links.
 
 ---
 
@@ -400,9 +454,17 @@ Dropbox**, not App folder.
 
 **The connection succeeds but no files are indexed.**
 Check `DROPBOX_ROOTS`. `DROPBOX_ROOTS is empty` in the indexing logs means no
-root is configured, and nothing is indexed until one is. `Failed to list Dropbox
-root <name>` means the path does not resolve — usually a rename, or a
-member-folder path missing its member-name prefix.
+root is configured, and nothing is indexed until one is. `No configured Dropbox
+root is reachable by <account>` for **every** connected admin means the paths
+resolve for nobody — usually a rename, or a folder that is neither a team folder
+nor shared with any of them. The same line for **some** accounts is normal: see
+§7.
+
+**Failed to list Dropbox root `<name>` for `<account>`.**
+An API failure, not a missing folder — the root resolved and then the listing
+broke, so look for an exhausted rate limit or a revoked scope in the lines
+above. A folder the account cannot reach is reported as `is out of reach`
+instead, at `INFO`.
 
 **A user sees no Dropbox documents.**
 They have not connected Dropbox, or they have not selected it for chat retrieval

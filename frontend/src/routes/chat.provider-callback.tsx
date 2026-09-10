@@ -80,7 +80,7 @@ type TranslateFn = (
 ) => string
 
 type CallbackOutcome =
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; match: MatchedProviderRequest | null; message: string }
   | { kind: 'proceed'; authCode: string; match: MatchedProviderRequest }
 
 interface CallbackSearch {
@@ -104,6 +104,7 @@ function resolveCallbackOutcome(
   if (search.error) {
     return {
       kind: 'error',
+      match: matched,
       message:
         search.error_description ??
         (providerLabel
@@ -115,6 +116,7 @@ function resolveCallbackOutcome(
   if (!search.code || !search.state) {
     return {
       kind: 'error',
+      match: matched,
       message: providerLabel
         ? t('sources.callbackMissingCode', { provider: providerLabel })
         : t('sources.callbackInvalidState'),
@@ -122,7 +124,11 @@ function resolveCallbackOutcome(
   }
 
   if (!matched) {
-    return { kind: 'error', message: t('sources.callbackInvalidState') }
+    return {
+      kind: 'error',
+      match: null,
+      message: t('sources.callbackInvalidState'),
+    }
   }
 
   return { kind: 'proceed', authCode: search.code, match: matched }
@@ -154,7 +160,16 @@ function ProviderCallbackRoute() {
     const outcome = resolveCallbackOutcome(search, t)
 
     if (outcome.kind === 'error') {
-      clearAllProviderRequests()
+      // A provider-specific failure only invalidates that provider's stored
+      // request; another provider may still be mid-OAuth in a second tab, and
+      // clearing it here would make its callback look like an invalid state.
+      // Only an unmatchable state leaves us nothing to attribute, so that's
+      // the one case where we wipe every stored request.
+      if (outcome.match) {
+        outcome.match.clear()
+      } else {
+        clearAllProviderRequests()
+      }
       if (!didUnmountRef.current) {
         setCallbackError(outcome.message)
       }

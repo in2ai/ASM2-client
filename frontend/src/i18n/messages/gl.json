@@ -351,8 +351,10 @@
         "inactiveDescription": "O indexado está desactivado. Agora podes conectar ou refrescar fontes.",
         "connectPrerequisite": "Detén o indexado VDB antes de conectar ou refrescar provedores.",
         "startRequiresSelection": "Selecciona polo menos unha fonte conectada para a recuperación do chat antes de iniciar o indexado.",
+        "runInProgress": "Xa hai un indexado en curso. Agarda a que remate antes de iniciar outro.",
         "startUpdate": "Iniciar indexado",
-        "stopUpdate": "Deter indexado"
+        "stopUpdate": "Deter indexado",
+        "reindexNow": "Reindexar agora"
       },
       "selectForChat": "Usar esta fonte para a recuperación do chat",
       "selectionSaving": "Gardando...",
@@ -438,6 +440,63 @@
       "unsupported": "Este navegador non admite notificacións web.",
       "enable": "Activar avisos",
       "enabled": "Notificacións do navegador activadas."
+    }
+  },
+  "IndexingProgress": {
+    "unavailable": "Estado non dispoñible",
+    "lastKnownState": "Último estado coñecido",
+    "lastKnownDescription": "Último estado comunicado: {status}. Esta información pode estar desactualizada.",
+    "open": "Abrir o estado do indexado de Qdrant",
+    "openRunning": "Indexado de Qdrant en curso: {status}",
+    "title": "Indexado de Qdrant",
+    "description": "Estado do traballo que mantén actualizada a base de datos vectorial.",
+    "loading": "Cargando o estado do indexado…",
+    "loadFailed": "Non se puido consultar o estado do indexado.",
+    "inProgress": "En curso",
+    "runningDescription": "Qdrant estase a actualizar agora mesmo.",
+    "indeterminateLabel": "Indexado en curso sen reconto de ficheiros",
+    "barLabel": "Ficheiros indexados na fonte actual",
+    "files": "{processed} de {total} ficheiros",
+    "eta": "Tempo restante: {eta}",
+    "sources": "Fontes",
+    "sourcesValue": "{completed} de {total} completadas",
+    "currentSource": "Fonte actual",
+    "noSource": "Ningunha",
+    "chunks": "Fragmentos indexados nesta execución",
+    "automatic": "Indexado",
+    "automaticEnabled": "Activado",
+    "automaticDisabled": "Desactivado",
+    "startedAt": "Inicio",
+    "finishedAt": "Fin",
+    "lastUpdate": "Última actualización",
+    "never": "—",
+    "status": {
+      "idle": "Aínda non se executou o indexado",
+      "running": "Actualizando Qdrant",
+      "completed": "Última execución completada",
+      "failed": "A última execución fallou",
+      "blocked": "A última execución detívose por seguridade",
+      "interrupted": "A última execución interrompeuse",
+      "unknown": "Estado descoñecido"
+    },
+    "statusDescription": {
+      "idle": "Qdrant non se actualizou desde que arrincou o servidor.",
+      "running": "Qdrant estase a actualizar agora mesmo.",
+      "completed": "Qdrant está ao día coas fontes indexadas.",
+      "failed": "O traballo detívose por un erro. Revisa o detalle inferior.",
+      "blocked": "A protección ante borrados detivo a execución antes de modificar Qdrant.",
+      "interrupted": "O servidor reiniciouse mentres o traballo estaba en marcha.",
+      "unknown": "O backend informou dun estado que esta versión non coñece."
+    },
+    "phase": {
+      "listing_sources": "Listando os ficheiros das fontes",
+      "preflight": "Comprobando os borrados antes de escribir",
+      "permissions": "Actualizando os permisos dos ficheiros",
+      "deleting": "Eliminando as entradas obsoletas",
+      "indexing": "Indexando documentos",
+      "long_context": "Xerando os índices de contexto longo",
+      "topics": "Extraendo temas",
+      "unknown": "En curso"
     }
   },
   "SignInPage": {

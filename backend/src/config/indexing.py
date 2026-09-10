@@ -1,9 +1,16 @@
+import logging
 from typing import Any
 
 from psycopg2.extras import Json
 from psycopg2.pool import ThreadedConnectionPool
 
 from src.indexing.deletion_guard import DeletionImpact
+from src.indexing.progress import (
+    STATUS_INTERRUPTED,
+    STATUS_RUNNING,
+    IndexingProgress,
+    IndexingRunState,
+)
 from src.metrics.connection import execute_query, execute_query_dict
 
 
@@ -194,3 +201,124 @@ def list_indexing_alerts(
     )
 
     return [dict(row) for row in rows]
+
+
+def get_indexing_progress(pool: ThreadedConnectionPool) -> dict[str, Any]:
+    rows = execute_query_dict(
+        pool,
+        """
+        SELECT
+            status,
+            phase,
+            current_source,
+            sources_total,
+            sources_completed,
+            files_total,
+            files_processed,
+            chunks_indexed,
+            eta_seconds,
+            detail,
+            started_at,
+            updated_at,
+            finished_at
+        FROM indexing_progress
+        WHERE id = 1
+        """,
+    )
+
+    if not rows:
+        raise RuntimeError("Indexing progress row is missing")
+
+    return dict(rows[0])
+
+
+def save_indexing_progress(
+    pool: ThreadedConnectionPool,
+    state: IndexingRunState,
+    *,
+    started: bool = False,
+    finished: bool = False,
+) -> None:
+    """Overwrite the singleton row with the state of the current run."""
+    execute_query(
+        pool,
+        """
+        UPDATE indexing_progress
+        SET status = %(status)s,
+            phase = %(phase)s,
+            current_source = %(current_source)s,
+            sources_total = %(sources_total)s,
+            sources_completed = %(sources_completed)s,
+            files_total = %(files_total)s,
+            files_processed = %(files_processed)s,
+            chunks_indexed = %(chunks_indexed)s,
+            eta_seconds = %(eta_seconds)s,
+            detail = %(detail)s,
+            started_at = CASE WHEN %(started)s THEN NOW() ELSE started_at END,
+            finished_at = CASE
+                WHEN %(finished)s THEN NOW()
+                WHEN %(started)s THEN NULL
+                ELSE finished_at
+            END,
+            updated_at = NOW()
+        WHERE id = 1
+        """,
+        {
+            "chunks_indexed": state.chunks_indexed,
+            "current_source": state.current_source,
+            "detail": state.detail,
+            "eta_seconds": state.eta_seconds,
+            "files_processed": state.files_processed,
+            "files_total": state.files_total,
+            "finished": finished,
+            "phase": state.phase,
+            "sources_completed": state.sources_completed,
+            "sources_total": state.sources_total,
+            "started": started,
+            "status": state.status,
+        },
+    )
+
+
+def mark_running_indexing_progress_interrupted(
+    pool: ThreadedConnectionPool,
+) -> bool:
+    """Close a run left as running by a process that died; reports if there was one."""
+    rows = execute_query(
+        pool,
+        """
+        UPDATE indexing_progress
+        SET status = %s,
+            phase = NULL,
+            current_source = NULL,
+            eta_seconds = NULL,
+            finished_at = NOW(),
+            updated_at = NOW()
+        WHERE id = 1 AND status = %s
+        RETURNING id
+        """,
+        (STATUS_INTERRUPTED, STATUS_RUNNING),
+    ) or []
+
+    return bool(rows)
+
+
+class PostgresIndexingProgress(IndexingProgress):
+    """Publishes the run state so managers and admins can follow the indexing."""
+
+    def __init__(self, pool: ThreadedConnectionPool):
+        super().__init__()
+        self._pool = pool
+
+    def publish(self, *, started: bool = False, finished: bool = False) -> None:
+        # Reporting progress must never abort the indexing run itself.
+        try:
+            save_indexing_progress(
+                self._pool,
+                self.state,
+                started=started,
+                finished=finished,
+            )
+
+        except Exception:
+            logging.exception("Unable to publish indexing progress")

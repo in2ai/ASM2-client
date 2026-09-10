@@ -165,3 +165,36 @@ CREATE TABLE IF NOT EXISTS indexing_alert_dismissals (
     dismissed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, alert_id)
 );
+
+-- Live progress of the Qdrant indexing job, readable by managers/admins.
+-- Singleton row: the job never runs twice at the same time.
+CREATE TABLE IF NOT EXISTS indexing_progress (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    status TEXT NOT NULL DEFAULT 'idle'
+        CHECK (status IN (
+            'idle',
+            'running',
+            'completed',
+            'failed',
+            'blocked',
+            'interrupted'
+        )),
+    phase TEXT,
+    current_source TEXT,
+    sources_total INTEGER NOT NULL DEFAULT 0 CHECK (sources_total >= 0),
+    sources_completed INTEGER NOT NULL DEFAULT 0 CHECK (sources_completed >= 0),
+    files_total INTEGER NOT NULL DEFAULT 0 CHECK (files_total >= 0),
+    files_processed INTEGER NOT NULL DEFAULT 0 CHECK (files_processed >= 0),
+    chunks_indexed INTEGER NOT NULL DEFAULT 0 CHECK (chunks_indexed >= 0),
+    eta_seconds DOUBLE PRECISION CHECK (eta_seconds >= 0),
+    detail TEXT,
+    started_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ
+);
+
+INSERT INTO indexing_progress (
+    id
+)
+VALUES (1)
+ON CONFLICT (id) DO NOTHING;

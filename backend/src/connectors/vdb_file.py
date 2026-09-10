@@ -8,7 +8,7 @@ import chardet
 import requests
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
-from dropbox.exceptions import ApiError
+from dropbox.exceptions import DropboxException
 from openpyxl import load_workbook
 from pptx import Presentation
 from PyPDF2 import PdfReader
@@ -247,7 +247,11 @@ class DropboxFile(VDBFile):
 
             return response.content
 
-        except ApiError:
+        # DropboxException, not ApiError: safe_call re-raises the RateLimitError
+        # or InternalServerError it gave up on, and those are HttpError
+        # subclasses. Only the common base keeps an exhausted retry from
+        # aborting the whole indexing run over a single file.
+        except DropboxException:
             logging.warning("Dropbox download failed: %s", self.metadata["id"], exc_info=True)
 
             return None
