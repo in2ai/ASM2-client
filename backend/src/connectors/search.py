@@ -17,6 +17,38 @@ def get_permission_filter(sources: dict[str, DataSource] | None = None):
     return Filter(should=filters) if filters else None
 
 
+def merge_sources(*source_lists) -> list[dict]:
+    merged = {}
+
+    for source_list in source_lists:
+        for source in source_list or []:
+            key = source.get("id") or source.get("link") or source.get("title")
+            existing = merged.get(key)
+
+            if existing is None:
+                merged[key] = {**source, "pages": set(source.get("pages") or [])}
+                continue
+
+            existing["pages"].update(source.get("pages") or [])
+
+            # Backfill: una llamada puede traer metadatos que otra no tenía
+            for field in ("title", "source_type", "link"):
+                if not existing.get(field) and source.get(field):
+                    existing[field] = source[field]
+
+    result = []
+
+    for source in merged.values():
+        pages = source.pop("pages")
+
+        if pages:
+            source["pages"] = sorted(pages)
+
+        result.append(source)
+
+    return result
+
+
 def build_contiguous_chunk_filter(anchors: list[tuple[str, int]], num_previous: int, num_next: int) -> Filter:
     should_filters: list[Filter] = []
 
