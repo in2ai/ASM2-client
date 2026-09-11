@@ -1,3 +1,5 @@
+import json 
+
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.store.postgres.aio import AsyncPostgresStore
@@ -21,18 +23,43 @@ def get_store(pool):
     return AsyncPostgresStore(pool)
 
 
+_COUNTABLE_BLOCKS = {"text", "image_url"}
+
+
 def should_continue(state: State, config: RunnableConfig):
     """Return the next node to execute."""
     messages = state.messages
     last_message = messages[-1]
- 
+
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
         return "tools"
- 
-    llm = config.get("configurable", {}).get("llm")
-    if llm.get_num_tokens_from_messages(messages) > MAX_CONTEXT_TOKENS:
+
+    llm = config["configurable"]["llm"]
+
+    try:
+        total = llm.get_num_tokens_from_messages(messages)
+
+    except ValueError:
+        countable, reasoning = [], 0
+        for m in messages:
+            details = (getattr(m, "usage_metadata", None) or {}).get("output_token_details") or {}
+            reasoning += details.get("reasoning", 0)
+
+            if isinstance(m.content, list):
+                blocks = [
+                    b if not isinstance(b, dict) or b.get("type") in _COUNTABLE_BLOCKS
+                    else {"type": "text", "text": json.dumps(b, default=str)}
+                    for b in m.content
+                    if not (isinstance(b, dict) and b.get("type") == "reasoning")
+                ]
+                m = m.model_copy(update={"content": blocks})
+            countable.append(m)
+
+        total = llm.get_num_tokens_from_messages(countable) + reasoning
+
+    if total > MAX_CONTEXT_TOKENS:
         return "summarize_conversation"
- 
+
     return END
 
 
