@@ -260,7 +260,9 @@ class GoogleDriveSource(DataSource):
         return sorted(result_tokens)
 
 
-    def has_access(self, file_id: str) -> bool:
+    def has_access(self, file_id: str, metadata: dict[str, Any] | None = None) -> bool:
+        # metadata is unused: a Drive file id is global and files.get already
+        # succeeds for an anyone-with-link grant, so nothing extra is needed
         try:
             safe_execute(
                 self.service.files().get(fileId=file_id, fields="id", supportsAllDrives=True)

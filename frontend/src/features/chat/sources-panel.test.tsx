@@ -16,6 +16,7 @@ vi.mock('next-intl', () => ({
 
 vi.mock('lucide-react', () => ({
   CheckCircle2: () => null,
+  Cloud: () => null,
   CloudCog: () => null,
   Database: () => null,
   Loader2: () => null,
@@ -88,6 +89,13 @@ vi.mock('./google-drive-auth', () => ({
   persistGoogleDriveOAuthRequest: vi.fn(),
 }))
 
+vi.mock('./dropbox-auth', () => ({
+  DROPBOX_CALLBACK_PATH: '/chat/provider-callback',
+  buildDropboxAuthorizeUrl: vi.fn(() => 'https://dropbox.example.test'),
+  createDropboxOAuthState: vi.fn(() => 'dropbox-oauth-state'),
+  persistDropboxOAuthRequest: vi.fn(),
+}))
+
 describe('SourcesPanel', () => {
   beforeEach(() => {
     useSourceLoginInfoQueryMock.mockReturnValue({
@@ -143,6 +151,38 @@ describe('SourcesPanel', () => {
     expect((connectButton as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('renders an independent connect button for each provider', () => {
+    useVdbUpdateStatusQueryMock.mockReturnValue({
+      data: { active: false },
+      error: null,
+      isFetching: false,
+    })
+
+    render(
+      <SourcesPanel
+        isAdmin
+        open
+        onOpenChange={() => undefined}
+        status={{
+          can_chat: false,
+          vdb_indexing_active: false,
+          connected_sources: ['drive'],
+          selected_sources: [],
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByRole('checkbox', { name: 'sources.selectForChat' }),
+    ).toBeTruthy()
+
+    const dropboxConnectButton = screen.getByRole('button', {
+      name: 'sources.connectDropbox',
+    }) as HTMLButtonElement
+
+    expect(dropboxConnectButton.disabled).toBe(false)
+  })
+
   it('blocks new source connections while VDB indexing is active', () => {
     useVdbUpdateStatusQueryMock.mockReturnValue({
       data: { active: true },
@@ -164,12 +204,19 @@ describe('SourcesPanel', () => {
       />,
     )
 
-    const connectButton = screen.getByRole('button', {
+    const driveConnectButton = screen.getByRole('button', {
       name: 'sources.connectDrive',
     })
+    const dropboxConnectButton = screen.getByRole('button', {
+      name: 'sources.connectDropbox',
+    })
 
-    expect((connectButton as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText('sources.vdb.connectPrerequisite')).toBeTruthy()
+    expect((driveConnectButton as HTMLButtonElement).disabled).toBe(true)
+    expect((dropboxConnectButton as HTMLButtonElement).disabled).toBe(true)
+    // One prerequisite notice per locked, not-yet-connected provider card.
+    expect(screen.getAllByText('sources.vdb.connectPrerequisite')).toHaveLength(
+      2,
+    )
   })
 
   it('keeps source connection available for users while VDB indexing is active', () => {
@@ -233,6 +280,166 @@ describe('SourcesPanel', () => {
 
     expect(checkbox.checked).toBe(true)
     expect(screen.getByText('sources.selectionSaving')).toBeTruthy()
+  })
+
+  it.each([
+    {
+      isAdmin: true,
+      active: true,
+      pending: false,
+      selected: true,
+      visible: true,
+      enabled: true,
+    },
+    {
+      isAdmin: true,
+      active: true,
+      pending: true,
+      selected: true,
+      visible: true,
+      enabled: false,
+    },
+    {
+      isAdmin: true,
+      active: true,
+      pending: false,
+      selected: false,
+      visible: true,
+      enabled: false,
+    },
+    {
+      isAdmin: true,
+      active: false,
+      pending: false,
+      selected: true,
+      visible: false,
+      enabled: false,
+    },
+    {
+      isAdmin: false,
+      active: true,
+      pending: false,
+      selected: true,
+      visible: false,
+      enabled: false,
+    },
+  ])(
+    'handles reindex availability: %j',
+    ({ isAdmin, active, pending, selected, visible, enabled }) => {
+      const mutate = vi.fn()
+      useStartVdbUpdateMutationMock.mockReturnValue({
+        error: null,
+        isPending: pending,
+        mutate,
+      })
+      useVdbUpdateStatusQueryMock.mockReturnValue({
+        data: { active },
+        error: null,
+        isFetching: false,
+      })
+
+      render(
+        <SourcesPanel
+          isAdmin={isAdmin}
+          open
+          onOpenChange={() => undefined}
+          status={{
+            can_chat: true,
+            vdb_indexing_active: active,
+            connected_sources: ['drive'],
+            selected_sources: selected ? ['drive'] : [],
+          }}
+        />,
+      )
+
+      const button = screen.queryByRole('button', {
+        name: 'sources.vdb.reindexNow',
+      })
+      if (!visible) {
+        expect(button).toBeNull()
+        return
+      }
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error('Expected a reindex button')
+      }
+      expect(button.disabled).toBe(!enabled)
+      fireEvent.click(button)
+      expect(mutate).toHaveBeenCalledTimes(enabled ? 1 : 0)
+    },
+  )
+
+  it('keeps reindex out of reach while a run is already working', () => {
+    const mutate = vi.fn()
+    useStartVdbUpdateMutationMock.mockReturnValue({
+      error: null,
+      isPending: false,
+      mutate,
+    })
+    useVdbUpdateStatusQueryMock.mockReturnValue({
+      data: { active: true, running: true },
+      error: null,
+      isFetching: false,
+    })
+
+    render(
+      <SourcesPanel
+        isAdmin
+        open
+        onOpenChange={() => undefined}
+        status={{
+          can_chat: true,
+          vdb_indexing_active: true,
+          connected_sources: ['drive'],
+          selected_sources: ['drive'],
+        }}
+      />,
+    )
+
+    const button = screen.getByRole('button', {
+      name: 'sources.vdb.reindexNow',
+    }) as HTMLButtonElement
+
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(mutate).not.toHaveBeenCalled()
+    expect(screen.getByText('sources.vdb.runInProgress')).toBeTruthy()
+  })
+
+  it('reindexes on demand between runs, with indexing left enabled', () => {
+    const mutate = vi.fn()
+    useStartVdbUpdateMutationMock.mockReturnValue({
+      error: null,
+      isPending: false,
+      mutate,
+    })
+    useVdbUpdateStatusQueryMock.mockReturnValue({
+      data: { active: true, running: false },
+      error: null,
+      isFetching: false,
+    })
+
+    render(
+      <SourcesPanel
+        isAdmin
+        open
+        onOpenChange={() => undefined}
+        status={{
+          can_chat: true,
+          vdb_indexing_active: true,
+          connected_sources: ['drive'],
+          selected_sources: ['drive'],
+        }}
+      />,
+    )
+
+    const button = screen.getByRole('button', {
+      name: 'sources.vdb.reindexNow',
+    }) as HTMLButtonElement
+
+    expect(button.disabled).toBe(false)
+    fireEvent.click(button)
+    expect(mutate).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('sources.vdb.runInProgress')).toBeNull()
   })
 
   it('disables start indexing when no source is selected for retrieval', () => {

@@ -9,6 +9,7 @@ import time
 from google.auth.exceptions import TransportError
 from googleapiclient.errors import HttpError
 from httplib2 import ServerNotFoundError
+from dropbox.exceptions import InternalServerError, RateLimitError
 
 RETRYABLE_HTTP_STATUSES = (500, 502, 503, 504)
 RETRYABLE_TRANSPORT_ERRORS = (
@@ -93,6 +94,28 @@ def safe_execute(request, retries=6, backoff=1.7, google_retries=1):
             raise
 
     raise RuntimeError("Google API: demasiados fallos consecutivos (5xx).") from last_http_error
+
+
+def safe_call(fn, *args, **kwargs):
+    delay = 1.0
+    last_error = None
+
+    for _ in range(5):
+        try:
+            return fn(*args, **kwargs)
+
+        except RateLimitError as e:
+            last_error = e
+            wait = getattr(e, "backoff", None) or delay
+
+        except InternalServerError as e:
+            last_error = e
+            wait = delay
+
+        time.sleep(wait)
+        delay = min(delay * 2, 60)
+
+    raise last_error
 
 
 THREAD_LOCKS: dict[str, threading.Lock] = {}

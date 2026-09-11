@@ -65,7 +65,7 @@ export interface SendMessageResult {
   detected_lang: string
 }
 
-export type SourceProviderKey = 'drive'
+export type SourceProviderKey = 'drive' | 'dropbox'
 
 export interface SourceLoginInfo {
   auth_mode: 'authorization_code'
@@ -81,4 +81,12 @@ export interface SourcesStatus {
 
 export interface VdbUpdateStatus {
   active: boolean
+  /** A run is working right now, so scheduling another one would do nothing. */
+  running: boolean
+}
+
+export interface StartVdbUpdateResult {
+  active: boolean
+  /** False when the request only kept indexing on, because a run was already working. */
+  scheduled: boolean
 }
