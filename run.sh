@@ -6,9 +6,11 @@ usage() {
 Usage: ./run.sh [up|down|build|config|logs|ps] [options] [-- extra docker compose args]
 
 Modes:
-  --local           Include local TimescaleDB and Logto services (default)
-  --remote          Use external TimescaleDB and Logto services
+  --local           Include the local Logto service (default)
+  --remote          Use an external Logto service
   --bench           Just like --local, but changes entrypoint to a benchmark instead of the web server
+
+TimescaleDB always runs as a local container in --local and --remote alike.
 
 AI:
   --local-model [cpu|nvidia|amd]
@@ -18,7 +20,7 @@ Networking:
   dashboard         Published on localhost:3001
   logto             Published on localhost:3011 and localhost:3002 in --local mode
   backend/qdrant    Internal Docker network only
-  timescaledb       Internal Docker network only in --local mode
+  timescaledb       Published on localhost:5432
 
 Accelerators:
   --gpu [nvidia|amd] Enable backend GPU (bare --gpu keeps NVIDIA compatibility)
@@ -244,7 +246,8 @@ compose_args=()
 if [ "$mode" = "bench" ]; then
   compose_args+=(-f docker-compose.bench.yml)
 else
-  compose_args+=(-f docker-compose.yml)
+  # TimescaleDB always runs locally, in --local and --remote alike
+  compose_args+=(-f docker-compose.yml -f docker-compose.timescaledb.yml)
 fi
 
 if [ "$mode" = "local" ]; then

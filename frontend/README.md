@@ -66,10 +66,10 @@ docker build -f frontend/Dockerfile.caddy -t asm2-dashboard:caddy frontend
 Compose integration (from repo root):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.timescaledb.yml -f docker-compose.local.yml up --build
 ```
 
-The base compose stack now includes the TanStack SPA image (served by Caddy), the FastAPI backend, and Qdrant. The local override adds TimescaleDB and Logto.
+The base compose stack now includes the TanStack SPA image (served by Caddy), the FastAPI backend, and Qdrant. The TimescaleDB override adds the database, and the local override adds Logto.
 
 In the Docker stack, host traffic goes through Caddy on port `3001`, which serves the SPA and proxies `/api/*` to `backend:8001` over the internal Docker network.
 

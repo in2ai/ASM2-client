@@ -7,10 +7,12 @@ set -eu
 : "${PG_PASSWORD:=}"
 : "${PG_DB:=tsdb}"
 
+# Only the stacks that run Logto against this instance hand over a password.
+# Without one the Logto role and database are left alone.
+LOGTO_DB_PASSWORD=""
 if [ -n "${LOGTO_POSTGRES_PASSWORD_FILE:-}" ]; then
   LOGTO_DB_PASSWORD="$(cat "$LOGTO_POSTGRES_PASSWORD_FILE")"
-else
-  : "${LOGTO_POSTGRES_PASSWORD:?LOGTO_POSTGRES_PASSWORD is required}"
+elif [ -n "${LOGTO_POSTGRES_PASSWORD:-}" ]; then
   LOGTO_DB_PASSWORD="$LOGTO_POSTGRES_PASSWORD"
 fi
 
@@ -25,11 +27,12 @@ echo "TimescaleDB is reachable. Executing init_tsdb.sql ..."
 
 export PGPASSWORD="$PG_PASSWORD"
 
-echo "Creating the Logto role and database when missing ..."
+if [ -n "$LOGTO_DB_PASSWORD" ]; then
+  echo "Creating the Logto role and database when missing ..."
 
-psql -X -v ON_ERROR_STOP=1 \
-  -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d postgres \
-  --set=logto_password="$LOGTO_DB_PASSWORD" <<'SQL'
+  psql -X -v ON_ERROR_STOP=1 \
+    -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d postgres \
+    --set=logto_password="$LOGTO_DB_PASSWORD" <<'SQL'
 SELECT format('CREATE ROLE logto LOGIN CREATEROLE PASSWORD %L', :'logto_password')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'logto')
 \gexec
@@ -43,6 +46,9 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'logto')
 
 ALTER DATABASE logto OWNER TO logto;
 SQL
+else
+  echo "No Logto password provided. Skipping the Logto role and database ..."
+fi
 
 unset LOGTO_DB_PASSWORD
 

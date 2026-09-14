@@ -75,8 +75,8 @@ cp .env.example .env
 
 | Variable | Descripción | Default |
 | --- | --- | --- |
-| `PG_HOST` | Host de TimescaleDB (`timescaledb` para Docker, IP para VPS) | `timescaledb` |
-| `PG_PORT` | Puerto PostgreSQL | `5432` |
+| `PG_HOST` | Host de TimescaleDB. `run.sh` lo fuerza a `timescaledb` en `--local` y `--remote`; solo se usa fuera de Docker | `timescaledb` |
+| `PG_PORT` | Puerto PostgreSQL. `run.sh` lo fuerza a `5432` en `--local` y `--remote` | `5432` |
 | `PG_USER` | Usuario de base de datos | `postgres` |
 | `PG_PASSWORD` | Contraseña de PostgreSQL usada por backend e init SQL | `change_me_for_local_pg` |
 | `PG_DB` | Nombre de la base de datos | `tsdb` |
@@ -146,7 +146,8 @@ El frontend acepta `VITE_LOGTO_*` y también los aliases `LOGTO_*` durante el bu
 | Archivo | Descripción |
 | --- | --- |
 | `docker-compose.yml` | Stack base remoto-friendly (`backend`, `dashboard`, `qdrant`) con `backend` y `qdrant` solo en red interna Docker |
-| `docker-compose.local.yml` | Override para infraestructura local (`timescaledb`, `timescaledb-init`, `logto`) con Logto publicado en `localhost` |
+| `docker-compose.timescaledb.yml` | Override con TimescaleDB local (`timescaledb`, `timescaledb-init`), aplicado siempre en `--local` y `--remote` |
+| `docker-compose.local.yml` | Override para Logto local (`logto`) publicado en `localhost` |
 | `docker-compose.gpu.yml` | Override para habilitar GPU NVIDIA en `backend` |
 | `docker-compose.gpu-amd.yml` | Override para habilitar GPU AMD (ROCm) en `backend` |
 | `docker-compose.qdrant-nvidia.yml` | Override para Qdrant con GPU NVIDIA |
@@ -170,23 +171,26 @@ Servicios internos en este modo:
 
 - **Backend API**: solo accesible desde la red Docker a través de `dashboard` y otros contenedores
 - **Qdrant**: solo accesible desde la red Docker
-- **TimescaleDB**: solo accesible desde la red Docker
+- **TimescaleDB**: publicado en `127.0.0.1:5432` para inspeccionar la base desde el host
 
 ### Opción 2: Servicios Remotos
 
-Si TimescaleDB y Logto ya están desplegados fuera de Docker, ejecuta solo `backend`, `dashboard` y `qdrant`:
+Si Logto ya está desplegado fuera de Docker, ejecuta `backend`, `dashboard`, `qdrant` y TimescaleDB local, sin `logto`:
 
 ```bash
 ./run.sh up --remote
 ```
 
+TimescaleDB **no** se toma del despliegue remoto: este modo levanta su propio contenedor
+`timescaledb` igual que `--local`, con los datos en el volumen `timescaledb-data`.
+
 **Requisitos previos:**
 
-1. Actualiza tu archivo `.env` con las URLs y credenciales remotas de TimescaleDB y Logto.
+1. Actualiza tu archivo `.env` con las URLs y credenciales remotas de Logto. Las variables
+   `PG_*` describen la base local: `PG_HOST` y `PG_PORT` los sobrescribe el override a
+   `timescaledb:5432`, mientras que `PG_USER`, `PG_PASSWORD` y `PG_DB` crean la base local.
 
    ```env
-    PG_HOST=tu-ip-o-hostname-vps
-    PG_PORT=5432
     PG_USER=postgres
     PG_PASSWORD=tu_contraseña
     PG_DB=tsdb
@@ -203,6 +207,7 @@ Servicios internos en este modo:
 
 - **Backend API**: solo accesible desde la red Docker a través de `dashboard`
 - **Qdrant**: solo accesible desde la red Docker
+- **TimescaleDB**: publicado en `127.0.0.1:5432` para inspeccionar la base desde el host
 
 ### Opción 3: Docker con Soporte GPU (Backend)
 
@@ -383,7 +388,8 @@ ASM2-client/
 ├── questdb/               # Datos persistentes de QuestDB (generado)
 ├── benchmark/              # Datasets QA de entrada y resultados del benchmark de RAG
 ├── docker-compose.yml     # Stack base backend + SPA + qdrant con solo dashboard publicado en localhost
-├── docker-compose.local.yml    # Infraestructura local (TimescaleDB + Logto) con Logto publicado en localhost
+├── docker-compose.timescaledb.yml   # TimescaleDB local, aplicado en --local y --remote
+├── docker-compose.local.yml    # Logto local publicado en localhost
 ├── docker-compose.gpu.yml # Override para soporte GPU (backend)
 ├── docker-compose.qdrant-nvidia.yml # Override para Qdrant GPU NVIDIA
 ├── docker-compose.qdrant-amd.yml    # Override para Qdrant GPU AMD
