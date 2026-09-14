@@ -15,7 +15,6 @@ import igraph as ig
 import numpy as np
 from scipy.sparse import coo_matrix, csr_matrix
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
 from qdrant_client.http import models
 

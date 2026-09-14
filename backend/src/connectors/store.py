@@ -8,8 +8,8 @@ import threading
 from datetime import timedelta
 
 from treedex import TreeDex
-from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
+from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, Modifier, PayloadSchemaType, PointStruct, SparseVectorParams, VectorParams
@@ -61,7 +61,7 @@ CALCULATE_TOPICS = get_bool_env("CALCULATE_TOPICS")
 
 
 def iterate_qdrant_docs(
-    vectorstore: Qdrant,
+    vectorstore: QdrantVectorStore,
     batch_size=100,
     with_payload=True,
     with_vectors=False,
@@ -92,7 +92,7 @@ def iterate_qdrant_docs(
             break
 
 
-def get_vectordb(embeddings) -> Qdrant:
+def get_vectordb(embeddings) -> QdrantVectorStore:
     client = QdrantClient(
         url=f"http://{QDRANT_HOST}:6333",
         grpc_port=6334,
@@ -100,7 +100,19 @@ def get_vectordb(embeddings) -> Qdrant:
         timeout=QDRANT_TIMEOUT,
     )
 
-    vectorstore = Qdrant(client, QDRANT_COL, embeddings)
+    # Only .client/.collection_name/.embeddings are ever used - the collection has a
+    # custom hybrid schema (named "embedding"/"bm25" vectors) that QdrantVectorStore's
+    # own validation doesn't know about, and the collection may not exist yet on a
+    # first run (build_vectordb_from_sources creates it right after this call).
+    vectorstore = QdrantVectorStore(
+        client,
+        QDRANT_COL,
+        embedding=embeddings,
+        vector_name="embedding",
+        sparse_vector_name="bm25",
+        validate_embeddings=False,
+        validate_collection_config=False,
+    )
     return vectorstore
 
 
@@ -487,7 +499,7 @@ def generate_treedex_index(llm, file: VDBFile):
         logging.info(f"Error while generating TreeDex index: {e}")
 
 
-def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
+def update_file_permissions(vectorstore: QdrantVectorStore, file_id, new_permissions):
     # Create file filter
     id_filter = Filter(
         must=[FieldCondition(key="metadata.id", match=MatchValue(value=file_id))]
@@ -514,7 +526,7 @@ def update_file_permissions(vectorstore: Qdrant, file_id, new_permissions):
     )
 
 
-def extract_topics(llm, vectorstore: Qdrant, pool=None):
+def extract_topics(llm, vectorstore: QdrantVectorStore, pool=None):
     manifest = VDBManifest(QDRANT_META_PATH)
 
     # Add topics if needed
