@@ -17,7 +17,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { CheckCircle2, Cloud, CloudCog, Database, Loader2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   useSourceLoginInfoQuery,
   useStartVdbUpdateMutation,
@@ -288,47 +288,156 @@ const DROPBOX_PROVIDER_CONFIG: ProviderConfig = {
   providerKey: 'dropbox',
 }
 
+interface SourcesSelection {
+  errorFor: (providerKey: SourceProviderKey) => string | undefined
+  isPending: (providerKey: SourceProviderKey) => boolean
+  isSelected: (providerKey: SourceProviderKey) => boolean
+  toggle: (providerKey: SourceProviderKey, nextSelected: boolean) => void
+}
+
+function withProvider(
+  sources: string[],
+  providerKey: SourceProviderKey,
+  selected: boolean,
+): string[] {
+  const next = new Set(sources)
+
+  if (selected) {
+    next.add(providerKey)
+  } else {
+    next.delete(providerKey)
+  }
+
+  return Array.from(next)
+}
+
+function withoutFirst(
+  providers: SourceProviderKey[],
+  providerKey: SourceProviderKey,
+): SourceProviderKey[] {
+  const index = providers.indexOf(providerKey)
+
+  if (index === -1) {
+    return providers
+  }
+
+  return [...providers.slice(0, index), ...providers.slice(index + 1)]
+}
+
+// Every provider card edits the same list, so a request must carry the toggles
+// made while the previous one was still in flight: the desired list lives here
+// and requests are chained instead of racing each other.
+function useSourcesSelection(selectedSources: string[]): SourcesSelection {
+  const t = useTranslations('ChatPage')
+  const updateSourcesSelectionMutation = useUpdateSourcesSelectionMutation()
+  const [selection, setSelection] = useState(selectedSources)
+  const [pendingProviders, setPendingProviders] = useState<SourceProviderKey[]>(
+    [],
+  )
+  const [errors, setErrors] = useState<
+    Partial<Record<SourceProviderKey, string>>
+  >({})
+  const desiredRef = useRef(selectedSources)
+  const queueRef = useRef<Promise<unknown>>(Promise.resolve())
+  const hasPending = pendingProviders.length > 0
+
+  useEffect(() => {
+    // While a request is in flight the desired list is ahead of the saved one.
+    if (hasPending) {
+      return
+    }
+
+    desiredRef.current = selectedSources
+    setSelection(selectedSources)
+  }, [hasPending, selectedSources])
+
+  const rollback = (
+    providerKey: SourceProviderKey,
+    appliedSelected: boolean,
+  ) => {
+    // A newer toggle already replaced this value, so it owns the rollback.
+    if (desiredRef.current.includes(providerKey) !== appliedSelected) {
+      return
+    }
+
+    const reverted = withProvider(
+      desiredRef.current,
+      providerKey,
+      !appliedSelected,
+    )
+    desiredRef.current = reverted
+    setSelection(reverted)
+  }
+
+  const toggle = (providerKey: SourceProviderKey, nextSelected: boolean) => {
+    const nextSources = withProvider(
+      desiredRef.current,
+      providerKey,
+      nextSelected,
+    )
+    desiredRef.current = nextSources
+    setSelection(nextSources)
+    setErrors((current) => ({ ...current, [providerKey]: undefined }))
+    setPendingProviders((current) => [...current, providerKey])
+
+    queueRef.current = queueRef.current
+      .then(() =>
+        updateSourcesSelectionMutation.mutateAsync(desiredRef.current),
+      )
+      .catch((error: unknown) => {
+        rollback(providerKey, nextSelected)
+        setErrors((current) => ({
+          ...current,
+          [providerKey]:
+            error instanceof Error ? error.message : t('errors.sendFailed'),
+        }))
+      })
+      .finally(() => {
+        setPendingProviders((current) => withoutFirst(current, providerKey))
+      })
+  }
+
+  return {
+    errorFor: (providerKey) => errors[providerKey],
+    isPending: (providerKey) => pendingProviders.includes(providerKey),
+    isSelected: (providerKey) => selection.includes(providerKey),
+    toggle,
+  }
+}
+
 function ProviderSourceCard({
   config,
   connected,
   isAdmin,
-  selected,
-  selectedSources,
+  selection,
   vdbActive,
 }: Readonly<{
   config: ProviderConfig
   connected: boolean
   isAdmin: boolean
-  selected: boolean
-  selectedSources: string[]
+  selection: SourcesSelection
   vdbActive: boolean
 }>) {
   const t = useTranslations('ChatPage')
-  const [inlineError, setInlineError] = useState<string>()
-  const [optimisticSelected, setOptimisticSelected] = useState(selected)
-  const [selectionPending, setSelectionPending] = useState(false)
+  const [connectError, setConnectError] = useState<string>()
   const loginInfoQuery = useSourceLoginInfoQuery(config.providerKey)
-  const updateSourcesSelectionMutation = useUpdateSourcesSelectionMutation()
   const oauthClientId = loginInfoQuery.data?.oauth_client_id ?? null
   const configured = Boolean(oauthClientId)
   const connectionLocked = isAdmin && vdbActive
+  const selected = selection.isSelected(config.providerKey)
+  const selectionPending = selection.isPending(config.providerKey)
+  const inlineError = connectError ?? selection.errorFor(config.providerKey)
   const loginError =
     loginInfoQuery.error instanceof Error
       ? loginInfoQuery.error.message
       : undefined
   const Icon = config.icon
 
-  useEffect(() => {
-    if (!selectionPending) {
-      setOptimisticSelected(selected)
-    }
-  }, [selected, selectionPending])
-
   const startConnect = () => {
-    setInlineError(undefined)
+    setConnectError(undefined)
 
     if (!oauthClientId) {
-      setInlineError(t('sources.notConfigured'))
+      setConnectError(t('sources.notConfigured'))
       return
     }
 
@@ -344,30 +453,6 @@ function ProviderSourceCard({
     globalThis.location.assign(
       config.buildAuthorizeUrl({ clientId: oauthClientId, redirectUri, state }),
     )
-  }
-
-  const toggleSelected = async (nextSelected: boolean) => {
-    setInlineError(undefined)
-    setOptimisticSelected(nextSelected)
-    setSelectionPending(true)
-
-    const nextSources = new Set(selectedSources)
-    if (nextSelected) {
-      nextSources.add(config.providerKey)
-    } else {
-      nextSources.delete(config.providerKey)
-    }
-
-    try {
-      await updateSourcesSelectionMutation.mutateAsync(Array.from(nextSources))
-    } catch (error) {
-      setOptimisticSelected(selected)
-      setInlineError(
-        error instanceof Error ? error.message : t('errors.sendFailed'),
-      )
-    } finally {
-      setSelectionPending(false)
-    }
   }
 
   const providerMessage = getProviderMessage({
@@ -423,9 +508,11 @@ function ProviderSourceCard({
                 type="checkbox"
                 className="cursor-pointer"
                 aria-label={t('sources.selectForChat')}
-                checked={optimisticSelected}
+                checked={selected}
                 disabled={selectionPending}
-                onChange={(event) => void toggleSelected(event.target.checked)}
+                onChange={(event) =>
+                  selection.toggle(config.providerKey, event.target.checked)
+                }
               />
               <span>{t('sources.selectForChat')}</span>
               {selectionPending ? (
@@ -540,11 +627,13 @@ export function SourcesPanel({
 }: Readonly<SourcesPanelProps>) {
   const t = useTranslations('ChatPage')
   const connectedSources = new Set(status?.connected_sources ?? [])
-  const selectedSources = status?.selected_sources ?? []
+  const selectedSources = useMemo(
+    () => status?.selected_sources ?? [],
+    [status?.selected_sources],
+  )
+  const selection = useSourcesSelection(selectedSources)
   const driveConnected = connectedSources.has('drive')
-  const driveSelected = selectedSources.includes('drive')
   const dropboxConnected = connectedSources.has('dropbox')
-  const dropboxSelected = selectedSources.includes('dropbox')
   const hasSelectedSources = selectedSources.length > 0
   const hasConnectedSources = connectedSources.size > 0
   const vdbStatusQuery = useVdbUpdateStatusQuery(isAdmin && open)
@@ -601,8 +690,7 @@ export function SourcesPanel({
             config={DRIVE_PROVIDER_CONFIG}
             connected={driveConnected}
             isAdmin={isAdmin}
-            selected={driveSelected}
-            selectedSources={selectedSources}
+            selection={selection}
             vdbActive={vdbActive}
           />
 
@@ -610,8 +698,7 @@ export function SourcesPanel({
             config={DROPBOX_PROVIDER_CONFIG}
             connected={dropboxConnected}
             isAdmin={isAdmin}
-            selected={dropboxSelected}
-            selectedSources={selectedSources}
+            selection={selection}
             vdbActive={vdbActive}
           />
 

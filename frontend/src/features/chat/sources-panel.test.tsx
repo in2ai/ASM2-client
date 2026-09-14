@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { SourcesPanel } from './sources-panel'
 
@@ -280,6 +280,62 @@ describe('SourcesPanel', () => {
 
     expect(checkbox.checked).toBe(true)
     expect(screen.getByText('sources.selectionSaving')).toBeTruthy()
+  })
+
+  it('keeps both providers selected when one is toggled while the other saves', async () => {
+    useVdbUpdateStatusQueryMock.mockReturnValue({
+      data: { active: false },
+      error: null,
+      isFetching: false,
+    })
+    const resolvers: Array<() => void> = []
+    const mutateAsync = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvers.push(() => resolve())
+        }),
+    )
+    useUpdateSourcesSelectionMutationMock.mockReturnValue({
+      isPending: false,
+      mutateAsync,
+    })
+
+    render(
+      <SourcesPanel
+        isAdmin={false}
+        open
+        onOpenChange={() => undefined}
+        status={{
+          can_chat: false,
+          vdb_indexing_active: false,
+          connected_sources: ['drive', 'dropbox'],
+          selected_sources: [],
+        }}
+      />,
+    )
+
+    const [driveCheckbox, dropboxCheckbox] = screen.getAllByRole('checkbox', {
+      name: 'sources.selectForChat',
+    }) as HTMLInputElement[]
+
+    fireEvent.click(driveCheckbox)
+    await act(async () => undefined)
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1)
+    expect(mutateAsync).toHaveBeenLastCalledWith(['drive'])
+
+    fireEvent.click(dropboxCheckbox)
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolvers[0]()
+    })
+
+    expect(mutateAsync).toHaveBeenCalledTimes(2)
+    expect(mutateAsync).toHaveBeenLastCalledWith(['drive', 'dropbox'])
+    expect(driveCheckbox.checked).toBe(true)
+    expect(dropboxCheckbox.checked).toBe(true)
   })
 
   it.each([
