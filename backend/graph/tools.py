@@ -38,6 +38,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
 
     configurable = config.get("configurable", {})
     llm = configurable["llm"]
+    judge_llm = configurable.get("judge_llm") or llm
     vectorstore = configurable["vectorstore"]
     sources = configurable["sources"]
     reranker = configurable["reranker"]
@@ -62,7 +63,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
 
     # Filter sources with LLM
     def check_chunk(c):
-        return is_relevant_source(llm, query, c.page_content).is_relevant
+        return is_relevant_source(judge_llm, query, c.page_content).is_relevant
 
     with ThreadPoolExecutor() as executor:
         relevance = list(executor.map(check_chunk, chunks))

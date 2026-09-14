@@ -110,7 +110,7 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
             if source not in sources:
                 continue
 
-            if not sources[source].has_access(file_id):
+            if not sources[source].has_access(file_id, f.metadata):
                 continue
 
         allowed_chunks.append(f)
@@ -131,7 +131,12 @@ def get_chunk_sources(chunks, sources):
         if doc_id not in available_sources:
             tag = _resolve_source_label(d.metadata.get("source", "Unknown"), sources)
             title = d.metadata.get("title") or d.metadata.get("name") or "(sin titulo)"
-            link = d.metadata.get("webViewLink")
+            # A recorded shared link opens for everyone the file reached,
+            # including a reader who has no other way in. Read from permissions
+            # rather than webViewLink because that is the payload the indexer
+            # refreshes on every run, so a new link shows up without a reindex.
+            permissions = d.metadata.get("permissions") or {}
+            link = permissions.get("link") or d.metadata.get("webViewLink")
 
             available_sources[doc_id] = {"id": doc_id, "title": title, "source_type": tag, "link": link}
 
