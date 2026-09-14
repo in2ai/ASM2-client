@@ -14,7 +14,7 @@ from src.generation.artifact import (
 )
 from src.generation.llm import InsufficientContextError, generate_document_from_context
 from src.generation.model import DocumentGenerationSchema
-from src.config.env import get_env, get_bool_env
+from src.config.env import get_int_env, get_bool_env
 from src.connectors.store import QDRANT_META_PATH
 from src.connectors.search import augment_chunks, merge_sources
 from src.connectors.llms import get_configured_long_context_llm
@@ -38,7 +38,7 @@ def retrieve_safely(query, vectorstore, reranker, sources):
     logging.info(f'Searching: {query}')
  
     try:
-        return retrieve_and_rerank(query, vectorstore, reranker, sources)
+        return retrieve_and_rerank(query, vectorstore, reranker, sources, k=get_int_env('HYBRID_SEARCH_K', 6))
  
     except Exception:
         logging.exception(f"Retrieval failed for: {query}")
