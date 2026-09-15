@@ -1,5 +1,5 @@
-from langchain_community.vectorstores import Qdrant
 from langchain_core.documents import Document
+from langchain_qdrant import QdrantVectorStore
 
 from qdrant_client.http.models import Filter
 from qdrant_client.http.models import Fusion, FusionQuery, Prefetch, FieldCondition, MatchValue, Range, Document as QDocument
@@ -88,7 +88,7 @@ def split_contiguous(nums):
     return res
 
 
-def augment_chunks(vectorstore: Qdrant, chunks: list[Document]):
+def augment_chunks(vectorstore: QdrantVectorStore, chunks: list[Document]):
     # Get all chunks from VDB
     anchors = [(d.metadata['id'], d.metadata['chunk_idx']) for d in chunks]
 
@@ -143,7 +143,7 @@ def join_contiguous_chunks(docs):
 
 
 def hybrid_search(
-    vectorstore: Qdrant,
+    vectorstore: QdrantVectorStore,
     query: str,
     k: int,
     prefetch_k: int,

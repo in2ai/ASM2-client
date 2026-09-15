@@ -233,7 +233,7 @@ El servicio `backend` puede utilizar GPU para acelerar el procesamiento local. S
 ./run.sh up --gpu amd --qdrant amd
 ```
 
-El backend AMD utiliza por defecto la imagen validada `rocm/pytorch:rocm7.2.4_ubuntu22.04_py3.10_pytorch_release_2.9.1`. Se puede cambiar con `ROCM_PYTORCH_IMAGE` si el modelo de GPU requiere otra versión compatible.
+El backend AMD utiliza por defecto la imagen validada `rocm/pytorch:rocm7.2_ubuntu24.04_py3.13_pytorch_release_2.10.0`. Se puede cambiar con `ROCM_PYTORCH_IMAGE` si el modelo de GPU requiere otra versión compatible.
 
 **Requisitos AMD:**
 
