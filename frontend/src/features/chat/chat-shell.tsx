@@ -2,6 +2,7 @@ import { UserMenu } from '@/app/_components/app-layout'
 import { AreaSwitcher } from '@/app/_components/area-switcher'
 import { Button } from '@/components/ui/button'
 import { IndexingAlertCenter } from '@/features/indexing-alerts/indexing-alert-center'
+import { IndexingProgressIndicator } from '@/features/indexing-progress/indexing-progress-indicator'
 import type { LogtoUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { Menu, MessageSquareText, X } from 'lucide-react'
@@ -86,6 +87,7 @@ export function ChatShell({
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {headerActions}
+            <IndexingProgressIndicator user={user} />
             <IndexingAlertCenter user={user} />
             <AreaSwitcher activeArea="chat" user={user} />
             {user.role === 'admin' ? (

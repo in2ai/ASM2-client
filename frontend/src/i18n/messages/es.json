@@ -334,9 +334,11 @@
       "descriptionUser": "Conecta tus fuentes y marca cuáles quieres habilitar para tus conversaciones. Estas conexiones no inician ni modifican el indexado compartido.",
       "connected": "Conectado",
       "connectDrive": "Conectar Google Drive",
+      "connectDropbox": "Conectar Dropbox",
       "disconnect": "Desconectar",
       "notConfigured": "Este proveedor todavía no está configurado en el backend.",
       "googleDriveHelp": "El navegador inicia Google OAuth y luego el código de autorización devuelto se envía al backend y se almacena allí.",
+      "dropboxHelp": "El navegador inicia Dropbox OAuth y luego el código de autorización devuelto se envía al backend y se almacena allí. Solo verás los documentos que tu cuenta de Dropbox ya puede abrir.",
       "readyToChatTitle": "Inicia el indexado cuando tus fuentes estén listas",
       "readyToChatDescription": "Cuando termines de conectar fuentes, activa VDB para que el backend empiece a indexar el contenido conectado.",
       "vdb": {
@@ -349,8 +351,10 @@
         "inactiveDescription": "El indexado está desactivado. Ahora puedes conectar o refrescar fuentes.",
         "connectPrerequisite": "Detén el indexado VDB antes de conectar o refrescar proveedores.",
         "startRequiresSelection": "Selecciona al menos una fuente conectada para la recuperación del chat antes de iniciar el indexado.",
+        "runInProgress": "Ya hay un indexado en curso. Espera a que termine antes de iniciar otro.",
         "startUpdate": "Iniciar indexado",
-        "stopUpdate": "Detener indexado"
+        "stopUpdate": "Detener indexado",
+        "reindexNow": "Reindexar ahora"
       },
       "selectForChat": "Usar esta fuente para la recuperación del chat",
       "selectionSaving": "Guardando...",
@@ -365,14 +369,17 @@
         "finishAdmin": "Cuando acabes, activa VDB para que el backend empiece a indexar el contenido conectado.",
         "finishUser": "Marca la fuente para que tu chat pueda utilizarla en la recuperación del RAG."
       },
-      "callbackFailedTitle": "La conexión con Google Drive falló",
-      "callbackCancelled": "La autorización de Google Drive fue cancelada o falló.",
-      "callbackMissingCode": "Falta el código de autorización de Google Drive.",
-      "callbackInvalidState": "El estado de autorización de Google Drive es inválido o ha expirado.",
-      "callbackExchangeFailed": "No se pudo completar la conexión con Google Drive.",
+      "callbackFailedTitle": "La conexión falló",
+      "callbackCancelled": "La autorización de {provider} fue cancelada o falló.",
+      "callbackMissingCode": "Falta el código de autorización de {provider}.",
+      "callbackInvalidState": "El estado de autorización es inválido o ha expirado.",
+      "callbackExchangeFailed": "No se pudo completar la conexión con {provider}.",
       "providers": {
         "drive": {
           "description": "Conecta tus archivos de Google Drive para que el asistente pueda recuperarlos."
+        },
+        "dropbox": {
+          "description": "Conecta tus archivos de Dropbox para que el asistente pueda recuperarlos."
         }
       }
     }
@@ -433,6 +440,63 @@
       "unsupported": "Este navegador no admite notificaciones web.",
       "enable": "Activar avisos",
       "enabled": "Notificaciones del navegador activadas."
+    }
+  },
+  "IndexingProgress": {
+    "unavailable": "Estado no disponible",
+    "lastKnownState": "Último estado conocido",
+    "lastKnownDescription": "Último estado comunicado: {status}. Esta información puede estar desactualizada.",
+    "open": "Abrir el estado del indexado de Qdrant",
+    "openRunning": "Indexado de Qdrant en curso: {status}",
+    "title": "Indexado de Qdrant",
+    "description": "Estado del trabajo que mantiene actualizada la base de datos vectorial.",
+    "loading": "Cargando el estado del indexado…",
+    "loadFailed": "No se ha podido consultar el estado del indexado.",
+    "inProgress": "En curso",
+    "runningDescription": "Qdrant se está actualizando ahora mismo.",
+    "indeterminateLabel": "Indexado en curso sin recuento de ficheros",
+    "barLabel": "Ficheros indexados en la fuente actual",
+    "files": "{processed} de {total} ficheros",
+    "eta": "Tiempo restante: {eta}",
+    "sources": "Fuentes",
+    "sourcesValue": "{completed} de {total} completadas",
+    "currentSource": "Fuente actual",
+    "noSource": "Ninguna",
+    "chunks": "Fragmentos indexados en esta ejecución",
+    "automatic": "Indexado",
+    "automaticEnabled": "Activado",
+    "automaticDisabled": "Desactivado",
+    "startedAt": "Inicio",
+    "finishedAt": "Fin",
+    "lastUpdate": "Última actualización",
+    "never": "—",
+    "status": {
+      "idle": "Todavía no se ha ejecutado el indexado",
+      "running": "Actualizando Qdrant",
+      "completed": "Última ejecución completada",
+      "failed": "La última ejecución falló",
+      "blocked": "La última ejecución se detuvo por seguridad",
+      "interrupted": "La última ejecución se interrumpió",
+      "unknown": "Estado desconocido"
+    },
+    "statusDescription": {
+      "idle": "Qdrant no se ha actualizado desde que arrancó el servidor.",
+      "running": "Qdrant se está actualizando ahora mismo.",
+      "completed": "Qdrant está al día con las fuentes indexadas.",
+      "failed": "El trabajo se detuvo por un error. Revisa el detalle inferior.",
+      "blocked": "La protección ante borrados detuvo la ejecución antes de modificar Qdrant.",
+      "interrupted": "El servidor se reinició mientras el trabajo estaba en marcha.",
+      "unknown": "El backend informó de un estado que esta versión no conoce."
+    },
+    "phase": {
+      "listing_sources": "Listando los ficheros de las fuentes",
+      "preflight": "Comprobando los borrados antes de escribir",
+      "permissions": "Actualizando los permisos de los ficheros",
+      "deleting": "Eliminando las entradas obsoletas",
+      "indexing": "Indexando documentos",
+      "long_context": "Generando los índices de contexto largo",
+      "topics": "Extrayendo temas",
+      "unknown": "En curso"
     }
   },
   "SignInPage": {

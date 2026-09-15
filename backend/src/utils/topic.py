@@ -22,6 +22,7 @@ from qdrant_client.http import models
 from src.config.env import get_bool_env, get_float_env, get_int_env
 from src.config.config import APPROX_SEARCH_PARAMS
 from src.connectors.qdrant_ops import run_qdrant_write_with_retry
+from src.utils.messages import message_text
 from src.utils.nlp import SUPPORTED_LANGUAGES
 
 # ===========================================================================
@@ -258,7 +259,9 @@ def get_topic(llm, texts):
     while res is None and tries < 5:
         try:
             tries += 1
-            ans = llm.invoke([SystemMessage(content=system), HumanMessage(content=user)]).content
+            ans = message_text(
+                llm.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+            )
             res = json.loads(ans)
 
         except json.JSONDecodeError:

@@ -261,6 +261,23 @@ class IndexingAlertModel(BaseModel):
     source_breakdown: list[IndexingAlertSourceImpactModel] | None
 
 
+class IndexingProgressModel(BaseModel):
+    status: str
+    phase: str | None
+    current_source: str | None
+    sources_total: int
+    sources_completed: int
+    files_total: int
+    files_processed: int
+    chunks_indexed: int
+    eta_seconds: float | None
+    detail: str | None
+    started_at: datetime | None
+    updated_at: datetime
+    finished_at: datetime | None
+    indexing_enabled: bool
+
+
 MetricsReadAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]
 MetricsExportAuth = Annotated[AuthInfo, Depends(require_dashboard_access())]
 AuthenticatedAuth = Annotated[AuthInfo, Depends(require_auth())]

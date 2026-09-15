@@ -14,9 +14,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { CheckCircle2, CloudCog, Database, Loader2 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { CheckCircle2, Cloud, CloudCog, Database, Loader2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   useSourceLoginInfoQuery,
   useStartVdbUpdateMutation,
@@ -25,12 +26,18 @@ import {
   useVdbUpdateStatusQuery,
 } from './api'
 import {
+  buildDropboxAuthorizeUrl,
+  createDropboxOAuthState,
+  DROPBOX_CALLBACK_PATH,
+  persistDropboxOAuthRequest,
+} from './dropbox-auth'
+import {
   buildGoogleDriveAuthorizeUrl,
   createGoogleDriveOAuthState,
   GOOGLE_DRIVE_CALLBACK_PATH,
   persistGoogleDriveOAuthRequest,
 } from './google-drive-auth'
-import type { SourcesStatus } from './types'
+import type { SourceProviderKey, SourcesStatus } from './types'
 
 type StatusMessageTone = 'error' | 'muted'
 
@@ -62,11 +69,11 @@ function StatusMessageText({ message }: Readonly<{ message: StatusMessage }>) {
   )
 }
 
-function getDriveMessage({
+function getProviderMessage({
   connected,
   connectionLocked,
-  driveConfigured,
-  driveLoginError,
+  configured,
+  loginError,
   inlineError,
   isLoading,
   notConfiguredLabel,
@@ -75,16 +82,16 @@ function getDriveMessage({
 }: Readonly<{
   connected: boolean
   connectionLocked: boolean
-  driveConfigured: boolean
-  driveLoginError?: string
+  configured: boolean
+  loginError?: string
   inlineError?: string
   isLoading: boolean
   notConfiguredLabel: string
   helpLabel: string
   prerequisiteLabel?: string
 }>): StatusMessage | null {
-  if (driveLoginError) {
-    return { text: driveLoginError, tone: 'error' }
+  if (loginError) {
+    return { text: loginError, tone: 'error' }
   }
 
   if (inlineError) {
@@ -95,7 +102,7 @@ function getDriveMessage({
     return { text: prerequisiteLabel, tone: 'muted' }
   }
 
-  if (driveConfigured) {
+  if (configured) {
     return { text: helpLabel, tone: 'muted' }
   }
 
@@ -177,20 +184,24 @@ function VdbActionButtons({
   isActive,
   onStart,
   onStop,
+  runInProgress,
   startPending,
   stopPending,
   startLabel,
   stopLabel,
+  reindexLabel,
 }: Readonly<{
   actionPending: boolean
   canStartIndexing: boolean
   isActive: boolean
   onStart: () => void
   onStop: () => void
+  runInProgress: boolean
   startPending: boolean
   stopPending: boolean
   startLabel: string
   stopLabel: string
+  reindexLabel: string
 }>) {
   const primaryAction = isActive
     ? {
@@ -214,102 +225,245 @@ function VdbActionButtons({
         ) : null}
         {primaryAction.label}
       </Button>
+      {isActive ? (
+        <Button
+          variant="outline"
+          // A second run cannot start while one works, so the backend would
+          // drop this request: the action stays out of reach until it ends.
+          disabled={actionPending || !canStartIndexing || runInProgress}
+          onClick={onStart}
+        >
+          {startPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {reindexLabel}
+        </Button>
+      ) : null}
     </div>
   )
 }
 
-function DriveSourceCard({
-  connected,
-  isAdmin,
-  selected,
-  selectedSources,
-  vdbActive,
-}: Readonly<{
-  connected: boolean
-  isAdmin: boolean
-  selected: boolean
-  selectedSources: string[]
-  vdbActive: boolean
-}>) {
+interface ProviderConfig {
+  buildAuthorizeUrl: (input: {
+    clientId: string
+    redirectUri: string
+    state: string
+  }) => string
+  callbackPath: string
+  connectLabelKey: string
+  createOAuthState: () => string
+  descriptionKey: string
+  helpLabelKey: string
+  icon: LucideIcon
+  label: string
+  persistOAuthRequest: (input: {
+    redirectUri: string
+    returnTo: string
+    state: string
+  }) => void
+  providerKey: SourceProviderKey
+}
+
+const DRIVE_PROVIDER_CONFIG: ProviderConfig = {
+  buildAuthorizeUrl: buildGoogleDriveAuthorizeUrl,
+  callbackPath: GOOGLE_DRIVE_CALLBACK_PATH,
+  connectLabelKey: 'connectDrive',
+  createOAuthState: createGoogleDriveOAuthState,
+  descriptionKey: 'providers.drive.description',
+  helpLabelKey: 'googleDriveHelp',
+  icon: CloudCog,
+  label: 'Google Drive',
+  persistOAuthRequest: persistGoogleDriveOAuthRequest,
+  providerKey: 'drive',
+}
+
+const DROPBOX_PROVIDER_CONFIG: ProviderConfig = {
+  buildAuthorizeUrl: buildDropboxAuthorizeUrl,
+  callbackPath: DROPBOX_CALLBACK_PATH,
+  connectLabelKey: 'connectDropbox',
+  createOAuthState: createDropboxOAuthState,
+  descriptionKey: 'providers.dropbox.description',
+  helpLabelKey: 'dropboxHelp',
+  icon: Cloud,
+  label: 'Dropbox',
+  persistOAuthRequest: persistDropboxOAuthRequest,
+  providerKey: 'dropbox',
+}
+
+interface SourcesSelection {
+  errorFor: (providerKey: SourceProviderKey) => string | undefined
+  isPending: (providerKey: SourceProviderKey) => boolean
+  isSelected: (providerKey: SourceProviderKey) => boolean
+  toggle: (providerKey: SourceProviderKey, nextSelected: boolean) => void
+}
+
+function withProvider(
+  sources: string[],
+  providerKey: SourceProviderKey,
+  selected: boolean,
+): string[] {
+  const next = new Set(sources)
+
+  if (selected) {
+    next.add(providerKey)
+  } else {
+    next.delete(providerKey)
+  }
+
+  return Array.from(next)
+}
+
+function withoutFirst(
+  providers: SourceProviderKey[],
+  providerKey: SourceProviderKey,
+): SourceProviderKey[] {
+  const index = providers.indexOf(providerKey)
+
+  if (index === -1) {
+    return providers
+  }
+
+  return [...providers.slice(0, index), ...providers.slice(index + 1)]
+}
+
+// Every provider card edits the same list, so a request must carry the toggles
+// made while the previous one was still in flight: the desired list lives here
+// and requests are chained instead of racing each other.
+function useSourcesSelection(selectedSources: string[]): SourcesSelection {
   const t = useTranslations('ChatPage')
-  const [inlineError, setInlineError] = useState<string>()
-  const [optimisticSelected, setOptimisticSelected] = useState(selected)
-  const [selectionPending, setSelectionPending] = useState(false)
-  const driveLoginInfoQuery = useSourceLoginInfoQuery('drive')
   const updateSourcesSelectionMutation = useUpdateSourcesSelectionMutation()
-  const driveOauthClientId = driveLoginInfoQuery.data?.oauth_client_id ?? null
-  const driveConfigured = Boolean(driveOauthClientId)
-  const connectionLocked = isAdmin && vdbActive
-  const driveLoginError =
-    driveLoginInfoQuery.error instanceof Error
-      ? driveLoginInfoQuery.error.message
-      : undefined
+  const [selection, setSelection] = useState(selectedSources)
+  const [pendingProviders, setPendingProviders] = useState<SourceProviderKey[]>(
+    [],
+  )
+  const [errors, setErrors] = useState<
+    Partial<Record<SourceProviderKey, string>>
+  >({})
+  const desiredRef = useRef(selectedSources)
+  const queueRef = useRef<Promise<unknown>>(Promise.resolve())
+  const hasPending = pendingProviders.length > 0
 
   useEffect(() => {
-    if (!selectionPending) {
-      setOptimisticSelected(selected)
-    }
-  }, [selected, selectionPending])
-
-  const startDrive = () => {
-    setInlineError(undefined)
-
-    if (!driveOauthClientId) {
-      setInlineError(t('sources.notConfigured'))
+    // While a request is in flight the desired list is ahead of the saved one.
+    if (hasPending) {
       return
     }
 
-    const redirectUri = `${globalThis.location.origin}${GOOGLE_DRIVE_CALLBACK_PATH}`
-    const state = createGoogleDriveOAuthState()
+    desiredRef.current = selectedSources
+    setSelection(selectedSources)
+  }, [hasPending, selectedSources])
 
-    persistGoogleDriveOAuthRequest({
+  const rollback = (
+    providerKey: SourceProviderKey,
+    appliedSelected: boolean,
+  ) => {
+    // A newer toggle already replaced this value, so it owns the rollback.
+    if (desiredRef.current.includes(providerKey) !== appliedSelected) {
+      return
+    }
+
+    const reverted = withProvider(
+      desiredRef.current,
+      providerKey,
+      !appliedSelected,
+    )
+    desiredRef.current = reverted
+    setSelection(reverted)
+  }
+
+  const toggle = (providerKey: SourceProviderKey, nextSelected: boolean) => {
+    const nextSources = withProvider(
+      desiredRef.current,
+      providerKey,
+      nextSelected,
+    )
+    desiredRef.current = nextSources
+    setSelection(nextSources)
+    setErrors((current) => ({ ...current, [providerKey]: undefined }))
+    setPendingProviders((current) => [...current, providerKey])
+
+    queueRef.current = queueRef.current
+      .then(() =>
+        updateSourcesSelectionMutation.mutateAsync(desiredRef.current),
+      )
+      .catch((error: unknown) => {
+        rollback(providerKey, nextSelected)
+        setErrors((current) => ({
+          ...current,
+          [providerKey]:
+            error instanceof Error ? error.message : t('errors.sendFailed'),
+        }))
+      })
+      .finally(() => {
+        setPendingProviders((current) => withoutFirst(current, providerKey))
+      })
+  }
+
+  return {
+    errorFor: (providerKey) => errors[providerKey],
+    isPending: (providerKey) => pendingProviders.includes(providerKey),
+    isSelected: (providerKey) => selection.includes(providerKey),
+    toggle,
+  }
+}
+
+function ProviderSourceCard({
+  config,
+  connected,
+  isAdmin,
+  selection,
+  vdbActive,
+}: Readonly<{
+  config: ProviderConfig
+  connected: boolean
+  isAdmin: boolean
+  selection: SourcesSelection
+  vdbActive: boolean
+}>) {
+  const t = useTranslations('ChatPage')
+  const [connectError, setConnectError] = useState<string>()
+  const loginInfoQuery = useSourceLoginInfoQuery(config.providerKey)
+  const oauthClientId = loginInfoQuery.data?.oauth_client_id ?? null
+  const configured = Boolean(oauthClientId)
+  const connectionLocked = isAdmin && vdbActive
+  const selected = selection.isSelected(config.providerKey)
+  const selectionPending = selection.isPending(config.providerKey)
+  const inlineError = connectError ?? selection.errorFor(config.providerKey)
+  const loginError =
+    loginInfoQuery.error instanceof Error
+      ? loginInfoQuery.error.message
+      : undefined
+  const Icon = config.icon
+
+  const startConnect = () => {
+    setConnectError(undefined)
+
+    if (!oauthClientId) {
+      setConnectError(t('sources.notConfigured'))
+      return
+    }
+
+    const redirectUri = `${globalThis.location.origin}${config.callbackPath}`
+    const state = config.createOAuthState()
+
+    config.persistOAuthRequest({
       redirectUri,
       returnTo: globalThis.location.pathname + globalThis.location.search,
       state,
     })
 
     globalThis.location.assign(
-      buildGoogleDriveAuthorizeUrl({
-        clientId: driveOauthClientId,
-        redirectUri,
-        state,
-      }),
+      config.buildAuthorizeUrl({ clientId: oauthClientId, redirectUri, state }),
     )
   }
 
-  const toggleSelected = async (nextSelected: boolean) => {
-    setInlineError(undefined)
-    setOptimisticSelected(nextSelected)
-    setSelectionPending(true)
-
-    const nextSources = new Set(selectedSources)
-    if (nextSelected) {
-      nextSources.add('drive')
-    } else {
-      nextSources.delete('drive')
-    }
-
-    try {
-      await updateSourcesSelectionMutation.mutateAsync(Array.from(nextSources))
-    } catch (error) {
-      setOptimisticSelected(selected)
-      setInlineError(
-        error instanceof Error ? error.message : t('errors.sendFailed'),
-      )
-    } finally {
-      setSelectionPending(false)
-    }
-  }
-
-  const driveMessage = getDriveMessage({
+  const providerMessage = getProviderMessage({
     connected,
     connectionLocked,
-    driveConfigured,
-    driveLoginError,
+    configured,
+    loginError,
     inlineError,
-    isLoading: driveLoginInfoQuery.isLoading,
+    isLoading: loginInfoQuery.isLoading,
     notConfiguredLabel: t('sources.notConfigured'),
-    helpLabel: t('sources.googleDriveHelp'),
+    helpLabel: t(`sources.${config.helpLabelKey}`),
     prerequisiteLabel: isAdmin
       ? t('sources.vdb.connectPrerequisite')
       : undefined,
@@ -321,11 +475,11 @@ function DriveSourceCard({
         <div className="flex items-start justify-between gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <CloudCog className="h-4 w-4" />
-              Google Drive
+              <Icon className="h-4 w-4" />
+              {config.label}
             </CardTitle>
             <CardDescription>
-              {t('sources.providers.drive.description')}
+              {t(`sources.${config.descriptionKey}`)}
             </CardDescription>
           </div>
           {connected ? (
@@ -334,19 +488,19 @@ function DriveSourceCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {driveMessage ? <StatusMessageText message={driveMessage} /> : null}
+        {providerMessage ? (
+          <StatusMessageText message={providerMessage} />
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           {!connected ? (
             <Button
               disabled={
-                connectionLocked ||
-                !driveConfigured ||
-                driveLoginInfoQuery.isLoading
+                connectionLocked || !configured || loginInfoQuery.isLoading
               }
-              onClick={startDrive}
+              onClick={startConnect}
             >
-              {t('sources.connectDrive')}
+              {t(`sources.${config.connectLabelKey}`)}
             </Button>
           ) : (
             <label className="border-border bg-background flex min-h-10 cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2 text-sm">
@@ -354,9 +508,11 @@ function DriveSourceCard({
                 type="checkbox"
                 className="cursor-pointer"
                 aria-label={t('sources.selectForChat')}
-                checked={optimisticSelected}
+                checked={selected}
                 disabled={selectionPending}
-                onChange={(event) => void toggleSelected(event.target.checked)}
+                onChange={(event) =>
+                  selection.toggle(config.providerKey, event.target.checked)
+                }
               />
               <span>{t('sources.selectForChat')}</span>
               {selectionPending ? (
@@ -387,6 +543,7 @@ function VdbUpdateCard({
     statusError: vdbStatusQuery.error,
   })
   const vdbUpdateActive = vdbStatusQuery.data?.active ?? false
+  const vdbRunInProgress = vdbStatusQuery.data?.running ?? false
   const vdbStatusPending = vdbStatusQuery.isFetching
   const vdbActionPending =
     startVdbUpdateMutation.isPending || stopVdbUpdateMutation.isPending
@@ -429,6 +586,12 @@ function VdbUpdateCard({
           </p>
         ) : null}
 
+        {vdbRunInProgress ? (
+          <p className="text-muted-foreground text-sm">
+            {t('sources.vdb.runInProgress')}
+          </p>
+        ) : null}
+
         {vdbError ? <p className="text-sm text-red-500">{vdbError}</p> : null}
 
         <VdbActionButtons
@@ -437,10 +600,12 @@ function VdbUpdateCard({
           isActive={vdbUpdateActive}
           onStart={() => startVdbUpdateMutation.mutate()}
           onStop={() => stopVdbUpdateMutation.mutate()}
+          runInProgress={vdbRunInProgress}
           startPending={startVdbUpdateMutation.isPending}
           stopPending={stopVdbUpdateMutation.isPending}
           startLabel={t('sources.vdb.startUpdate')}
           stopLabel={t('sources.vdb.stopUpdate')}
+          reindexLabel={t('sources.vdb.reindexNow')}
         />
       </CardContent>
     </Card>
@@ -462,10 +627,15 @@ export function SourcesPanel({
 }: Readonly<SourcesPanelProps>) {
   const t = useTranslations('ChatPage')
   const connectedSources = new Set(status?.connected_sources ?? [])
-  const selectedSources = status?.selected_sources ?? []
+  const selectedSources = useMemo(
+    () => status?.selected_sources ?? [],
+    [status?.selected_sources],
+  )
+  const selection = useSourcesSelection(selectedSources)
   const driveConnected = connectedSources.has('drive')
-  const driveSelected = selectedSources.includes('drive')
+  const dropboxConnected = connectedSources.has('dropbox')
   const hasSelectedSources = selectedSources.length > 0
+  const hasConnectedSources = connectedSources.size > 0
   const vdbStatusQuery = useVdbUpdateStatusQuery(isAdmin && open)
   const vdbActive = vdbStatusQuery.data?.active ?? false
   const panelDescription = isAdmin
@@ -516,15 +686,23 @@ export function SourcesPanel({
             />
           ) : null}
 
-          <DriveSourceCard
+          <ProviderSourceCard
+            config={DRIVE_PROVIDER_CONFIG}
             connected={driveConnected}
             isAdmin={isAdmin}
-            selected={driveSelected}
-            selectedSources={selectedSources}
+            selection={selection}
             vdbActive={vdbActive}
           />
 
-          {isAdmin && driveConnected && !vdbActive ? (
+          <ProviderSourceCard
+            config={DROPBOX_PROVIDER_CONFIG}
+            connected={dropboxConnected}
+            isAdmin={isAdmin}
+            selection={selection}
+            vdbActive={vdbActive}
+          />
+
+          {isAdmin && hasConnectedSources && !vdbActive ? (
             <Card className="gap-4 rounded-3xl border-amber-500/20 bg-amber-500/5">
               <CardHeader className="gap-2">
                 <CardTitle>{t('sources.readyToChatTitle')}</CardTitle>
