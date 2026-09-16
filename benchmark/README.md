@@ -5,7 +5,18 @@ pregunta del dataset de evaluación, el benchmark ejecuta el grafo RAG *real* (e
 usa la aplicación), captura la respuesta generada y los chunks recuperados, y puntúa el
 resultado con métricas de [RAGAS](https://docs.ragas.io/).
 
-La orquestación vive en [`backend/benchmark.py`](../backend/benchmark.py).
+La orquestación vive en [`backend/benchmark.py`](../backend/benchmark.py), y el stack se
+levanta con `./run.sh up --bench` (ver el [README raíz](../README.md)).
+
+> **Requisito de base de datos.** `benchmark.py` construye el pool de PostgreSQL al
+> importarse y lo pasa al grafo en `call_rag()`. `get_pg_pool()` usa `minconn=1`, así que la
+> conexión se abre en ese momento. `docker-compose.bench.yml` no define `timescaledb` y
+> `run.sh --bench` no aplica el override de TimescaleDB, de modo que `PG_HOST` tiene que
+> apuntar a una base alcanzable; si no, hay que levantar el stack a mano:
+>
+> ```bash
+> docker compose -f docker-compose.bench.yml -f docker-compose.timescaledb.yml up --build
+> ```
 
 ---
 

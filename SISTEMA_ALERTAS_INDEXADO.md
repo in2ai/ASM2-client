@@ -142,7 +142,8 @@ Modelos añadidos:
 
 ### `sql/init_tsdb.sql`
 
-Se crean tres tablas.
+Se crean tres tablas. (El fichero crea además `indexing_progress`, que pertenece al
+indicador de progreso descrito en la sección **Progreso del indexado**.)
 
 #### `indexing_deletion_guard`
 
@@ -341,6 +342,55 @@ El frontend consulta las últimas alertas cada 15 segundos. Para cada alerta nue
 - guarda su ID como último notificado.
 
 La primera vez solo avisa de la alerta más reciente para evitar una ráfaga de eventos antiguos.
+
+## Progreso del indexado
+
+El guard comparte espacio de nombres (`/indexing/*`), tabla y permisos con el indicador de
+progreso del indexado, que se añadió después. Ambos los consultan managers y administradores,
+y las dos funcionalidades se ven en la misma pantalla.
+
+### Backend
+
+`backend/src/indexing/progress.py` mantiene el estado de una ejecución:
+
+- Estados: `idle`, `running`, `completed`, `failed`, `blocked`, `interrupted`.
+- Fases: `listing_sources`, `preflight`, `permissions`, `deleting`, `indexing`,
+  `long_context`, `topics`.
+- Contadores: fuentes totales y completadas, ficheros totales y procesados, chunks indexados.
+- `estimate_eta_seconds()` extrapola el tiempo restante a partir del ritmo de ficheros ya
+  persistidos; devuelve `None` hasta que hay al menos un fichero procesado.
+
+`IndexingProgress` guarda ese estado en memoria y no publica nada, de modo que el indexado
+puede ejecutarse sin seguimiento. `PostgresIndexingProgress`
+(`backend/src/config/indexing.py`) sobrescribe `publish()` y vuelca el estado en la fila
+singleton `indexing_progress`. Publicar el progreso nunca puede abortar el indexado: los
+errores de escritura se registran y se ignoran.
+
+Como el estado es persistente, sobrevive a un reinicio del backend.
+`mark_running_indexing_progress_interrupted()` se ejecuta al arrancar y marca como
+`interrupted` una ejecución que un proceso muerto dejó en `running`.
+
+El bloqueo por borrado masivo se refleja aquí: `progress.finish(STATUS_BLOCKED)` deja la fila
+en `blocked` a la vez que se guarda la alerta.
+
+### Endpoint
+
+```http
+GET /indexing/progress
+```
+
+Requiere `manager` o `admin`. Devuelve la fila de progreso más `indexing_enabled`, que indica
+si existe el fichero `vdb.lock`.
+
+### Frontend
+
+`frontend/src/features/indexing-progress/`:
+
+- `api.ts` consulta el endpoint cada 5 segundos mientras el estado es `running` y cada 30
+  segundos en el resto de casos.
+- `logic.ts` calcula el porcentaje de ficheros, formatea el tiempo restante y decide qué
+  estados requieren atención.
+- `indexing-progress-indicator.tsx` renderiza el indicador.
 
 ## Alcance de la notificación
 
