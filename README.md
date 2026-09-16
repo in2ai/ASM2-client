@@ -107,7 +107,8 @@ cp .env.example .env
 | Variable | Descripción |
 | --- | --- |
 | `LOGTO_APP_ID` | ID de la aplicación SPA en Logto |
-| `LOGTO_ENDPOINT` | Endpoint compartido de Logto usado por la SPA y por el backend |
+| `LOGTO_ENDPOINT` | Endpoint público de Logto tal como lo alcanza el navegador; se compila en el bundle de la SPA y es el issuer OIDC |
+| `LOGTO_INTERNAL_ENDPOINT` | Opcional: el mismo Logto tal como lo alcanza el contenedor del backend (discovery, JWKS y Management API). Los overrides `local` y `dokploy` ya lo fijan en `http://logto:3001` |
 | `LOGTO_API_RESOURCE` | Audience del API compartido entre la SPA y la validación estricta en FastAPI |
 | `LOGTO_ADMIN_ENDPOINT` | Endpoint del panel de administración de Logto |
 | `LOGTO_POSTGRES_PASSWORD` | Contraseña del rol `logto` dentro de la instancia PostgreSQL compartida |

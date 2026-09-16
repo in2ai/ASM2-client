@@ -156,6 +156,7 @@ Backend environment values:
 
 ```env
 LOGTO_ENDPOINT=http://localhost:3011
+LOGTO_INTERNAL_ENDPOINT=
 LOGTO_API_RESOURCE=https://asm2-api.company.internal
 CORS_ALLOW_ORIGINS=http://localhost:3001
 LOGTO_MANAGEMENT_APP_ID=your_m2m_app_id
@@ -165,7 +166,7 @@ LOGTO_MANAGEMENT_API_RESOURCE=https://default.logto.app/api
 
 FastAPI validation behavior:
 
-- fetches OpenID configuration from `${LOGTO_ENDPOINT}/oidc/.well-known/openid-configuration`
+- fetches OpenID configuration from `${LOGTO_INTERNAL_ENDPOINT:-$LOGTO_ENDPOINT}/oidc/.well-known/openid-configuration`
 - retrieves signing keys from Logto JWKS
 - validates `iss`, `aud`, `sub`, and token expiry
 - resolves user roles server-side from the Logto Management API when management credentials are configured
@@ -226,6 +227,29 @@ In that mode:
 - browser connects to the SPA on port `3001`
 - SPA calls `/api/...`
 - Caddy forwards `/api/*` to `backend:8001`
+- the backend reaches Logto at `http://logto:3001`, which `docker-compose.local.yml`
+  sets as the default `LOGTO_INTERNAL_ENDPOINT`
+
+### Browser Endpoint vs Backend Endpoint
+
+`LOGTO_ENDPOINT` is the public URL: the SPA bundle is built with it, Logto runs with it
+as its `ENDPOINT`, and it is therefore the `iss` of every token. It has to resolve in the
+browser, so it can never be `host.docker.internal` — browsers do not resolve that alias,
+and Linux hosts do not define it at all.
+
+A containerized backend usually cannot reach that same URL: `http://localhost:3011` inside
+the backend container is the backend itself. `LOGTO_INTERNAL_ENDPOINT` covers that gap. The
+backend dials it for OpenID discovery, JWKS, and the Management API, and rewrites the
+absolute URLs from the discovery document (which Logto builds from its public `ENDPOINT`)
+onto it. Issuer and audience validation still use the public values, so tokens minted for
+the browser keep validating unchanged.
+
+| Where Logto runs | `LOGTO_ENDPOINT` | `LOGTO_INTERNAL_ENDPOINT` |
+| :--- | :--- | :--- |
+| In this stack (`--local`, Dokploy) | `http://localhost:3011` or the public hostname | `http://logto:3001` (already the compose default) |
+| On the host, outside the stack | `http://localhost:3011` | `http://host.docker.internal:3011` |
+| Remote / cloud Logto | `https://your-tenant.logto.app` | empty |
+| Backend running outside Docker | `http://localhost:3011` | empty |
 
 ## 7. Environment Formatting Caveat
 

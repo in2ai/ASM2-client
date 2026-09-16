@@ -6,6 +6,10 @@
 #   - Helper script: ./run.sh up --local
 services:
   backend:
+    # LOGTO_ENDPOINT is the browser-facing issuer, which a container cannot
+    # reach; the backend dials Logto over the compose network instead.
+    environment:
+      LOGTO_INTERNAL_ENDPOINT: ${LOGTO_INTERNAL_ENDPOINT:-http://logto:3001}
     depends_on:
       qdrant:
         condition: service_started
