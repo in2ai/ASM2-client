@@ -55,6 +55,7 @@ El sistema se despliega mediante contenedores Docker orquestados:
 
 - **Docker** y **Docker Compose** (recomendado para despliegue).
 - **Python 3.10–3.13** y [**uv**](https://docs.astral.sh/uv/) (para desarrollo local del backend; `backend/pyproject.toml` fija `requires-python = ">=3.10,<3.14"`).
++ **Python 3.13** y [**uv**](https://docs.astral.sh/uv/) (para desarrollo local del backend; `backend/pyproject.toml` fija `requires-python = ">=3.13,<3.14"`).
 - **Node.js 24** y **pnpm 11** (para desarrollo local del dashboard; la imagen de build usa `node:24-alpine` y `package.json` fija `packageManager: pnpm@11.11.0`).
 
 ## Configuración
