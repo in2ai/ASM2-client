@@ -65,7 +65,7 @@ LOGTO_ADMIN_ENDPOINT=http://localhost:3002
 Start the stack with:
 
 ```bash
-./run.sh up --local -d
+docker compose -f docker-compose.yml -f docker-compose.timescaledb.yml -f docker-compose.local.yml up -d timescaledb timescaledb-init logto
 ```
 
 `timescaledb` and `timescaledb-init` live in `docker-compose.timescaledb.yml` and
