@@ -55,6 +55,7 @@ El sistema se despliega mediante contenedores Docker orquestados:
 
 - **Docker** y **Docker Compose** (recomendado para despliegue).
 - **Python 3.10–3.13** y [**uv**](https://docs.astral.sh/uv/) (para desarrollo local del backend; `backend/pyproject.toml` fija `requires-python = ">=3.10,<3.14"`).
++ **Python 3.13** y [**uv**](https://docs.astral.sh/uv/) (para desarrollo local del backend; `backend/pyproject.toml` fija `requires-python = ">=3.13,<3.14"`).
 - **Node.js 24** y **pnpm 11** (para desarrollo local del dashboard; la imagen de build usa `node:24-alpine` y `package.json` fija `packageManager: pnpm@11.11.0`).
 
 ## Configuración
@@ -116,7 +117,7 @@ cp .env.example .env
 | `LOGTO_MANAGEMENT_APP_SECRET` | Client secret opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_API_RESOURCE` | Resource opcional de la Management API de Logto (default `https://default.logto.app/api`) |
 
-> El backend resuelve los roles (`admin`, `manager`, `user`) contra la Management API de Logto. Sin credenciales M2M no puede resolverlos, y las rutas protegidas por rol quedan inaccesibles.
+> El backend intenta resolver los roles (`admin`, `manager`, `user`) contra la Management API de Logto. Sin credenciales M2M, conserva los claims `roles`/`role` del JWT cuando están presentes; si tampoco existen, las rutas protegidas por rol quedan inaccesibles.
 
 #### Modelos
 
@@ -172,7 +173,7 @@ Tracing opcional de las llamadas LLM y del grafo de LangGraph. Si las tres varia
 
 ### Desarrollo Local del Dashboard
 
-Para el desarrollo del frontend fuera de Docker, usa `frontend/.env.local` (o el `.env` de la raíz, que es el `envDir` configurado en Vite) con la URL del backend y el endpoint público de Logto.
+Para el desarrollo del frontend fuera de Docker, usa `.env.local` en la raíz (el `envDir` configurado en Vite) con la URL del backend y el endpoint público de Logto.
 
 `frontend/vite.config.ts` lee los nombres **sin** prefijo `VITE_` (`LOGTO_ENDPOINT`, `LOGTO_APP_ID`, `LOGTO_API_RESOURCE`, `BACKEND_URL`) y los inyecta en el bundle como `import.meta.env.VITE_*`. Por eso los archivos Docker Compose pasan `LOGTO_*` como build args del dashboard.
 
