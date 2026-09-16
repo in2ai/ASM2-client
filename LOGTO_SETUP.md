@@ -65,7 +65,19 @@ LOGTO_ADMIN_ENDPOINT=http://localhost:3002
 Start the stack with:
 
 ```bash
-docker compose up -d timescaledb timescaledb-init logto
+docker compose -f docker-compose.yml -f docker-compose.timescaledb.yml -f docker-compose.local.yml up -d timescaledb timescaledb-init logto
+```
+
+`timescaledb` and `timescaledb-init` live in `docker-compose.timescaledb.yml` and
+`logto` in `docker-compose.local.yml`, so a bare `docker compose up` does not see
+them. To bring up only the auth path, pass the override files explicitly:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.timescaledb.yml \
+  -f docker-compose.local.yml \
+  up -d timescaledb timescaledb-init logto
 ```
 
 `timescaledb-init` creates the `logto` role and database when missing. Logto
@@ -111,7 +123,7 @@ LOGTO_API_RESOURCE=https://asm2-api.company.internal
 
 Notes:
 
-- `frontend/vite.config.ts` maps the shared `LOGTO_*` values into the `VITE_*` variables used by browser code.
+- `frontend/vite.config.ts` reads the unprefixed `LOGTO_*` values from the repository-root env files (`envDir: '..'`) and injects them into the bundle as the `VITE_LOGTO_*` variables used by browser code.
 - `frontend/src/lib/api.ts` uses `/api` in production and `http://localhost:8001` in local dev when no explicit frontend backend URL is provided.
 - Unlike the old Next.js dashboard flow, the SPA does not need `LOGTO_APP_SECRET` or `LOGTO_COOKIE_SECRET` in browser code.
 - No Logto organization template is required for this setup.
@@ -136,7 +148,7 @@ Important:
 - it must match exactly in Logto, the SPA token request, and backend validation
 - it is not the same thing as `/api` or a specific metrics route
 
-In the current backend, all `/metrics/*` endpoints require the `admin` role. The backend does not enforce custom API scopes.
+In the current backend, all `/metrics/*` endpoints require the `admin` **or** `manager` role (`require_dashboard_access()` in `backend/src/config/logto_auth.py`). The backend does not enforce custom API scopes.
 
 The SPA should request the Logto `roles` scope so role claims can be resolved from Logto user information.
 
@@ -144,6 +156,7 @@ Backend environment values:
 
 ```env
 LOGTO_ENDPOINT=http://localhost:3011
+LOGTO_INTERNAL_ENDPOINT=
 LOGTO_API_RESOURCE=https://asm2-api.company.internal
 CORS_ALLOW_ORIGINS=http://localhost:3001
 LOGTO_MANAGEMENT_APP_ID=your_m2m_app_id
@@ -153,17 +166,21 @@ LOGTO_MANAGEMENT_API_RESOURCE=https://default.logto.app/api
 
 FastAPI validation behavior:
 
-- fetches OpenID configuration from `${LOGTO_ENDPOINT}/oidc/.well-known/openid-configuration`
+- fetches OpenID configuration from `${LOGTO_INTERNAL_ENDPOINT:-$LOGTO_ENDPOINT}/oidc/.well-known/openid-configuration`
 - retrieves signing keys from Logto JWKS
 - validates `iss`, `aud`, `sub`, and token expiry
 - resolves user roles server-side from the Logto Management API when management credentials are configured
 - enforces route access through role-based FastAPI dependencies
 
-Protected backend routes currently include:
+Every route except `GET /healthz` requires a valid bearer token. The role each one
+needs is declared through the dependency aliases in `backend/src/model/endpoints.py`:
 
-- `GET /metrics/dashboard` requires `admin` role
-- `GET /metrics/stats` requires `admin` role
-- `GET /metrics/export` requires `admin` role
+| Dependency | Roles accepted | Routes |
+| :--- | :--- | :--- |
+| `AdminAuth` | `admin` | `POST /start-vdb-update`, `POST /stop-vdb-update`, `GET /vdb-update-status` |
+| `IndexingManagementAuth` | `admin`, `manager` | `GET`/`PUT /indexing/deletion-guard`, `PUT /indexing/deletion-guard/override`, `GET /indexing/progress`, `GET`/`DELETE /indexing/alerts`, `DELETE /indexing/alerts/{alert_id}` |
+| `MetricsReadAuth` / `MetricsExportAuth` | `admin`, `manager` | `GET /metrics/dashboard`, `GET /metrics/stats`, `GET /metrics/export` |
+| `AuthenticatedAuth` | any authenticated user | `GET /sources/login-info`, `POST /login-source`, `GET /sources/status`, `PUT /sources/selection`, `GET /authenticated-sources`, all `/chats*` routes |
 
 ## 5. Global Role Assignment
 
@@ -181,8 +198,12 @@ If you change a user's roles, force a new Logto authorization flow so newly issu
 LOGTO_ENDPOINT=http://localhost:3011
 LOGTO_APP_ID=your_spa_app_id
 LOGTO_API_RESOURCE=https://asm2-api.company.internal
-VITE_BACKEND_URL=http://localhost:8001
+BACKEND_URL=http://localhost:8001
 ```
+
+These go in the repository-root env file. `vite.config.ts` reads `BACKEND_URL`, not
+`VITE_BACKEND_URL`; when it is empty the SPA falls back to `http://localhost:8001`
+in dev and `/api` in production builds.
 
 Backend:
 
@@ -206,6 +227,29 @@ In that mode:
 - browser connects to the SPA on port `3001`
 - SPA calls `/api/...`
 - Caddy forwards `/api/*` to `backend:8001`
+- the backend reaches Logto at `http://logto:3001`, which `docker-compose.local.yml`
+  sets as the default `LOGTO_INTERNAL_ENDPOINT`
+
+### Browser Endpoint vs Backend Endpoint
+
+`LOGTO_ENDPOINT` is the public URL: the SPA bundle is built with it, Logto runs with it
+as its `ENDPOINT`, and it is therefore the `iss` of every token. It has to resolve in the
+browser, so it can never be `host.docker.internal` — browsers do not resolve that alias,
+and Linux hosts do not define it at all.
+
+A containerized backend usually cannot reach that same URL: `http://localhost:3011` inside
+the backend container is the backend itself. `LOGTO_INTERNAL_ENDPOINT` covers that gap. The
+backend dials it for OpenID discovery, JWKS, and the Management API, and rewrites the
+absolute URLs from the discovery document (which Logto builds from its public `ENDPOINT`)
+onto it. Issuer and audience validation still use the public values, so tokens minted for
+the browser keep validating unchanged.
+
+| Where Logto runs | `LOGTO_ENDPOINT` | `LOGTO_INTERNAL_ENDPOINT` |
+| :--- | :--- | :--- |
+| In this stack (`--local`, Dokploy) | `http://localhost:3011` or the public hostname | `http://logto:3001` (already the compose default) |
+| On the host, outside the stack | `http://localhost:3011` | `http://host.docker.internal:3011` |
+| Remote / cloud Logto | `https://your-tenant.logto.app` | empty |
+| Backend running outside Docker | `http://localhost:3011` | empty |
 
 ## 7. Environment Formatting Caveat
 
@@ -273,7 +317,7 @@ Once enabled, those sign-in methods appear automatically in the hosted Logto exp
 | SPA Logto config | `frontend/src/lib/logto.ts` |
 | SPA backend URL config | `frontend/src/lib/api.ts` |
 | Backend JWT validation | `backend/src/config/logto_auth.py` |
-| Backend bootstrap endpoint | `backend/server.py` |
+| Backend routes and role dependencies | `backend/server.py`, `backend/src/model/endpoints.py` |
 | Backend management API client | `backend/src/config/logto_management.py` |
 
 Created for the ASM2 Development Team.

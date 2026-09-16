@@ -5,6 +5,7 @@ import time
 import requests
 
 from src.config.env import get_env
+from src.config.logto_endpoints import get_internal_endpoint
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ _USER_ROLE_CACHE: dict[str, tuple[float, list[str]]] = {}
 
 
 def _get_management_config() -> tuple[str, str, str, str] | None:
-    logto_endpoint = str(get_env("LOGTO_ENDPOINT", "")).rstrip("/")
+    logto_endpoint = get_internal_endpoint()
     management_app_id = str(get_env("LOGTO_MANAGEMENT_APP_ID", "")).strip()
     management_app_secret = str(get_env("LOGTO_MANAGEMENT_APP_SECRET", "")).strip()
     management_api_resource = str(

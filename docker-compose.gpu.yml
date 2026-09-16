@@ -1,7 +1,7 @@
 # GPU override configuration for the backend service.
 # Usage:
 #   - Base stack only: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
-#   - Local infra: docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.gpu.yml up
+#   - Local infra: docker compose -f docker-compose.yml -f docker-compose.timescaledb.yml -f docker-compose.local.yml -f docker-compose.gpu.yml up
 #   - Helper script: ./run.sh up --gpu
 services:
   backend:
