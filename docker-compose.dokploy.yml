@@ -16,6 +16,7 @@ services:
       QDRANT_HOST: qdrant
       QDRANT_META_PATH: /app/data/qdrant_meta
       GOOGLE_CLIENT_SECRET_FILE: ${GOOGLE_CLIENT_SECRET_FILE:-/app/secrets/client_secret.json}
+      LOGTO_INTERNAL_ENDPOINT: ${LOGTO_INTERNAL_ENDPOINT:-http://logto:3001}
       PG_HOST: timescaledb
       PG_PORT: 5432
       PG_USER: ${PG_USER}

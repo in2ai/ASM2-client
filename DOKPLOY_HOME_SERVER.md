@@ -63,6 +63,7 @@ Notes:
 - If you use the Google Drive connector, prefer setting `CLIENT_SECRET` as inline JSON in Dokploy instead of mounting a secret file.
 - Only a small set of environment entries remain inline in the compose file. Those are service-local overrides such as internal hostnames, container paths, GPU flags, build-time mappings, translated variable names, or computed values.
 - The dashboard build reads the shared `LOGTO_ENDPOINT`, `LOGTO_APP_ID`, and `LOGTO_API_RESOURCE` values, and Vite exposes them as `VITE_*` values for browser code.
+- `LOGTO_ENDPOINT` must be the public URL the browser uses, because it is both baked into the dashboard bundle and given to Logto as its `ENDPOINT` (the OIDC issuer). The compose file points the backend at `http://logto:3001` through `LOGTO_INTERNAL_ENDPOINT`, so it reaches Logto over the internal network without depending on the public hostname.
 - `LOGTO_POSTGRES_PASSWORD` is defined in Dokploy's `Environment` tab. The compose file turns it into the runtime Docker secret `logto_postgres_password` for the database initialization job and Logto.
 - Logto has a dedicated `logto` database and role inside the shared PostgreSQL 18 / TimescaleDB instance. It does not use the application's `tsdb` database.
 - The `logto` role has `CREATEROLE`, but is not a superuser, because Logto creates an internal tenant role during schema seeding.

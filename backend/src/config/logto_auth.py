@@ -8,6 +8,11 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.config.env import get_env
+from src.config.logto_endpoints import (
+    get_internal_endpoint,
+    get_public_endpoint,
+    to_internal_url,
+)
 from src.config.logto_management import get_user_role_names
 
 
@@ -37,8 +42,10 @@ class AuthInfo:
     audience: list[str]
 
 
-def _ensure_auth_config() -> tuple[str, str]:
-    logto_endpoint = str(get_env("LOGTO_ENDPOINT", "")).rstrip("/")
+def _ensure_auth_config() -> tuple[str, str, str]:
+    """Return the public issuer base, the origin to dial, and the audience."""
+    logto_endpoint = get_public_endpoint()
+    internal_endpoint = get_internal_endpoint()
     logto_api_resource = str(get_env("LOGTO_API_RESOURCE", "")).strip()
 
     if not logto_endpoint:
@@ -47,10 +54,10 @@ def _ensure_auth_config() -> tuple[str, str]:
     if not logto_api_resource:
         raise RuntimeError("LOGTO_API_RESOURCE is required for strict auth")
 
-    return logto_endpoint, logto_api_resource
+    return logto_endpoint, internal_endpoint, logto_api_resource
 
 
-def _get_openid_config(logto_endpoint: str) -> dict[str, Any]:
+def _get_openid_config(internal_endpoint: str) -> dict[str, Any]:
     global _OPENID_CONFIG_CACHE
     global _OPENID_CONFIG_EXPIRES_AT
     global _OPENID_CONFIG_ENDPOINT
@@ -59,34 +66,36 @@ def _get_openid_config(logto_endpoint: str) -> dict[str, Any]:
     if (
         _OPENID_CONFIG_CACHE
         and now < _OPENID_CONFIG_EXPIRES_AT
-        and _OPENID_CONFIG_ENDPOINT == logto_endpoint
+        and _OPENID_CONFIG_ENDPOINT == internal_endpoint
     ):
         return _OPENID_CONFIG_CACHE
 
-    well_known_url = f"{logto_endpoint}/oidc/.well-known/openid-configuration"
+    well_known_url = f"{internal_endpoint}/oidc/.well-known/openid-configuration"
     response = requests.get(well_known_url, timeout=5)
     response.raise_for_status()
 
     _OPENID_CONFIG_CACHE = response.json()
-    _OPENID_CONFIG_ENDPOINT = logto_endpoint
+    _OPENID_CONFIG_ENDPOINT = internal_endpoint
     _OPENID_CONFIG_EXPIRES_AT = now + _OPENID_CONFIG_TTL_SECONDS
     return _OPENID_CONFIG_CACHE
 
 
-def _get_jwks_client(logto_endpoint: str) -> jwt.PyJWKClient:
+def _get_jwks_client(internal_endpoint: str) -> jwt.PyJWKClient:
     global _JWKS_CLIENT
     global _JWKS_ENDPOINT
 
-    if _JWKS_CLIENT is not None and _JWKS_ENDPOINT == logto_endpoint:
+    if _JWKS_CLIENT is not None and _JWKS_ENDPOINT == internal_endpoint:
         return _JWKS_CLIENT
 
-    openid_config = _get_openid_config(logto_endpoint)
+    openid_config = _get_openid_config(internal_endpoint)
     jwks_uri = openid_config.get("jwks_uri")
     if not jwks_uri:
-        jwks_uri = f"{logto_endpoint}/oidc/jwks"
+        jwks_uri = f"{internal_endpoint}/oidc/jwks"
+    else:
+        jwks_uri = to_internal_url(str(jwks_uri))
 
     _JWKS_CLIENT = jwt.PyJWKClient(jwks_uri)
-    _JWKS_ENDPOINT = logto_endpoint
+    _JWKS_ENDPOINT = internal_endpoint
     return _JWKS_CLIENT
 
 
@@ -131,15 +140,15 @@ def _get_allowed_jwt_algorithms(signing_key: jwt.PyJWK) -> list[str]:
 
 def validate_token(token: str) -> AuthInfo:
     try:
-        logto_endpoint, logto_api_resource = _ensure_auth_config()
+        logto_endpoint, internal_endpoint, logto_api_resource = _ensure_auth_config()
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    openid_config = _get_openid_config(logto_endpoint)
+    openid_config = _get_openid_config(internal_endpoint)
     issuer = str(openid_config.get("issuer") or f"{logto_endpoint}/oidc")
 
     try:
-        signing_key = _get_jwks_client(logto_endpoint).get_signing_key_from_jwt(token)
+        signing_key = _get_jwks_client(internal_endpoint).get_signing_key_from_jwt(token)
         payload = jwt.decode(
             token,
             signing_key,

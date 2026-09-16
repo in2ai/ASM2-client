@@ -1,7 +1,7 @@
 # AMD ROCm GPU override configuration for the backend service.
 # Usage:
 #   - Base stack only: docker compose -f docker-compose.yml -f docker-compose.gpu-amd.yml up
-#   - Local infra: docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.gpu-amd.yml up
+#   - Local infra: docker compose -f docker-compose.yml -f docker-compose.timescaledb.yml -f docker-compose.local.yml -f docker-compose.gpu-amd.yml up
 #   - Helper script: ./run.sh up --gpu amd
 services:
   backend:
