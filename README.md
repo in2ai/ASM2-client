@@ -172,7 +172,7 @@ Tracing opcional de las llamadas LLM y del grafo de LangGraph. Si las tres varia
 
 ### Desarrollo Local del Dashboard
 
-Para el desarrollo del frontend fuera de Docker, usa `frontend/.env.local` (o el `.env` de la raíz, que es el `envDir` configurado en Vite) con la URL del backend y el endpoint público de Logto.
+Para el desarrollo del frontend fuera de Docker, usa `.env.local` en la raíz (el `envDir` configurado en Vite) con la URL del backend y el endpoint público de Logto.
 
 `frontend/vite.config.ts` lee los nombres **sin** prefijo `VITE_` (`LOGTO_ENDPOINT`, `LOGTO_APP_ID`, `LOGTO_API_RESOURCE`, `BACKEND_URL`) y los inyecta en el bundle como `import.meta.env.VITE_*`. Por eso los archivos Docker Compose pasan `LOGTO_*` como build args del dashboard.
 
