@@ -116,7 +116,7 @@ cp .env.example .env
 | `LOGTO_MANAGEMENT_APP_SECRET` | Client secret opcional de la app M2M para la Management API |
 | `LOGTO_MANAGEMENT_API_RESOURCE` | Resource opcional de la Management API de Logto (default `https://default.logto.app/api`) |
 
-> El backend resuelve los roles (`admin`, `manager`, `user`) contra la Management API de Logto. Sin credenciales M2M no puede resolverlos, y las rutas protegidas por rol quedan inaccesibles.
+> El backend intenta resolver los roles (`admin`, `manager`, `user`) contra la Management API de Logto. Sin credenciales M2M, conserva los claims `roles`/`role` del JWT cuando están presentes; si tampoco existen, las rutas protegidas por rol quedan inaccesibles.
 
 #### Modelos
 
