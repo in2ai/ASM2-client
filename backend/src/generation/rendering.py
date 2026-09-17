@@ -469,7 +469,12 @@ class PdfRenderer(DocumentRenderer):
             splitByRow=1,
         )
         if "splitInRow" in _TABLE_KW:
-            kwargs["splitInRow"] = 1  # belt and braces if a row grows past _ROW_LIMIT
+            # Off deliberately. Splitting inside a row makes ReportLab re-emit the
+            # repeated header mid-page and leaves the continuation fragment with a
+            # blank first column, so the reader sees an unnamed row. Rows are
+            # capped at _ROW_LIMIT below, well under the frame height, so no row
+            # can ever be too tall to place whole and this costs nothing.
+            kwargs["splitInRow"] = 0
         if "emptyTableAction" in _TABLE_KW:
             # Unreachable given the guards above, but rl_config defaults this to
             # 'error'. 'ignore' degrades to a zero Spacer; 'indicate' would draw
