@@ -47,6 +47,11 @@ export interface CreateChatInput {
   title?: string
 }
 
+export interface RenameChatInput {
+  chatId: string
+  title: string
+}
+
 export interface SendMessageInput {
   chatId: string
   content: string

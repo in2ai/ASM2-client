@@ -228,6 +228,28 @@ class PostgresChatStore:
             "content": bytes(row["content"]),
         }
 
+    def rename_chat(self, user_id: str, chat_id: str, title: str) -> dict[str, Any]:
+        """The chat under its new title, scoped to its owner.
+
+        ``updated_at`` stays untouched: a rename is not new conversation
+        activity, and bumping it would reshuffle the sidebar ordering.
+        """
+
+        resolved_title = build_chat_title(title)
+
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE chats SET title = %s WHERE id = %s AND user_id = %s",
+                (resolved_title, chat_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise ChatNotFoundError(chat_id=chat_id)
+
+        chat = self.get_chat(user_id, chat_id)
+        if chat is None:
+            raise ChatNotFoundError(chat_id=chat_id)
+        return chat
+
     def delete_chat(self, user_id: str, chat_id: str) -> None:
         with self._cursor() as cur:
             cur.execute(

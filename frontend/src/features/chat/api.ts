@@ -7,6 +7,7 @@ import type {
   ChatSummary,
   CreateChatInput,
   DownloadDocumentInput,
+  RenameChatInput,
   SendMessageInput,
   SendMessageResult,
   SourceLoginInfo,
@@ -194,6 +195,32 @@ export function useDeleteChatMutation() {
       )
       queryClient.removeQueries({ queryKey: chatQueryKeys.detail(chatId) })
       await queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
+    },
+  })
+}
+
+export function useRenameChatMutation() {
+  const request = useAuthorizedChatRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ chatId, title }: RenameChatInput) =>
+      request<ChatDetail>(`/chats/${chatId}`, {
+        body: JSON.stringify({ title }),
+        method: 'PATCH',
+      }),
+    onSuccess: (chat) => {
+      queryClient.setQueryData(chatQueryKeys.detail(chat.id), chat)
+      queryClient.setQueryData<ChatSummary[] | undefined>(
+        chatQueryKeys.list,
+        (currentChats) =>
+          currentChats?.map((currentChat) =>
+            currentChat.id === chat.id
+              ? { ...currentChat, title: chat.title }
+              : currentChat,
+          ) ?? currentChats,
+      )
+      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
     },
   })
 }

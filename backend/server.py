@@ -620,7 +620,7 @@ async def list_chats(auth: AuthenticatedAuth):
 
 @app.post("/chats", response_model=ChatDetailModel)
 async def create_chat(auth: AuthenticatedAuth, payload: CreateChatRequestModel):
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
     return chat_store.create_chat(auth.sub, title=payload.title)
 
 
@@ -696,7 +696,7 @@ def get_generated_document_in_latest_turn(messages: list) -> dict[str, Any] | No
 
 @app.get("/chats/{chat_id}", response_model=ChatDetailModel)
 async def get_chat(auth: AuthenticatedAuth, chat_id: str):
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
     return _get_chat_or_404(chat_store, auth.sub, chat_id)
 
 
@@ -723,9 +723,21 @@ async def download_chat_document(
     )
 
 
+@app.patch("/chats/{chat_id}", response_model=ChatDetailModel)
+async def rename_chat(
+    auth: AuthenticatedAuth, chat_id: str, payload: RenameChatRequestModel
+):
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
+
+    try:
+        return chat_store.rename_chat(auth.sub, chat_id, payload.title)
+    except ChatNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Chat not found") from exc
+
+
 @app.delete("/chats/{chat_id}", status_code=204)
 async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
 
     try:
         chat_store.delete_chat(auth.sub, chat_id)

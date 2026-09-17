@@ -7,7 +7,13 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
-import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from 'react'
+import type {
+  ButtonHTMLAttributes,
+  ComponentProps,
+  InputHTMLAttributes,
+  LabelHTMLAttributes,
+  ReactNode,
+} from 'react'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { ChatSidebar } from './chat-sidebar'
@@ -54,6 +60,24 @@ vi.mock('@/components/ui/button', () => ({
   }) => <button {...props}>{children}</button>,
 }))
 
+vi.mock('@/components/ui/dialog', () => ({
+  Dialog: ({ children, open }: { children: ReactNode; open: boolean }) =>
+    open ? <div>{children}</div> : null,
+  DialogContent: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogDescription: ({ children }: { children: ReactNode }) => (
+    <p>{children}</p>
+  ),
+  DialogFooter: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogHeader: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
+}))
+
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
@@ -77,6 +101,16 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   ),
 }))
 
+vi.mock('@/components/ui/input', () => ({
+  Input: (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+}))
+
+vi.mock('@/components/ui/label', () => ({
+  Label: ({ children, ...props }: LabelHTMLAttributes<HTMLLabelElement>) => (
+    <label {...props}>{children}</label>
+  ),
+}))
+
 vi.mock('@/components/ui/scroll-area', () => ({
   ScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
@@ -84,6 +118,7 @@ vi.mock('@/components/ui/scroll-area', () => ({
 vi.mock('lucide-react', () => ({
   MessageSquareText: () => null,
   MoreHorizontal: () => null,
+  Pencil: () => null,
   Plus: () => null,
   Trash2: () => null,
 }))
@@ -126,7 +161,15 @@ function renderSidebar(
       newChatLabel="New conversation"
       onCreateChat={() => undefined}
       onDeleteChat={() => undefined}
+      onRenameChat={() => undefined}
       onSelectChat={() => undefined}
+      renameCancelLabel="Cancel"
+      renameChatLabel="Rename conversation"
+      renameDescription="Pick a name you will recognise."
+      renameFieldLabel="Conversation name"
+      renameSaveLabel="Save"
+      renameTitle="Rename this conversation"
+      renamingChatId={undefined}
       rowActionsLabel="Conversation actions"
       {...overrides}
     />,
@@ -165,5 +208,45 @@ describe('ChatSidebar', () => {
     await waitFor(() => {
       expect(onDeleteChat).toHaveBeenCalledWith('chat-1')
     })
+  })
+
+  it('renames a conversation from its current title', async () => {
+    const onRenameChat = vi.fn()
+
+    renderSidebar({ onRenameChat })
+
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Rename conversation' })[0],
+    )
+    expect(screen.getByText('Rename this conversation')).toBeTruthy()
+
+    const field = screen.getByLabelText<HTMLInputElement>('Conversation name')
+    expect(field.value).toBe('Project policy')
+
+    fireEvent.change(field, { target: { value: '  Holiday policy  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(onRenameChat).toHaveBeenCalledWith('chat-1', 'Holiday policy')
+    })
+  })
+
+  it('keeps the rename disabled while the title is blank', () => {
+    const onRenameChat = vi.fn()
+
+    renderSidebar({ onRenameChat })
+
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Rename conversation' })[0],
+    )
+    fireEvent.change(screen.getByLabelText('Conversation name'), {
+      target: { value: '   ' },
+    })
+
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(save)
+    expect(onRenameChat).not.toHaveBeenCalled()
   })
 })

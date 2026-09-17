@@ -70,12 +70,19 @@ vi.mock('./chat-sidebar', () => ({
   ChatSidebar: (props: {
     chats: Array<{ id: string; title: string }>
     onDeleteChat: (chatId: string) => void
+    onRenameChat: (chatId: string, title: string) => void
   }) => (
     <div>
       {props.chats.map((chat) => (
-        <button key={chat.id} onClick={() => props.onDeleteChat(chat.id)}>
-          {`delete-${chat.id}`}
-        </button>
+        <div key={chat.id}>
+          <button onClick={() => props.onDeleteChat(chat.id)}>
+            {`delete-${chat.id}`}
+          </button>
+          <button onClick={() => props.onRenameChat(chat.id, 'Vacaciones')}>
+            {`rename-${chat.id}`}
+          </button>
+          <span>{`title-${chat.id}-${chat.title}`}</span>
+        </div>
       ))}
     </div>
   ),
@@ -974,5 +981,79 @@ describe('ChatPage', () => {
     await waitFor(() => {
       expect(onSelectChat).toHaveBeenCalledWith('chat-2', { replace: true })
     })
+  })
+
+  it('renames a conversation and shows its new title in the sidebar', async () => {
+    let chat = {
+      created_at: '2026-04-14T18:30:00.000Z',
+      id: 'chat-1',
+      last_message_preview: 'Mensaje 1',
+      title: 'Chat empresarial',
+      updated_at: '2026-04-14T18:32:00.000Z',
+    }
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (requestUrl.endsWith('/chats') && method === 'GET') {
+          return jsonResponse([chat])
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse({ ...chat, messages: [] })
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'PATCH') {
+          const { title } = JSON.parse(init?.body as string) as {
+            title: string
+          }
+          chat = { ...chat, title }
+          return jsonResponse({ ...chat, messages: [] })
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      },
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByText('title-chat-1-Chat empresarial')
+
+    fireEvent.click(screen.getByText('rename-chat-1'))
+
+    await screen.findByText('title-chat-1-Vacaciones')
+
+    const renameCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === 'PATCH',
+    )
+    expect(renameCall?.[1]?.body).toBe(JSON.stringify({ title: 'Vacaciones' }))
   })
 })

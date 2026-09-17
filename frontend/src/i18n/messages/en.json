@@ -280,6 +280,12 @@
       "newChat": "New conversation",
       "rowActions": "Conversation actions",
       "deleteChat": "Delete conversation",
+      "renameChat": "Rename conversation",
+      "renameTitle": "Rename conversation",
+      "renameDescription": "Pick a name that helps you find this conversation later.",
+      "renameFieldLabel": "Conversation name",
+      "renameCancel": "Cancel",
+      "renameAction": "Save",
       "confirmDeleteTitle": "Delete conversation?",
       "confirmDeleteDescription": "This permanently removes the conversation and all of its messages.",
       "confirmDeleteCancel": "Cancel",
@@ -325,6 +331,7 @@
       "loadFailed": "The chat workspace could not be loaded. Please try again.",
       "sendFailed": "Your message could not be sent. Please try again.",
       "deleteFailed": "The conversation could not be deleted. Please try again.",
+      "renameFailed": "The conversation could not be renamed. Please try again.",
       "downloadFailed": "The document could not be downloaded. Please try again."
     },
     "sources": {

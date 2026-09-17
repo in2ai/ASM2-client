@@ -10,15 +10,31 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { AppLocale } from '@/i18n/config'
 import { cn } from '@/lib/utils'
-import { MessageSquareText, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
+import {
+  MessageSquareText,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { useState } from 'react'
 import { ChatSidebarLoadingState } from './chat-loading-state'
 import type { ChatSummary } from './types'
@@ -41,7 +57,15 @@ interface ChatSidebarProps {
   newChatLabel: string
   onCreateChat: () => void
   onDeleteChat: (chatId: string) => void | Promise<void>
+  onRenameChat: (chatId: string, title: string) => void | Promise<void>
   onSelectChat: (chatId: string) => void
+  renameCancelLabel: string
+  renameChatLabel: string
+  renameDescription: string
+  renameFieldLabel: string
+  renameSaveLabel: string
+  renameTitle: string
+  renamingChatId?: string
   rowActionsLabel: string
 }
 
@@ -62,11 +86,25 @@ export function ChatSidebar({
   newChatLabel,
   onCreateChat,
   onDeleteChat,
+  onRenameChat,
   onSelectChat,
+  renameCancelLabel,
+  renameChatLabel,
+  renameDescription,
+  renameFieldLabel,
+  renameSaveLabel,
+  renameTitle,
+  renamingChatId,
   rowActionsLabel,
 }: Readonly<ChatSidebarProps>) {
   const [chatPendingDelete, setChatPendingDelete] =
     useState<ChatSummary | null>(null)
+  const [chatPendingRename, setChatPendingRename] =
+    useState<ChatSummary | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+
+  const isRenaming = Boolean(renamingChatId)
+  const trimmedRenameValue = renameValue.trim()
 
   const handleConfirmDelete = async () => {
     if (!chatPendingDelete) {
@@ -75,6 +113,20 @@ export function ChatSidebar({
 
     await onDeleteChat(chatPendingDelete.id)
     setChatPendingDelete(null)
+  }
+
+  const startRename = (chat: ChatSummary) => {
+    setChatPendingRename(chat)
+    setRenameValue(getChatTitle(chat.title))
+  }
+
+  const handleSubmitRename = async () => {
+    if (!chatPendingRename || !trimmedRenameValue) {
+      return
+    }
+
+    await onRenameChat(chatPendingRename.id, trimmedRenameValue)
+    setChatPendingRename(null)
   }
 
   return (
@@ -104,6 +156,7 @@ export function ChatSidebar({
             {chats.map((chat) => {
               const isActive = activeChatId === chat.id
               const isDeleting = deletingChatId === chat.id
+              const isRenamingRow = renamingChatId === chat.id
 
               return (
                 <div
@@ -141,12 +194,21 @@ export function ChatSidebar({
                         size="icon-sm"
                         className="mt-2 mr-2 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 data-[state=open]:opacity-100"
                         aria-label={rowActionsLabel}
-                        disabled={isDeleting}
+                        disabled={isDeleting || isRenamingRow}
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          startRename(chat)
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span>{renameChatLabel}</span>
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
                         onSelect={(event) => {
@@ -165,6 +227,57 @@ export function ChatSidebar({
           </div>
         ) : null}
       </ScrollArea>
+
+      <Dialog
+        open={Boolean(chatPendingRename)}
+        onOpenChange={(open) => {
+          if (!open && !isRenaming) {
+            setChatPendingRename(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{renameTitle}</DialogTitle>
+            <DialogDescription>{renameDescription}</DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleSubmitRename()
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="chat-rename-title">{renameFieldLabel}</Label>
+              <Input
+                id="chat-rename-title"
+                autoFocus
+                maxLength={60}
+                value={renameValue}
+                disabled={isRenaming}
+                onChange={(event) => setRenameValue(event.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isRenaming}
+                onClick={() => setChatPendingRename(null)}
+              >
+                {renameCancelLabel}
+              </Button>
+              <Button
+                type="submit"
+                disabled={isRenaming || !trimmedRenameValue}
+              >
+                {renameSaveLabel}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={Boolean(chatPendingDelete)}

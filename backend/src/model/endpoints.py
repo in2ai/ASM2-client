@@ -179,6 +179,10 @@ class CreateChatRequestModel(BaseModel):
     title: str | None = None
 
 
+class RenameChatRequestModel(BaseModel):
+    title: str
+
+
 class SendMessageRequestModel(BaseModel):
     content: str
 

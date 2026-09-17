@@ -280,6 +280,12 @@
       "newChat": "Nueva conversación",
       "rowActions": "Acciones de la conversación",
       "deleteChat": "Eliminar conversación",
+      "renameChat": "Renombrar conversación",
+      "renameTitle": "Renombrar conversación",
+      "renameDescription": "Elige un nombre que te ayude a encontrar esta conversación más adelante.",
+      "renameFieldLabel": "Nombre de la conversación",
+      "renameCancel": "Cancelar",
+      "renameAction": "Guardar",
       "confirmDeleteTitle": "¿Eliminar conversación?",
       "confirmDeleteDescription": "Esto elimina de forma permanente la conversación y todos sus mensajes.",
       "confirmDeleteCancel": "Cancelar",
@@ -325,6 +331,7 @@
       "loadFailed": "No se pudo cargar el espacio de chat. Inténtalo de nuevo.",
       "sendFailed": "No se pudo enviar tu mensaje. Inténtalo de nuevo.",
       "deleteFailed": "No se pudo eliminar la conversación. Inténtalo de nuevo.",
+      "renameFailed": "No se pudo renombrar la conversación. Inténtalo de nuevo.",
       "downloadFailed": "No se pudo descargar el documento. Inténtalo de nuevo."
     },
     "sources": {

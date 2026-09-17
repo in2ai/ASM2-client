@@ -13,6 +13,7 @@ import {
   useCreateChatMutation,
   useDeleteChatMutation,
   useDownloadDocumentMutation,
+  useRenameChatMutation,
   useSendMessageMutation,
   useSourcesStatusQuery,
 } from './api'
@@ -65,6 +66,7 @@ export function ChatPage({
   const chatQuery = useChatQuery(effectiveChatId)
   const createChatMutation = useCreateChatMutation()
   const deleteChatMutation = useDeleteChatMutation()
+  const renameChatMutation = useRenameChatMutation()
   const sendMessageMutation = useSendMessageMutation()
   const downloadDocumentMutation = useDownloadDocumentMutation()
 
@@ -174,6 +176,16 @@ export function ChatPage({
       }
     } catch (error) {
       setComposerError(toErrorMessage(error, t('errors.deleteFailed')))
+    }
+  }
+
+  const handleRenameChat = async (chatId: string, title: string) => {
+    setComposerError(undefined)
+
+    try {
+      await renameChatMutation.mutateAsync({ chatId, title })
+    } catch (error) {
+      setComposerError(toErrorMessage(error, t('errors.renameFailed')))
     }
   }
 
@@ -305,7 +317,19 @@ export function ChatPage({
           newChatLabel={t('sidebar.newChat')}
           onCreateChat={() => void handleCreateChat()}
           onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
+          onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
           onSelectChat={(chatId) => onSelectChat(chatId)}
+          renameCancelLabel={t('sidebar.renameCancel')}
+          renameChatLabel={t('sidebar.renameChat')}
+          renameDescription={t('sidebar.renameDescription')}
+          renameFieldLabel={t('sidebar.renameFieldLabel')}
+          renameSaveLabel={t('sidebar.renameAction')}
+          renameTitle={t('sidebar.renameTitle')}
+          renamingChatId={
+            renameChatMutation.isPending
+              ? renameChatMutation.variables?.chatId
+              : undefined
+          }
           rowActionsLabel={t('sidebar.rowActions')}
         />
       }
