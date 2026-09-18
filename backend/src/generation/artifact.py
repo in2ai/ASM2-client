@@ -17,6 +17,8 @@ from src.generation.rendering import (
     MarkdownRenderer,
     PdfRenderer,
     TxtRenderer,
+    DocxRenderer,
+    CsvRenderer
 )
 
 
@@ -35,6 +37,16 @@ DOCUMENT_FORMATS: dict[str, dict[str, Any]] = {
         "extension": "txt",
         "mime_type": "text/plain; charset=utf-8",
         "renderer": TxtRenderer,
+    },
+    "docx": {
+        "extension": "docx",
+        "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document; charset=utf-8",
+        "renderer": DocxRenderer,
+    },
+    "csv": {
+        "extension": "csv",
+        "mime_type": "text/csv; charset=utf-8",
+        "renderer": CsvRenderer,
     },
 }
 
