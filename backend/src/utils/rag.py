@@ -1,6 +1,7 @@
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from typing import Optional, List
+import threading
 
 from pydantic import BaseModel, Field
 from typing import Dict, Optional
@@ -54,7 +55,11 @@ def _resolve_source_label(source_key: str, sources: Dict[str, DataSource]) -> st
 # ---------------------------------
 
 def get_reranker():
-    return CrossEncoder("cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+    return CrossEncoder(
+        "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1", 
+        model_kwargs={"torch_dtype": "float16"}
+    )
+
 
 
 def rerank_documents(reranker, query: str, documents: list, top_k: int = None) -> list:
@@ -89,6 +94,9 @@ def rerank_documents(reranker, query: str, documents: list, top_k: int = None) -
     return reranked_docs
 
 
+PERMISSIONS_LOCK = threading.Lock()
+
+
 def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataSource], k: int = 6) -> tuple:
     """Retrieval-only function: hybrid search + permission filtering + reranking.
 
@@ -98,7 +106,10 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
     lang_code = detect_language(query)
 
     # Perform hybrid search
-    search_results = hybrid_search(vectordb, query, 25, 25, sources)
+    use_reranker = get_bool_env('USE_RERANKER')
+    search_k = 25 if use_reranker else k
+
+    search_results = hybrid_search(vectordb, query, search_k, 25, sources)
 
     # Filter by permissions
     allowed_chunks = []
@@ -110,13 +121,14 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
             if source not in sources:
                 continue
 
-            if not sources[source].has_access(file_id, f.metadata):
-                continue
+            with PERMISSIONS_LOCK:
+                if not sources[source].has_access(file_id, f.metadata):
+                    continue
 
         allowed_chunks.append(f)
 
     # Rerank documents
-    if allowed_chunks:
+    if use_reranker and allowed_chunks:
         allowed_chunks = rerank_documents(reranker, query, allowed_chunks, top_k=k)
 
     return allowed_chunks, lang_code
@@ -221,4 +233,101 @@ def is_relevant_source(llm, query, chunk):
 
     ans = llm_judge.invoke([SystemMessage(content=system), HumanMessage(content=user)])
 
+    return ans
+
+
+class SubQueries(BaseModel):
+    queries: list[str]
+ 
+ 
+def generate_subqueries(llm, query, previous_queries, reason=""):
+    # LLM with function call
+    llm_planner = llm.with_structured_output(SubQueries)
+ 
+    # Prompt
+    system = """
+    You are a query planner for RAG.
+ 
+    Given a user question, decompose it into the search queries needed to answer it. Emit
+    as many as the question actually requires and no more: one query for a question about
+    a single topic, ten for a question spanning ten topics.
+ 
+    Rules:
+    - Write every query in the same language as the user question. Never translate.
+    - One topic per query. Split anything joined by a conjunction: "company structure and
+      staff" becomes "company structure" and "company staff".
+    - Keep each query short. Emit the terms a document would use, not a sentence.
+    - Each query must stand on its own: no pronouns, no references to the other queries.
+    - Do not emit paraphrases of the same search.
+ 
+    You may also receive the queries already searched and the reason why their results
+    were not enough. In that case:
+    - Never repeat an already searched query, not even reworded.
+    - Target the gap described in the reason, and nothing else.
+    - If a previous query was on the right track but too broad or too narrow, rewrite it
+      with different terms instead of jumping to an unrelated angle.
+    """
+ 
+    user = f"""
+    Question:
+    {query}
+ 
+    Already searched:
+    {previous_queries}
+ 
+    Why the results were not enough:
+    {reason}
+    """
+ 
+    ans = llm_planner.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+ 
+    return ans
+ 
+ 
+class ContextSufficiency(BaseModel):
+    is_enough: bool
+    reason: str
+ 
+ 
+def is_context_enough(llm, query, context):
+    # LLM with function call
+    llm_judge = llm.with_structured_output(ContextSufficiency)
+ 
+    # Prompt
+    system = """
+    You are a sufficiency classifier for RAG.
+ 
+    Given:
+    1) a user question
+    2) the context retrieved so far
+ 
+    Decide whether the context is enough to write a complete, grounded answer.
+ 
+    Mark is_enough = true if every part of the question can be answered from the context.
+    An answer stating that the sources do not cover something also counts as complete, as
+    long as the context is what makes that clear.
+ 
+    Mark is_enough = false if:
+    - part of the question is left unanswered
+    - the context only supports a partial or hedged answer
+    - answering would require filling gaps with outside knowledge
+ 
+    Judge only whether an answer can be written from the context, not whether it is the
+    answer the user was hoping for.
+ 
+    In reason, when is_enough is false, name the specific piece of information that is
+    missing instead of restating that the context is insufficient. That text is the only
+    input used to plan the next round of searches.
+    """
+ 
+    user = f"""
+    Question:
+    {query}
+ 
+    Context:
+    {context}
+    """
+ 
+    ans = llm_judge.invoke([SystemMessage(content=system), HumanMessage(content=user)])
+ 
     return ans
