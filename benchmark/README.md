@@ -56,6 +56,13 @@ respuesta de referencia y las columnas:
 Cómo se genera este dataset (fuentes, descarga, muestreo y unión) se explica en detalle en el
 [README de generación de datasets](dataset_generation/README.md).
 
+> **Antes de ejecutar el benchmark**, los documentos que el dataset consulta tienen que estar
+> indexados. Los corpus generados contienen más documentos de los que usa el dataset, así que
+> el subconjunto exacto a subir al conector se obtiene con
+> [`export_corpus.py`](dataset_generation/export_corpus.py), que lo deja en
+> `benchmark/data/corpus_to_upload/` con una subcarpeta por fuente. Ver
+> [la sección 4 del README de generación](dataset_generation/README.md#4-exportación-del-corpus-a-indexar).
+
 ---
 
 ## 3. Variables parametrizables
