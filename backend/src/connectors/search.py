@@ -7,6 +7,7 @@ from qdrant_client.http.models import Fusion, FusionQuery, Prefetch, FieldCondit
 from src.config.search_config import APPROX_SEARCH_PARAMS, PREV_CHUNKS, NEXT_CHUNKS
 from src.connectors.source import DataSource
 from src.connectors.store import BM25_MODEL, iterate_qdrant_docs
+from src.config.env import get_bool_env
 
 
 def get_permission_filter(sources: dict[str, DataSource] | None = None):
@@ -175,7 +176,29 @@ def hybrid_search(
     ]
 
     contiguous_filter = build_contiguous_chunk_filter(anchors, PREV_CHUNKS, NEXT_CHUNKS)
-    search_results = iterate_qdrant_docs(vectorstore, scroll_filter=contiguous_filter)
-    res = [d for _, d in search_results]
+    use_reranker = get_bool_env('USE_RERANKER')
+
+    if use_reranker:
+        search_results = iterate_qdrant_docs(vectorstore, scroll_filter=contiguous_filter)
+        res = [d for _, d in search_results]
+
+    else:
+        search_results = vectorstore.client.query_points(
+            collection_name=vectorstore.collection_name,
+            query=FusionQuery(fusion=Fusion.RRF),
+            prefetch=[
+                Prefetch(query=emb, using="embedding", limit=prefetch_k, params=APPROX_SEARCH_PARAMS, filter=contiguous_filter),
+                Prefetch(query=QDocument(text=query, model=BM25_MODEL), using="bm25", limit=prefetch_k, params=APPROX_SEARCH_PARAMS, filter=contiguous_filter)
+            ],
+            search_params=APPROX_SEARCH_PARAMS,
+            with_payload=True,
+            with_vectors=False,
+            limit=k,
+        )
+
+        res = [
+            Document(page_content=i.payload.get("page_content", {}), metadata=i.payload.get("metadata", {}))
+            for i in search_results.points
+        ]
 
     return res
