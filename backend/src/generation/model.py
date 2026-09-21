@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class DocumentGenerationSchema(BaseModel):
     query: str
-    format: Literal["pdf", "markdown", "txt"] = Field(
+    format: Literal["pdf", "markdown", "txt", "docx", "csv"] = Field(
         description="The file format to render the document in."
     )
 
