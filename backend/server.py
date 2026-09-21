@@ -613,9 +613,9 @@ async def get_auth_sources(auth: AuthenticatedAuth):
 
 
 @app.get("/chats", response_model=list[ChatSummaryModel])
-async def list_chats(auth: AuthenticatedAuth):
-    chat_store:PostgresChatStore = app.state.tsdb_chat_store
-    return chat_store.list_chats(auth.sub)
+async def list_chats(auth: AuthenticatedAuth, archived: bool = False):
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
+    return chat_store.list_chats(auth.sub, archived=archived)
 
 
 @app.post("/chats", response_model=ChatDetailModel)
@@ -724,15 +724,29 @@ async def download_chat_document(
 
 
 @app.patch("/chats/{chat_id}", response_model=ChatDetailModel)
-async def rename_chat(
-    auth: AuthenticatedAuth, chat_id: str, payload: RenameChatRequestModel
+async def update_chat(
+    auth: AuthenticatedAuth, chat_id: str, payload: UpdateChatRequestModel
 ):
+    """The chat after the requested changes, applied in turn.
+
+    Each field the caller omits is left as it is, so pinning a chat never
+    disturbs its title and renaming one never disturbs its place.
+    """
+
     chat_store: PostgresChatStore = app.state.tsdb_chat_store
+    chat: dict[str, Any] | None = None
 
     try:
-        return chat_store.rename_chat(auth.sub, chat_id, payload.title)
+        if payload.title is not None:
+            chat = chat_store.rename_chat(auth.sub, chat_id, payload.title)
+        if payload.archived is not None:
+            chat = chat_store.set_chat_archived(auth.sub, chat_id, payload.archived)
+        if payload.pinned is not None:
+            chat = chat_store.set_chat_pinned(auth.sub, chat_id, payload.pinned)
     except ChatNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Chat not found") from exc
+
+    return chat
 
 
 @app.delete("/chats/{chat_id}", status_code=204)

@@ -24,6 +24,15 @@ type ConversationRenderState = {
 
 let conversationRenderStates: ConversationRenderState[] = []
 
+/** The sidebar listing, whichever archive side it asks for. */
+function isChatsListRequest(requestUrl: string, method: string) {
+  return method === 'GET' && /\/chats\?archived=(true|false)$/.test(requestUrl)
+}
+
+function isArchivedListRequest(requestUrl: string) {
+  return requestUrl.endsWith('/chats?archived=true')
+}
+
 vi.mock('next-intl', () => ({
   useLocale: () => 'es',
   useTranslations: () => (key: string) => key,
@@ -68,11 +77,24 @@ vi.mock('./chat-shell', () => ({
 
 vi.mock('./chat-sidebar', () => ({
   ChatSidebar: (props: {
-    chats: Array<{ id: string; title: string }>
+    chats: Array<{
+      archived?: boolean
+      id: string
+      pinned?: boolean
+      title: string
+    }>
     onDeleteChat: (chatId: string) => void
     onRenameChat: (chatId: string, title: string) => void
+    onSetChatArchived: (chatId: string, archived: boolean) => void
+    onSetChatPinned: (chatId: string, pinned: boolean) => void
+    onShowArchivedChange: (showArchived: boolean) => void
+    showArchived: boolean
   }) => (
     <div>
+      <span>{`showArchived-${props.showArchived}`}</span>
+      <button onClick={() => props.onShowArchivedChange(!props.showArchived)}>
+        toggle-archived-view
+      </button>
       {props.chats.map((chat) => (
         <div key={chat.id}>
           <button onClick={() => props.onDeleteChat(chat.id)}>
@@ -80,6 +102,14 @@ vi.mock('./chat-sidebar', () => ({
           </button>
           <button onClick={() => props.onRenameChat(chat.id, 'Vacaciones')}>
             {`rename-${chat.id}`}
+          </button>
+          <button onClick={() => props.onSetChatPinned(chat.id, !chat.pinned)}>
+            {`pin-${chat.id}`}
+          </button>
+          <button
+            onClick={() => props.onSetChatArchived(chat.id, !chat.archived)}
+          >
+            {`archive-${chat.id}`}
           </button>
           <span>{`title-${chat.id}-${chat.title}`}</span>
         </div>
@@ -217,7 +247,7 @@ describe('ChatPage', () => {
           return jsonResponse(sourcesStatusChatReady)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse([])
         }
 
@@ -353,7 +383,7 @@ describe('ChatPage', () => {
           return jsonResponse(sourcesStatusChatReady)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse([
             {
               created_at: '2026-04-14T18:30:00.000Z',
@@ -524,7 +554,7 @@ describe('ChatPage', () => {
           return jsonResponse(sourcesStatusChatReady)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse([])
         }
 
@@ -676,7 +706,7 @@ describe('ChatPage', () => {
           return jsonResponse(sourcesStatusSetupInProgress)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse([])
         }
 
@@ -729,7 +759,7 @@ describe('ChatPage', () => {
           return jsonResponse(sourcesStatusAwaitingFirstBuild)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse([])
         }
 
@@ -783,7 +813,7 @@ describe('ChatPage', () => {
           return jsonResponse(sourcesStatusChatReadyWhileIndexing)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse([])
         }
 
@@ -832,7 +862,7 @@ describe('ChatPage', () => {
           return jsonResponse(statusResponse)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse([])
         }
 
@@ -937,7 +967,7 @@ describe('ChatPage', () => {
           return jsonResponse(sourcesStatusChatReady)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse(chats)
         }
 
@@ -1006,7 +1036,7 @@ describe('ChatPage', () => {
           return jsonResponse(sourcesStatusChatReady)
         }
 
-        if (requestUrl.endsWith('/chats') && method === 'GET') {
+        if (isChatsListRequest(requestUrl, method)) {
           return jsonResponse([chat])
         }
 
@@ -1055,5 +1085,230 @@ describe('ChatPage', () => {
       ([, init]) => init?.method === 'PATCH',
     )
     expect(renameCall?.[1]?.body).toBe(JSON.stringify({ title: 'Vacaciones' }))
+  })
+
+  it('pins a conversation through the chat endpoint', async () => {
+    let chat = {
+      archived: false,
+      created_at: '2026-04-14T18:30:00.000Z',
+      id: 'chat-1',
+      last_message_preview: 'Mensaje 1',
+      pinned: false,
+      title: 'Chat empresarial',
+      updated_at: '2026-04-14T18:32:00.000Z',
+    }
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse(isArchivedListRequest(requestUrl) ? [] : [chat])
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse({ ...chat, messages: [] })
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'PATCH') {
+          const { pinned } = JSON.parse(init?.body as string) as {
+            pinned: boolean
+          }
+          chat = { ...chat, pinned }
+          return jsonResponse({ ...chat, messages: [] })
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      },
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByText('pin-chat-1')
+
+    fireEvent.click(screen.getByText('pin-chat-1'))
+
+    await waitFor(() => {
+      const pinCall = fetchMock.mock.calls.find(
+        ([, init]) => init?.method === 'PATCH',
+      )
+      expect(pinCall?.[1]?.body).toBe(JSON.stringify({ pinned: true }))
+    })
+  })
+
+  it('hands the pane to another conversation when the open one is archived', async () => {
+    const chats = [
+      {
+        archived: false,
+        created_at: '2026-04-14T18:30:00.000Z',
+        id: 'chat-1',
+        last_message_preview: 'Mensaje 1',
+        pinned: false,
+        title: 'Chat empresarial',
+        updated_at: '2026-04-14T18:32:00.000Z',
+      },
+      {
+        archived: false,
+        created_at: '2026-04-14T17:30:00.000Z',
+        id: 'chat-2',
+        last_message_preview: null,
+        pinned: false,
+        title: 'Otro chat',
+        updated_at: '2026-04-14T17:32:00.000Z',
+      },
+    ]
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse(isArchivedListRequest(requestUrl) ? [] : chats)
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse({ ...chats[0], messages: [] })
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'PATCH') {
+          return jsonResponse({ ...chats[0], archived: true, messages: [] })
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      },
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const onSelectChat = vi.fn()
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={onSelectChat}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByText('archive-chat-1')
+
+    fireEvent.click(screen.getByText('archive-chat-1'))
+
+    await waitFor(() => {
+      expect(onSelectChat).toHaveBeenCalledWith('chat-2', { replace: true })
+    })
+
+    const archiveCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === 'PATCH',
+    )
+    expect(archiveCall?.[1]?.body).toBe(JSON.stringify({ archived: true }))
+  })
+
+  it('asks the backend for the archived conversations in the archived view', async () => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse(
+            isArchivedListRequest(requestUrl)
+              ? [
+                  {
+                    archived: true,
+                    created_at: '2026-04-14T18:30:00.000Z',
+                    id: 'chat-9',
+                    last_message_preview: null,
+                    pinned: false,
+                    title: 'Chat archivado',
+                    updated_at: '2026-04-14T18:32:00.000Z',
+                  },
+                ]
+              : [],
+          )
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      },
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByText('showArchived-false')
+
+    fireEvent.click(screen.getByText('toggle-archived-view'))
+
+    await screen.findByText('title-chat-9-Chat archivado')
+    expect(screen.getByText('showArchived-true')).toBeTruthy()
   })
 })

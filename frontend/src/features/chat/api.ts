@@ -9,6 +9,8 @@ import type {
   DownloadDocumentInput,
   RenameChatInput,
   SendMessageInput,
+  SetChatArchivedInput,
+  SetChatPinnedInput,
   SendMessageResult,
   SourceLoginInfo,
   SourcesStatus,
@@ -19,7 +21,9 @@ import type {
 export const chatQueryKeys = {
   all: ['chat'] as const,
   detail: (chatId: string) => ['chat', 'detail', chatId] as const,
+  // A prefix over both archive sides, so invalidating it settles them together.
   list: ['chat', 'list'] as const,
+  listFor: (archived: boolean) => ['chat', 'list', archived] as const,
   sources: ['chat', 'sources'] as const,
   vdbUpdate: ['chat', 'vdb-update'] as const,
 }
@@ -100,12 +104,13 @@ export function useAuthorizedChatDownload() {
   }
 }
 
-export function useChatsQuery() {
+export function useChatsQuery(archived = false) {
   const request = useAuthorizedChatRequest()
 
   return useQuery({
-    queryKey: chatQueryKeys.list,
-    queryFn: () => request<ChatSummary[]>('/chats'),
+    queryKey: chatQueryKeys.listFor(archived),
+    queryFn: () =>
+      request<ChatSummary[]>(`/chats?archived=${archived ? 'true' : 'false'}`),
   })
 }
 
@@ -188,8 +193,8 @@ export function useDeleteChatMutation() {
         method: 'DELETE',
       }),
     onSuccess: async (_result, chatId) => {
-      queryClient.setQueryData<ChatSummary[] | undefined>(
-        chatQueryKeys.list,
+      queryClient.setQueriesData<ChatSummary[]>(
+        { queryKey: chatQueryKeys.list },
         (currentChats) =>
           currentChats?.filter((chat) => chat.id !== chatId) ?? currentChats,
       )
@@ -211,8 +216,8 @@ export function useRenameChatMutation() {
       }),
     onSuccess: (chat) => {
       queryClient.setQueryData(chatQueryKeys.detail(chat.id), chat)
-      queryClient.setQueryData<ChatSummary[] | undefined>(
-        chatQueryKeys.list,
+      queryClient.setQueriesData<ChatSummary[]>(
+        { queryKey: chatQueryKeys.list },
         (currentChats) =>
           currentChats?.map((currentChat) =>
             currentChat.id === chat.id
@@ -221,6 +226,43 @@ export function useRenameChatMutation() {
           ) ?? currentChats,
       )
       void queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
+    },
+  })
+}
+
+export function useSetChatPinnedMutation() {
+  const request = useAuthorizedChatRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ chatId, pinned }: SetChatPinnedInput) =>
+      request<ChatDetail>(`/chats/${chatId}`, {
+        body: JSON.stringify({ pinned }),
+        method: 'PATCH',
+      }),
+    onSuccess: async (chat) => {
+      queryClient.setQueryData(chatQueryKeys.detail(chat.id), chat)
+      // The server decides where a pinned chat sits, so refetch rather than
+      // guess the new order here.
+      await queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
+    },
+  })
+}
+
+export function useSetChatArchivedMutation() {
+  const request = useAuthorizedChatRequest()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ archived, chatId }: SetChatArchivedInput) =>
+      request<ChatDetail>(`/chats/${chatId}`, {
+        body: JSON.stringify({ archived }),
+        method: 'PATCH',
+      }),
+    onSuccess: async (chat) => {
+      queryClient.setQueryData(chatQueryKeys.detail(chat.id), chat)
+      // The chat has just crossed between the two lists: both are now stale.
+      await queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
     },
   })
 }

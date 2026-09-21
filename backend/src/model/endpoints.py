@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Annotated, Any
 
 from fastapi import Depends
@@ -168,6 +168,8 @@ class ChatSummaryModel(BaseModel):
     title: str
     created_at: datetime
     updated_at: datetime
+    pinned: bool = False
+    archived: bool = False
     last_message_preview: str | None = None
 
 
@@ -179,8 +181,18 @@ class CreateChatRequestModel(BaseModel):
     title: str | None = None
 
 
-class RenameChatRequestModel(BaseModel):
-    title: str
+class UpdateChatRequestModel(BaseModel):
+    """A partial update: whichever of the three fields the caller sends."""
+
+    title: str | None = None
+    pinned: bool | None = None
+    archived: bool | None = None
+
+    @model_validator(mode="after")
+    def require_a_change(self) -> "UpdateChatRequestModel":
+        if self.title is None and self.pinned is None and self.archived is None:
+            raise ValueError("Send at least one of title, pinned or archived")
+        return self
 
 
 class SendMessageRequestModel(BaseModel):

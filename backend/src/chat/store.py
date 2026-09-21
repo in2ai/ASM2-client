@@ -80,13 +80,23 @@ class PostgresChatStore:
         finally:
             self._pool.putconn(conn)
 
-    def list_chats(self, user_id: str) -> list[dict[str, Any]]:
+    def list_chats(
+        self, user_id: str, *, archived: bool = False
+    ) -> list[dict[str, Any]]:
+        """One side of the archive at a time, pinned chats first.
+
+        The sidebar shows the active chats by default and the archived ones
+        only when asked for them, so the two never share a list.
+        """
+
         query = """
             SELECT
                 chats.id,
                 chats.title,
                 chats.created_at,
                 chats.updated_at,
+                chats.pinned,
+                chats.archived,
                 (
                     SELECT messages.content
                     FROM messages
@@ -95,11 +105,11 @@ class PostgresChatStore:
                     LIMIT 1
                 ) AS last_message_preview
             FROM chats
-            WHERE chats.user_id = %s
-            ORDER BY chats.updated_at DESC, chats.created_at DESC
+            WHERE chats.user_id = %s AND chats.archived = %s
+            ORDER BY chats.pinned DESC, chats.updated_at DESC, chats.created_at DESC
         """
         with self._cursor() as cur:
-            cur.execute(query, (user_id,))
+            cur.execute(query, (user_id, archived))
             rows = cur.fetchall()
         return [self._row_to_chat_summary(row) for row in rows]
 
@@ -127,6 +137,8 @@ class PostgresChatStore:
             "title": resolved_title,
             "created_at": timestamp,
             "updated_at": timestamp,
+            "pinned": False,
+            "archived": False,
             "last_message_preview": None,
             "messages": [],
         }
@@ -151,6 +163,8 @@ class PostgresChatStore:
                     chats.title,
                     chats.created_at,
                     chats.updated_at,
+                    chats.pinned,
+                    chats.archived,
                     (
                         SELECT messages.content
                         FROM messages
@@ -241,6 +255,65 @@ class PostgresChatStore:
             cur.execute(
                 "UPDATE chats SET title = %s WHERE id = %s AND user_id = %s",
                 (resolved_title, chat_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise ChatNotFoundError(chat_id=chat_id)
+
+        chat = self.get_chat(user_id, chat_id)
+        if chat is None:
+            raise ChatNotFoundError(chat_id=chat_id)
+        return chat
+
+    def set_chat_pinned(
+        self, user_id: str, chat_id: str, pinned: bool
+    ) -> dict[str, Any]:
+        """The chat with its pin set, scoped to its owner.
+
+        Like a rename, pinning leaves ``updated_at`` alone: it reorders the
+        sidebar by itself and should not also pass for conversation activity.
+        """
+
+        return self._update_chat_flags(user_id, chat_id, pinned=pinned)
+
+    def set_chat_archived(
+        self, user_id: str, chat_id: str, archived: bool
+    ) -> dict[str, Any]:
+        """The chat moved into or out of the archive, scoped to its owner.
+
+        Archiving drops the pin: a pin promotes a chat to the top of the
+        active list, which an archived chat has just left.
+        """
+
+        if archived:
+            return self._update_chat_flags(
+                user_id, chat_id, archived=True, pinned=False
+            )
+
+        return self._update_chat_flags(user_id, chat_id, archived=False)
+
+    def _update_chat_flags(
+        self,
+        user_id: str,
+        chat_id: str,
+        *,
+        pinned: bool | None = None,
+        archived: bool | None = None,
+    ) -> dict[str, Any]:
+        assignments = []
+        values: list[Any] = []
+
+        if pinned is not None:
+            assignments.append("pinned = %s")
+            values.append(pinned)
+        if archived is not None:
+            assignments.append("archived = %s")
+            values.append(archived)
+
+        with self._cursor() as cur:
+            cur.execute(
+                f"UPDATE chats SET {', '.join(assignments)} "
+                "WHERE id = %s AND user_id = %s",
+                (*values, chat_id, user_id),
             )
             if cur.rowcount == 0:
                 raise ChatNotFoundError(chat_id=chat_id)
@@ -345,6 +418,8 @@ class PostgresChatStore:
             "title": row["title"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
+            "pinned": row["pinned"],
+            "archived": row["archived"],
             "last_message_preview": row["last_message_preview"],
         }
 

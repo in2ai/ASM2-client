@@ -36,6 +36,8 @@ export interface ChatSummary {
   title: string
   created_at: string
   updated_at: string
+  pinned: boolean
+  archived: boolean
   last_message_preview: string | null
 }
 
@@ -50,6 +52,16 @@ export interface CreateChatInput {
 export interface RenameChatInput {
   chatId: string
   title: string
+}
+
+export interface SetChatPinnedInput {
+  chatId: string
+  pinned: boolean
+}
+
+export interface SetChatArchivedInput {
+  archived: boolean
+  chatId: string
 }
 
 export interface SendMessageInput {

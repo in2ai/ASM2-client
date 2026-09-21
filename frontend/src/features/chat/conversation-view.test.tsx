@@ -73,10 +73,12 @@ function createMessage(
 
 function createChat(messages: ChatMessage[]): ChatDetail {
   return {
+    archived: false,
     created_at: defaultTimestamp,
     id: 'chat-1',
     last_message_preview: null,
     messages,
+    pinned: false,
     title: 'Markdown chat',
     updated_at: defaultTimestamp,
   }

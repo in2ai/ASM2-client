@@ -7,8 +7,14 @@ CREATE TABLE IF NOT EXISTS chats (
     user_id TEXT NOT NULL,
     title TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL
+    updated_at TIMESTAMPTZ NOT NULL,
+    pinned BOOLEAN NOT NULL DEFAULT FALSE,
+    archived BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+-- Databases created before pinning and archiving existed.
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
@@ -35,6 +41,9 @@ CREATE TABLE IF NOT EXISTS message_documents (
 
 CREATE INDEX IF NOT EXISTS idx_chats_user_updated
     ON chats(user_id, updated_at DESC);
+-- Covers the sidebar listing: one archive side at a time, pinned chats first.
+CREATE INDEX IF NOT EXISTS idx_chats_user_archived_pinned_updated
+    ON chats(user_id, archived, pinned DESC, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat_created
     ON messages(chat_id, created_at ASC);
 

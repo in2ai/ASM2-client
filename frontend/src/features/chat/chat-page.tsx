@@ -15,6 +15,8 @@ import {
   useDownloadDocumentMutation,
   useRenameChatMutation,
   useSendMessageMutation,
+  useSetChatArchivedMutation,
+  useSetChatPinnedMutation,
   useSourcesStatusQuery,
 } from './api'
 import { getMessageDocument } from './chat-document'
@@ -58,23 +60,27 @@ export function ChatPage({
   const [downloadingDocumentIds, setDownloadingDocumentIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+  const [showArchived, setShowArchived] = useState(false)
 
   const queryClient = useQueryClient()
-  const chatsQuery = useChatsQuery()
+  const chatsQuery = useChatsQuery(showArchived)
   const sourcesQuery = useSourcesStatusQuery()
   const effectiveChatId = selectedChatId ?? chatsQuery.data?.[0]?.id
   const chatQuery = useChatQuery(effectiveChatId)
   const createChatMutation = useCreateChatMutation()
   const deleteChatMutation = useDeleteChatMutation()
   const renameChatMutation = useRenameChatMutation()
+  const setChatPinnedMutation = useSetChatPinnedMutation()
+  const setChatArchivedMutation = useSetChatArchivedMutation()
   const sendMessageMutation = useSendMessageMutation()
   const downloadDocumentMutation = useDownloadDocumentMutation()
 
   useEffect(() => {
-    if (!selectedChatId && chatsQuery.data?.[0]?.id) {
+    // The archived list is a place to tidy up, not a conversation to fall into.
+    if (!selectedChatId && !showArchived && chatsQuery.data?.[0]?.id) {
       onSelectChat(chatsQuery.data[0].id, { replace: true })
     }
-  }, [chatsQuery.data, onSelectChat, selectedChatId])
+  }, [chatsQuery.data, onSelectChat, selectedChatId, showArchived])
 
   const activeChat = useMemo(() => {
     if (chatQuery.data) {
@@ -155,6 +161,13 @@ export function ChatPage({
     emptyPrimaryActionLabel = undefined
   }
 
+  let updatingChatId: string | undefined
+  if (setChatPinnedMutation.isPending) {
+    updatingChatId = setChatPinnedMutation.variables?.chatId
+  } else if (setChatArchivedMutation.isPending) {
+    updatingChatId = setChatArchivedMutation.variables?.chatId
+  }
+
   const handleCreateChat = async () => {
     setComposerError(undefined)
     const chat = await createChatMutation.mutateAsync(undefined)
@@ -176,6 +189,41 @@ export function ChatPage({
       }
     } catch (error) {
       setComposerError(toErrorMessage(error, t('errors.deleteFailed')))
+    }
+  }
+
+  const handleSetChatPinned = async (chatId: string, pinned: boolean) => {
+    setComposerError(undefined)
+
+    try {
+      await setChatPinnedMutation.mutateAsync({ chatId, pinned })
+    } catch (error) {
+      setComposerError(toErrorMessage(error, t('errors.pinFailed')))
+    }
+  }
+
+  const handleSetChatArchived = async (chatId: string, archived: boolean) => {
+    setComposerError(undefined)
+    // Archiving takes the chat out of the list on screen, so the pane it was
+    // filling has to move on to a chat that is still there.
+    const nextChatId =
+      effectiveChatId === chatId
+        ? chatsQuery.data?.find((chat) => chat.id !== chatId)?.id
+        : undefined
+
+    try {
+      await setChatArchivedMutation.mutateAsync({ archived, chatId })
+
+      if (effectiveChatId === chatId) {
+        onSelectChat(nextChatId, { replace: true })
+      }
+    } catch (error) {
+      setComposerError(
+        toErrorMessage(
+          error,
+          archived ? t('errors.archiveFailed') : t('errors.unarchiveFailed'),
+        ),
+      )
     }
   }
 
@@ -298,6 +346,11 @@ export function ChatPage({
       sidebar={
         <ChatSidebar
           activeChatId={effectiveChatId}
+          archiveChatLabel={t('sidebar.archiveChat')}
+          archivedEmptyDescription={t('sidebar.archivedEmptyDescription')}
+          archivedEmptyTitle={t('sidebar.archivedEmptyTitle')}
+          archivedTitle={t('sidebar.archivedTitle')}
+          backToChatsLabel={t('sidebar.backToChats')}
           chats={chatsQuery.data ?? []}
           confirmDeleteActionLabel={t('sidebar.confirmDeleteAction')}
           confirmDeleteCancelLabel={t('sidebar.confirmDeleteCancel')}
@@ -319,6 +372,16 @@ export function ChatPage({
           onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
           onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
           onSelectChat={(chatId) => onSelectChat(chatId)}
+          onSetChatArchived={(chatId, archived) =>
+            void handleSetChatArchived(chatId, archived)
+          }
+          onSetChatPinned={(chatId, pinned) =>
+            void handleSetChatPinned(chatId, pinned)
+          }
+          onShowArchivedChange={setShowArchived}
+          pinChatLabel={t('sidebar.pinChat')}
+          pinnedSectionLabel={t('sidebar.pinnedSection')}
+          recentSectionLabel={t('sidebar.recentSection')}
           renameCancelLabel={t('sidebar.renameCancel')}
           renameChatLabel={t('sidebar.renameChat')}
           renameDescription={t('sidebar.renameDescription')}
@@ -331,6 +394,11 @@ export function ChatPage({
               : undefined
           }
           rowActionsLabel={t('sidebar.rowActions')}
+          showArchived={showArchived}
+          unarchiveChatLabel={t('sidebar.unarchiveChat')}
+          unpinChatLabel={t('sidebar.unpinChat')}
+          updatingChatId={updatingChatId}
+          viewArchivedLabel={t('sidebar.viewArchived')}
         />
       }
     >

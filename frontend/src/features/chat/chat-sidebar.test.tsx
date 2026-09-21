@@ -116,25 +116,34 @@ vi.mock('@/components/ui/scroll-area', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  Archive: () => null,
+  ArchiveRestore: () => null,
+  ArrowLeft: () => null,
   MessageSquareText: () => null,
   MoreHorizontal: () => null,
   Pencil: () => null,
+  Pin: () => null,
+  PinOff: () => null,
   Plus: () => null,
   Trash2: () => null,
 }))
 
 const chats: ChatSummary[] = [
   {
+    archived: false,
     created_at: '2026-05-01T12:00:00.000Z',
     id: 'chat-1',
     last_message_preview: 'Latest answer',
+    pinned: false,
     title: 'Project policy',
     updated_at: '2026-05-02T12:00:00.000Z',
   },
   {
+    archived: false,
     created_at: '2026-05-01T11:00:00.000Z',
     id: 'chat-2',
     last_message_preview: null,
+    pinned: false,
     title: '',
     updated_at: '2026-05-01T11:00:00.000Z',
   },
@@ -146,6 +155,11 @@ function renderSidebar(
   return render(
     <ChatSidebar
       activeChatId="chat-1"
+      archiveChatLabel="Archive conversation"
+      archivedEmptyDescription="Archived conversations are kept here."
+      archivedEmptyTitle="Nothing archived"
+      archivedTitle="Archived"
+      backToChatsLabel="Back to conversations"
       chats={chats}
       confirmDeleteActionLabel="Delete"
       confirmDeleteCancelLabel="Cancel"
@@ -163,6 +177,12 @@ function renderSidebar(
       onDeleteChat={() => undefined}
       onRenameChat={() => undefined}
       onSelectChat={() => undefined}
+      onSetChatArchived={() => undefined}
+      onSetChatPinned={() => undefined}
+      onShowArchivedChange={() => undefined}
+      pinChatLabel="Pin conversation"
+      pinnedSectionLabel="Pinned"
+      recentSectionLabel="Recent"
       renameCancelLabel="Cancel"
       renameChatLabel="Rename conversation"
       renameDescription="Pick a name you will recognise."
@@ -171,6 +191,11 @@ function renderSidebar(
       renameTitle="Rename this conversation"
       renamingChatId={undefined}
       rowActionsLabel="Conversation actions"
+      showArchived={false}
+      unarchiveChatLabel="Unarchive conversation"
+      unpinChatLabel="Unpin conversation"
+      updatingChatId={undefined}
+      viewArchivedLabel="Archived"
       {...overrides}
     />,
   )
@@ -229,6 +254,97 @@ describe('ChatSidebar', () => {
     await waitFor(() => {
       expect(onRenameChat).toHaveBeenCalledWith('chat-1', 'Holiday policy')
     })
+  })
+
+  it('pins an unpinned conversation and unpins a pinned one', () => {
+    const onSetChatPinned = vi.fn()
+
+    renderSidebar({ onSetChatPinned })
+
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin conversation' })[0],
+    )
+    expect(onSetChatPinned).toHaveBeenCalledWith('chat-1', true)
+
+    cleanup()
+
+    renderSidebar({
+      chats: [{ ...chats[0], pinned: true }],
+      onSetChatPinned,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unpin conversation' }))
+    expect(onSetChatPinned).toHaveBeenCalledWith('chat-1', false)
+  })
+
+  it('groups pinned conversations above the rest', () => {
+    renderSidebar({ chats: [{ ...chats[0], pinned: true }, chats[1]] })
+
+    expect(screen.getByText('Pinned')).toBeTruthy()
+    expect(screen.getByText('Recent')).toBeTruthy()
+  })
+
+  it('leaves out the section headings when nothing is pinned', () => {
+    renderSidebar()
+
+    expect(screen.queryByText('Pinned')).toBeNull()
+    expect(screen.queryByText('Recent')).toBeNull()
+  })
+
+  it('archives a conversation from the active list', () => {
+    const onSetChatArchived = vi.fn()
+
+    renderSidebar({ onSetChatArchived })
+
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Archive conversation' })[0],
+    )
+
+    expect(onSetChatArchived).toHaveBeenCalledWith('chat-1', true)
+  })
+
+  it('switches to the archived view', () => {
+    const onShowArchivedChange = vi.fn()
+
+    renderSidebar({ onShowArchivedChange })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archived' }))
+
+    expect(onShowArchivedChange).toHaveBeenCalledWith(true)
+  })
+
+  it('unarchives from the archived view and offers no pin there', () => {
+    const onSetChatArchived = vi.fn()
+
+    renderSidebar({
+      chats: [{ ...chats[0], archived: true }],
+      onSetChatArchived,
+      showArchived: true,
+    })
+
+    expect(
+      screen.queryByRole('button', { name: 'Pin conversation' }),
+    ).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Unarchive conversation' }),
+    )
+
+    expect(onSetChatArchived).toHaveBeenCalledWith('chat-1', false)
+  })
+
+  it('returns to the active list from the archived view', () => {
+    const onShowArchivedChange = vi.fn()
+
+    renderSidebar({ chats: [], onShowArchivedChange, showArchived: true })
+
+    expect(screen.getByText('Nothing archived')).toBeTruthy()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to conversations' }),
+    )
+
+    expect(onShowArchivedChange).toHaveBeenCalledWith(false)
   })
 
   it('keeps the rename disabled while the title is blank', () => {
