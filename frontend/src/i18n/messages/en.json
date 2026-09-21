@@ -337,6 +337,23 @@
       "downloadDocument": "Download",
       "downloadingDocument": "Downloading..."
     },
+    "progress": {
+      "title": "Working on it",
+      "elapsed": "{seconds}s",
+      "understanding": "Reading your question",
+      "thinking": "Working out how to answer",
+      "searching": "Searching your documents",
+      "searchingCount": "Searching your documents ({count} searches)",
+      "reading": "Going through the search results",
+      "expanding": "Taking a closer look at a document",
+      "expandingTitle": "Taking a closer look at {title}",
+      "refining": "Digging deeper for the missing details",
+      "refiningCount": "Digging deeper ({count} more searches)",
+      "writingDocument": "Putting your document together",
+      "writingDocumentFormat": "Putting your {format} together",
+      "composing": "Writing the answer",
+      "summarizing": "Tidying up the conversation history"
+    },
     "errors": {
       "title": "Unable to load chat",
       "loadFailed": "The chat workspace could not be loaded. Please try again.",
@@ -346,7 +363,8 @@
       "downloadFailed": "The document could not be downloaded. Please try again.",
       "pinFailed": "The conversation could not be pinned. Please try again.",
       "archiveFailed": "The conversation could not be archived. Please try again.",
-      "unarchiveFailed": "The conversation could not be unarchived. Please try again."
+      "unarchiveFailed": "The conversation could not be unarchived. Please try again.",
+      "turnInterrupted": "The connection dropped while the answer was being written. Reloading the conversation."
     },
     "sources": {
       "openPanel": "Sources",
@@ -467,14 +485,14 @@
     "unavailable": "Status unavailable",
     "lastKnownState": "Last known state",
     "lastKnownDescription": "Last reported status: {status}. This information may be out of date.",
-    "open": "Open Qdrant indexing status",
-    "openRunning": "Qdrant indexing in progress: {status}",
-    "title": "Qdrant indexing",
+    "open": "Open document indexing status",
+    "openRunning": "Document indexing in progress: {status}",
+    "title": "Document indexing",
     "description": "State of the job that keeps the vector database up to date.",
     "loading": "Loading indexing status…",
     "loadFailed": "The indexing status could not be checked.",
     "inProgress": "Working",
-    "runningDescription": "Qdrant is being updated right now.",
+    "runningDescription": "The database is being updated right now.",
     "indeterminateLabel": "Indexing in progress without a file count",
     "barLabel": "Files indexed in the current source",
     "files": "{processed} of {total} files",
@@ -493,7 +511,7 @@
     "never": "—",
     "status": {
       "idle": "No indexing run yet",
-      "running": "Updating Qdrant",
+      "running": "Updating the database",
       "completed": "Last run completed",
       "failed": "Last run failed",
       "blocked": "Last run stopped for safety",

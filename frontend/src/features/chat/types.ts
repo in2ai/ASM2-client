@@ -64,9 +64,37 @@ export interface SetChatArchivedInput {
   chatId: string
 }
 
+/**
+ * A step the backend reports while it works on an answer.
+ *
+ * The backend sends the phase and its numbers, never wording, so the step is
+ * shown in the language the user is reading the app in.
+ */
+export type ChatProgressPhase =
+  | 'understanding'
+  | 'thinking'
+  | 'searching'
+  | 'reading'
+  | 'expanding'
+  | 'refining'
+  | 'writing_document'
+  | 'composing'
+  | 'summarizing'
+
+export interface ChatProgressEvent {
+  phase: ChatProgressPhase
+  /** Searches started in this round, for `searching` and `refining`. */
+  searches?: number
+  /** The document being looked at in full, for `expanding`. */
+  title?: string
+  /** The document format being written, for `writing_document`. */
+  format?: string
+}
+
 export interface SendMessageInput {
   chatId: string
   content: string
+  onProgress?: (event: ChatProgressEvent) => void
 }
 
 export interface DownloadDocumentInput {

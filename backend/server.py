@@ -4,12 +4,14 @@ import os
 import json
 from urllib.parse import quote_plus
 
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from psycopg_pool import AsyncConnectionPool
 
 from graph.model import get_llm_with_tools
@@ -759,10 +761,24 @@ async def delete_chat(auth: AuthenticatedAuth, chat_id: str):
         raise HTTPException(status_code=404, detail="Chat not found") from exc
 
 
-async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, Any]:
+# ---------------------------------
+# Chat turns
+# ---------------------------------
+
+# A quiet connection is still a live one: proxies are told so this often.
+SSE_KEEPALIVE_SECONDS = 15
+
+# Turns outlive the request that started them, so a reader who hangs up mid-turn
+# still gets the answer in the conversation. The set keeps them from being
+# garbage collected while they run.
+_running_turns: set[asyncio.Task] = set()
+
+
+def _ensure_ready_to_chat(auth: AuthInfo) -> dict[str, DataSource]:
+    """The sources this turn may search, or a 409 saying why there are none."""
+
     pg_pool = app.state.pg_pool
     sources_status = build_sources_status(pg_pool, auth.sub)
-    sources = get_selected_authenticated_sources(pg_pool, auth.sub)
 
     if not sources_status["selected_sources"]:
         raise HTTPException(
@@ -776,6 +792,17 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
             detail="Chat is unavailable until the initial source indexing finishes.",
         )
 
+    return get_selected_authenticated_sources(pg_pool, auth.sub)
+
+
+async def _run_chat_turn(
+    auth: AuthInfo,
+    chat_id: str,
+    query: str,
+    sources: dict[str, DataSource],
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    pg_pool = app.state.pg_pool
     metrics_actor = metrics_actor_from_auth(auth.sub, auth.role)
     register_user_activity(pg_pool, actor=metrics_actor)
 
@@ -808,16 +835,27 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
         pg_pool, Metrics.LLM_RESPONSE_TIME.value, actor=metrics_actor
     ):
         try:
-            result = await app.state.graph.ainvoke(
-                {"messages": [HumanMessage(content=query)]}, config
-            )
+            state: dict[str, Any] = {}
+
+            # "values" carries the graph state, "custom" the progress the nodes
+            # and tools report as they go.
+            async for mode, chunk in app.state.graph.astream(
+                {"messages": [HumanMessage(content=query)]},
+                config,
+                stream_mode=["values", "custom"],
+            ):
+                if mode == "values":
+                    state = chunk
+                elif on_progress is not None:
+                    on_progress(chunk)
+
         except Exception:
             logging.exception("Graph invocation failed")
             raise HTTPException(
                 status_code=500, detail="Internal error processing your request"
             )
 
-    messages = result.get("messages") or []
+    messages = state.get("messages") or []
     if not messages:
         raise HTTPException(status_code=500, detail="No response generated")
 
@@ -827,10 +865,62 @@ async def _run_chat_turn(auth: AuthInfo, chat_id: str, query: str) -> dict[str, 
     record_token_usage_metrics(pg_pool, messages, metrics_actor)
     return {
         "answer": message_text(messages[-1]),
-        "detected_lang": str(result.get("detected_lang", "es")),
+        "detected_lang": str(state.get("detected_lang", "es")),
         "sources": available_sources,
         "document": document,
     }
+
+
+def _append_user_message(
+    chat_store: PostgresChatStore, user_id: str, chat_id: str, content: str
+) -> dict[str, Any]:
+    try:
+        return chat_store.append_message(
+            user_id,
+            chat_id,
+            "user",
+            content,
+            status="sent",
+        )
+    except ChatNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Chat not found") from exc
+
+
+def _store_chat_turn(
+    chat_store: PostgresChatStore,
+    user_id: str,
+    chat_id: str,
+    user_message: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    """Save the answer and return the finished turn."""
+
+    assistant_message = chat_store.append_message(
+        user_id,
+        chat_id,
+        "assistant",
+        result["answer"],
+        status="complete",
+        metadata={
+            "detected_lang": result["detected_lang"],
+            "sources": result["sources"],
+        },
+        document=to_stored_document(result.get("document")),
+    )
+    chat = _get_chat_or_404(chat_store, user_id, chat_id)
+
+    return {
+        "chat": chat,
+        "user_message": user_message,
+        "assistant_message": assistant_message,
+        "detected_lang": result["detected_lang"],
+    }
+
+
+def _sse_event(event: str, data: dict[str, Any]) -> str:
+    """One server-sent event, ready to go on the wire."""
+
+    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
 
 @app.post("/chats/{chat_id}/messages", response_model=SendMessageResultModel)
@@ -845,40 +935,97 @@ async def send_chat_message(
 
     chat_store: PostgresChatStore = app.state.tsdb_chat_store
     _get_chat_or_404(chat_store, auth.sub, chat_id)
+    sources = _ensure_ready_to_chat(auth)
 
-    try:
-        user_message = chat_store.append_message(
-            auth.sub,
-            chat_id,
-            "user",
-            content,
-            status="sent",
-        )
-    except ChatNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Chat not found") from exc
+    user_message = _append_user_message(chat_store, auth.sub, chat_id, content)
+    result = await _run_chat_turn(auth, chat_id, content, sources)
 
-    result = await _run_chat_turn(auth, chat_id, content)
+    return _store_chat_turn(chat_store, auth.sub, chat_id, user_message, result)
 
-    assistant_message = chat_store.append_message(
-        auth.sub,
-        chat_id,
-        "assistant",
-        result["answer"],
-        status="complete",
-        metadata={
-            "detected_lang": result["detected_lang"],
-            "sources": result["sources"],
+
+@app.post("/chats/{chat_id}/messages/stream")
+async def stream_chat_message(
+    auth: AuthenticatedAuth,
+    chat_id: str,
+    payload: SendMessageRequestModel,
+):
+    """The same turn as POST /chats/{chat_id}/messages, told as it happens.
+
+    The answer is not streamed: it arrives whole in a final `result` event,
+    identical to what the plain endpoint returns. What comes before it are
+    `progress` events describing the step the backend is on, so a turn that
+    takes a minute does not look like a stalled spinner.
+    """
+
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="content must not be empty")
+
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
+    _get_chat_or_404(chat_store, auth.sub, chat_id)
+    sources = _ensure_ready_to_chat(auth)
+
+    user_message = _append_user_message(chat_store, auth.sub, chat_id, content)
+    events: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
+
+    async def run_turn() -> None:
+        try:
+            result = await _run_chat_turn(
+                auth,
+                chat_id,
+                content,
+                sources,
+                on_progress=lambda event: events.put_nowait(("progress", event)),
+            )
+            turn = _store_chat_turn(
+                chat_store, auth.sub, chat_id, user_message, result
+            )
+            # Serialized through the response model, so a turn reads the
+            # same here as it does from the plain endpoint.
+            finished = SendMessageResultModel.model_validate(turn)
+            events.put_nowait(("result", finished.model_dump(mode="json")))
+
+        except HTTPException as exc:
+            events.put_nowait(("error", {"detail": exc.detail}))
+
+        except Exception:
+            logging.exception("Chat turn failed")
+            events.put_nowait(
+                ("error", {"detail": "Internal error processing your request"})
+            )
+
+        finally:
+            events.put_nowait(None)
+
+    turn_task = asyncio.create_task(run_turn())
+    _running_turns.add(turn_task)
+    turn_task.add_done_callback(_running_turns.discard)
+
+    async def event_stream():
+        while True:
+            try:
+                event = await asyncio.wait_for(events.get(), SSE_KEEPALIVE_SECONDS)
+
+            except TimeoutError:
+                yield ": keep-alive\n\n"
+                continue
+
+            if event is None:
+                break
+
+            name, data = event
+            yield _sse_event(name, data)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            # Tells proxies to pass each event through instead of buffering it.
+            "X-Accel-Buffering": "no",
         },
-        document=to_stored_document(result.get("document")),
     )
-    chat = _get_chat_or_404(chat_store, auth.sub, chat_id)
 
-    return {
-        "chat": chat,
-        "user_message": user_message,
-        "assistant_message": assistant_message,
-        "detected_lang": result["detected_lang"],
-    }
 
 # ---------------------------------
 # Metrics endpoints

@@ -1,6 +1,10 @@
 :80 {
   root * /srv
-  encode zstd gzip
+
+  # Chat progress is reported event by event, and a compressor holding the
+  # first small writes back until its buffer fills would undo that.
+  @compressible not path /api/chats/*/messages/stream
+  encode @compressible zstd gzip
 
   handle_path /api/* {
     reverse_proxy backend:8001

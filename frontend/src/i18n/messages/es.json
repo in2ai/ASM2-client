@@ -337,6 +337,23 @@
       "downloadDocument": "Descargar",
       "downloadingDocument": "Descargando..."
     },
+    "progress": {
+      "title": "Trabajando en ello",
+      "elapsed": "{seconds}s",
+      "understanding": "Leyendo tu pregunta",
+      "thinking": "Decidiendo cómo responder",
+      "searching": "Buscando en tus documentos",
+      "searchingCount": "Buscando en tus documentos ({count} búsquedas)",
+      "reading": "Revisando los resultados de la búsqueda",
+      "expanding": "Mirando un documento con más detalle",
+      "expandingTitle": "Mirando con más detalle {title}",
+      "refining": "Profundizando en lo que falta",
+      "refiningCount": "Profundizando ({count} búsquedas más)",
+      "writingDocument": "Preparando tu documento",
+      "writingDocumentFormat": "Preparando tu {format}",
+      "composing": "Redactando la respuesta",
+      "summarizing": "Resumiendo la conversación"
+    },
     "errors": {
       "title": "No se pudo cargar el chat",
       "loadFailed": "No se pudo cargar el espacio de chat. Inténtalo de nuevo.",
@@ -346,7 +363,8 @@
       "downloadFailed": "No se pudo descargar el documento. Inténtalo de nuevo.",
       "pinFailed": "No se pudo fijar la conversación. Inténtalo de nuevo.",
       "archiveFailed": "No se pudo archivar la conversación. Inténtalo de nuevo.",
-      "unarchiveFailed": "No se pudo desarchivar la conversación. Inténtalo de nuevo."
+      "unarchiveFailed": "No se pudo desarchivar la conversación. Inténtalo de nuevo.",
+      "turnInterrupted": "Se perdió la conexión mientras se escribía la respuesta. Recargando la conversación."
     },
     "sources": {
       "openPanel": "Fuentes",
@@ -467,14 +485,14 @@
     "unavailable": "Estado no disponible",
     "lastKnownState": "Último estado conocido",
     "lastKnownDescription": "Último estado comunicado: {status}. Esta información puede estar desactualizada.",
-    "open": "Abrir el estado del indexado de Qdrant",
-    "openRunning": "Indexado de Qdrant en curso: {status}",
-    "title": "Indexado de Qdrant",
+    "open": "Abrir el estado del indexado de documentos",
+    "openRunning": "Indexado de documentos en curso: {status}",
+    "title": "Indexado de documentos",
     "description": "Estado del trabajo que mantiene actualizada la base de datos vectorial.",
     "loading": "Cargando el estado del indexado…",
     "loadFailed": "No se ha podido consultar el estado del indexado.",
     "inProgress": "En curso",
-    "runningDescription": "Qdrant se está actualizando ahora mismo.",
+    "runningDescription": "la base de datos se está actualizando ahora mismo.",
     "indeterminateLabel": "Indexado en curso sin recuento de ficheros",
     "barLabel": "Ficheros indexados en la fuente actual",
     "files": "{processed} de {total} ficheros",
@@ -493,7 +511,7 @@
     "never": "—",
     "status": {
       "idle": "Todavía no se ha ejecutado el indexado",
-      "running": "Actualizando Qdrant",
+      "running": "Actualizando la base de datos",
       "completed": "Última ejecución completada",
       "failed": "La última ejecución falló",
       "blocked": "La última ejecución se detuvo por seguridad",

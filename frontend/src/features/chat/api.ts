@@ -2,6 +2,7 @@ import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 import { useLogto } from '@logto/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { saveBlobAsFile } from './chat-document'
+import { readChatTurn } from './chat-stream'
 import type {
   ChatDetail,
   ChatSummary,
@@ -11,7 +12,6 @@ import type {
   SendMessageInput,
   SetChatArchivedInput,
   SetChatPinnedInput,
-  SendMessageResult,
   SourceLoginInfo,
   SourcesStatus,
   StartVdbUpdateResult,
@@ -267,15 +267,28 @@ export function useSetChatArchivedMutation() {
   })
 }
 
+/**
+ * Sends a message and follows the turn until the answer is ready.
+ *
+ * The backend reports what it is working on as it goes, so `onProgress` hears
+ * about every step; the answer is not streamed, and arrives in one piece.
+ */
 export function useSendMessageMutation() {
-  const request = useAuthorizedChatRequest()
+  const request = useAuthorizedChatFetch()
 
   return useMutation({
-    mutationFn: ({ chatId, content }: SendMessageInput) =>
-      request<SendMessageResult>(`/chats/${chatId}/messages`, {
+    mutationFn: async ({ chatId, content, onProgress }: SendMessageInput) => {
+      const response = await request(`/chats/${chatId}/messages/stream`, {
         body: JSON.stringify({ content }),
+        headers: {
+          Accept: 'text/event-stream',
+          'Content-Type': 'application/json',
+        },
         method: 'POST',
-      }),
+      })
+
+      return readChatTurn(response, onProgress)
+    },
   })
 }
 

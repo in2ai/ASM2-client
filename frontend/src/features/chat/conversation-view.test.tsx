@@ -9,7 +9,7 @@ import type {
 } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { ConversationView } from './conversation-view'
-import type { ChatDetail, ChatMessage } from './types'
+import type { ChatDetail, ChatMessage, ChatProgressEvent } from './types'
 
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -36,6 +36,7 @@ vi.mock('@/components/ui/textarea', () => ({
 vi.mock('lucide-react', () => ({
   ArrowUp: () => null,
   Bot: () => null,
+  Check: () => null,
   Download: () => null,
   ExternalLink: () => null,
   FileText: () => null,
@@ -54,6 +55,13 @@ const defaultLabels = {
   sending: 'Sending',
   sources: 'Sources',
   user: 'User',
+}
+
+const defaultProgress = {
+  events: [],
+  formatElapsed: (seconds: number) => `${seconds}s`,
+  formatStep: (event: ChatProgressEvent) => event.phase,
+  title: 'Working on it',
 }
 
 const defaultTimestamp = '2026-05-13T12:00:00.000Z'
@@ -89,7 +97,9 @@ type ConversationOverrides = Partial<
     ComponentProps<typeof ConversationView>,
     | 'documentDownloadErrors'
     | 'downloadingDocumentMessageIds'
+    | 'isSending'
     | 'onDownloadDocument'
+    | 'progress'
   >
 >
 
@@ -111,6 +121,7 @@ function renderConversation(
       messageLabels={defaultLabels}
       onComposerChange={() => undefined}
       onSendMessage={() => undefined}
+      progress={defaultProgress}
       {...overrides}
     />,
   )
@@ -484,5 +495,60 @@ describe('ConversationView generated documents', () => {
     ])
 
     expect(screen.queryByText('Generated document')).toBeNull()
+  })
+})
+
+describe('ConversationView progress', () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  function renderSending(events: ChatProgressEvent[]) {
+    return renderConversation(
+      [createMessage({ content: 'My question.', role: 'user' })],
+      {
+        isSending: true,
+        progress: {
+          ...defaultProgress,
+          events,
+          formatStep: (event) => `step:${event.phase}`,
+        },
+      },
+    )
+  }
+
+  it('keeps every step reported so far on screen', () => {
+    renderSending([
+      { phase: 'understanding' },
+      { phase: 'searching', searches: 3 },
+      { phase: 'reading' },
+    ])
+
+    const steps = screen.getByRole('status').querySelectorAll('li')
+
+    expect([...steps].map((step) => step.textContent)).toEqual([
+      'step:understanding',
+      'step:searching',
+      'step:reading',
+    ])
+  })
+
+  it('stands in with the plain label until the first step arrives', () => {
+    renderSending([])
+
+    expect(screen.getByRole('status').textContent).toContain('Sending')
+  })
+
+  it('reports nothing while no answer is on its way', () => {
+    renderConversation([
+      createMessage({ content: 'My question.', role: 'user' }),
+    ])
+
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

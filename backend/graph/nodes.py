@@ -1,14 +1,23 @@
-from langchain_core.messages import HumanMessage, RemoveMessage, SystemMessage
+from langchain_core.messages import (
+    HumanMessage,
+    RemoveMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.runnables import RunnableConfig
 
 from src.utils.messages import message_text
 from src.utils.nlp import detect_language
 from src.utils.rag import get_rag_system_prompt
+from . import progress
 from .state import State
 
 
 def detect_language_node(state: State):
     """Detect the language of the last user message."""
+
+    progress.emit(progress.UNDERSTANDING)
+
     for msg in reversed(state.messages):
         if isinstance(msg, HumanMessage) and isinstance(msg.content, str):
             try:
@@ -21,6 +30,11 @@ def detect_language_node(state: State):
 
 
 def call_model(state: State, config: RunnableConfig):
+    # Tool results already in hand means this pass writes the answer.
+    last_message = state.messages[-1] if state.messages else None
+    answering = isinstance(last_message, ToolMessage)
+    progress.emit(progress.COMPOSING if answering else progress.THINKING)
+
     configurable = config.get("configurable", {})
     llm_with_tools = configurable.get('llm_with_tools')
     system_prompt = get_rag_system_prompt(state.detected_lang)
@@ -43,6 +57,8 @@ _SUMMARY_GUIDANCE = (
 
 
 def summarize_conversation(state: State, config: RunnableConfig):
+    progress.emit(progress.SUMMARIZING)
+
     summary = state.summary
  
     if summary:

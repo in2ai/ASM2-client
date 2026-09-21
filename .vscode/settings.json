@@ -147,6 +147,7 @@
     "wordprocessingml",
     "workos",
     "WORKOS",
-    "workoscdn"
+    "workoscdn",
+    "zstd"
   ]
 }

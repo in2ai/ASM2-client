@@ -10,9 +10,10 @@ import {
   ExternalLink,
   FileText,
   Loader2,
-  User2,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
+import { ChatActivity } from './chat-activity'
+import { BubbleAvatar } from './chat-avatar'
 import { ChatConversationLoadingState } from './chat-loading-state'
 import {
   formatDocumentSize,
@@ -20,7 +21,13 @@ import {
   getMessageDocument,
 } from './chat-document'
 import { MessageMarkdown } from './message-markdown'
-import type { ChatDetail, ChatDocument, ChatMessage, ChatSource } from './types'
+import type {
+  ChatDetail,
+  ChatDocument,
+  ChatMessage,
+  ChatProgressEvent,
+  ChatSource,
+} from './types'
 import { formatMessageTimestamp } from './utils'
 
 interface ConversationViewProps {
@@ -55,6 +62,13 @@ interface ConversationViewProps {
   onComposerChange: (value: string) => void
   onSendMessage: () => void
   pendingMessage?: ChatMessage | null
+  /** What the backend is doing right now, while an answer is on its way. */
+  progress: {
+    events: readonly ChatProgressEvent[]
+    formatElapsed: (seconds: number) => string
+    formatStep: (event: ChatProgressEvent) => string
+    title: string
+  }
 }
 
 export function ConversationView({
@@ -78,6 +92,7 @@ export function ConversationView({
   onComposerChange,
   onSendMessage,
   pendingMessage,
+  progress,
 }: Readonly<ConversationViewProps>) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const messages = useMemo(
@@ -137,10 +152,13 @@ export function ConversationView({
               ))}
 
               {isSending ? (
-                <div className="text-muted-foreground flex items-center gap-3 px-1 text-sm">
-                  <Loader2 className="text-primary h-4 w-4 animate-spin" />
-                  <span>{messageLabels.sending}</span>
-                </div>
+                <ChatActivity
+                  events={progress.events}
+                  fallbackLabel={messageLabels.sending}
+                  formatElapsed={progress.formatElapsed}
+                  formatEvent={progress.formatStep}
+                  title={progress.title}
+                />
               ) : null}
 
               <div ref={bottomRef} />
@@ -423,19 +441,4 @@ function formatSourcePages(
   return pages.length === 1
     ? `${labels.page} ${pages[0]}`
     : `${labels.pages} ${pages.join(', ')}`
-}
-
-function BubbleAvatar({ isUser }: Readonly<{ isUser: boolean }>) {
-  return (
-    <div
-      className={cn(
-        'flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border',
-        isUser
-          ? 'bg-primary/10 text-primary border-primary/20'
-          : 'bg-muted text-muted-foreground',
-      )}
-    >
-      {isUser ? <User2 className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-    </div>
-  )
 }

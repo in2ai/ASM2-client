@@ -28,6 +28,7 @@ from src.metrics.metrics import (
 from src.utils.nlp import extract_search_terms
 from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources, generate_subqueries, is_context_enough
 from src.utils.topic import resolve_topic_names
+from . import progress
  
  
 MAX_SEARCH_ROUNDS = 3
@@ -80,6 +81,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
     USE_LONG_CONTEXT_BEFORE = get_bool_env('LONG_CONTEXT_BEFORE_FILTER')
     lc_llm = get_configured_long_context_llm(llm) if USE_LONG_CONTEXT else None
  
+    progress.emit(progress.SEARCHING)
+ 
     # The original query is always searched, so a bad decomposition can't lose the baseline
     pending = [query] + generate_subqueries(llm, query, [query]).queries
     executed, chunks, seen = [], [], set()
@@ -89,9 +92,15 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
     logging.info(f'Planned subsearches: {pending}')
  
     with TimedMetric(pool, Metrics.DOC_RESPONSE_TIME.value, actor=metrics_actor):
-        for _ in range(MAX_SEARCH_ROUNDS):
+        for round_index in range(MAX_SEARCH_ROUNDS):
             batch, pending = pending, []
             executed += batch
+ 
+            # A later round only happens because the first one fell short.
+            progress.emit(
+                progress.REFINING if round_index else progress.SEARCHING,
+                searches=len(batch),
+            )
  
             with ThreadPoolExecutor() as executor:
                 results = list(executor.map(
@@ -112,6 +121,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
             new = [c for r, _ in results for c in r if c.page_content not in seen]
             seen.update(c.page_content for c in new)
  
+            progress.emit(progress.READING)
+ 
             with ThreadPoolExecutor() as executor:
                 relevance = list(executor.map(
                     lambda c: is_relevant_source(llm, query, c.page_content).is_relevant, new
@@ -131,6 +142,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
                         continue
  
                     logging.info(f"Checking long context for {source['title']}")
+                    progress.emit(progress.EXPANDING, title=source["title"])
+ 
                     index = TreeDex.load(treedex_path, llm=lc_llm)
                     result = index.query(query, agentic=True)
  
@@ -208,6 +221,7 @@ def generate_document(
     """
 
     logging.info("Generating document...")
+    progress.emit(progress.WRITING_DOCUMENT, format=format)
 
     # Get config
     configurable = config.get("configurable", {})

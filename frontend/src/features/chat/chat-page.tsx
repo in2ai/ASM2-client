@@ -20,11 +20,13 @@ import {
   useSourcesStatusQuery,
 } from './api'
 import { getMessageDocument } from './chat-document'
+import { appendProgress, describeProgress } from './chat-progress'
+import { UnfinishedTurnError } from './chat-stream'
 import { ChatShell } from './chat-shell'
 import { ChatSidebar } from './chat-sidebar'
 import { ConversationView } from './conversation-view'
 import { SourcesPanel } from './sources-panel'
-import type { ChatMessage } from './types'
+import type { ChatMessage, ChatProgressEvent } from './types'
 import { getChatTitle, toErrorMessage } from './utils'
 
 function omitKey(source: Record<string, string>, key: string) {
@@ -52,6 +54,7 @@ export function ChatPage({
   const [composerValue, setComposerValue] = useState('')
   const [composerError, setComposerError] = useState<string | undefined>()
   const [pendingMessage, setPendingMessage] = useState<ChatMessage | null>(null)
+  const [progressEvents, setProgressEvents] = useState<ChatProgressEvent[]>([])
   const [sendingChatId, setSendingChatId] = useState<string | null>(null)
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [documentDownloadErrors, setDocumentDownloadErrors] = useState<
@@ -297,9 +300,13 @@ export function ChatPage({
 
       setComposerValue('')
       setPendingMessage(optimisticMessage)
+      setProgressEvents([])
+
       const result = await sendMessageMutation.mutateAsync({
         chatId: activeChatId,
         content,
+        onProgress: (event) =>
+          setProgressEvents((current) => appendProgress(current, event)),
       })
 
       setPendingMessage(null)
@@ -307,8 +314,18 @@ export function ChatPage({
       await queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
     } catch (error) {
       setPendingMessage(null)
-      setComposerValue(content)
-      setComposerError(toErrorMessage(error, t('errors.sendFailed')))
+
+      // A turn the backend kept working on after the connection broke may have
+      // been answered anyway, so ask it rather than assume the message is lost.
+      if (error instanceof UnfinishedTurnError && activeChatId) {
+        setComposerError(t('errors.turnInterrupted'))
+        await queryClient.invalidateQueries({
+          queryKey: chatQueryKeys.detail(activeChatId),
+        })
+      } else {
+        setComposerValue(content)
+        setComposerError(toErrorMessage(error, t('errors.sendFailed')))
+      }
     } finally {
       setSendingChatId((current) => (current === activeChatId ? null : current))
     }
@@ -450,6 +467,15 @@ export function ChatPage({
           onComposerChange={setComposerValue}
           onSendMessage={() => void handleSendMessage()}
           pendingMessage={visiblePendingMessage}
+          progress={{
+            events: progressEvents,
+            formatElapsed: (seconds) => t('progress.elapsed', { seconds }),
+            formatStep: (event) => {
+              const { key, values } = describeProgress(event)
+              return t(key, values)
+            },
+            title: t('progress.title'),
+          }}
         />
       )}
     </ChatShell>

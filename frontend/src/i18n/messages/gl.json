@@ -337,6 +337,23 @@
       "downloadDocument": "Descargar",
       "downloadingDocument": "Descargando..."
     },
+    "progress": {
+      "title": "Traballando niso",
+      "elapsed": "{seconds}s",
+      "understanding": "Lendo a túa pregunta",
+      "thinking": "Decidindo como responder",
+      "searching": "Buscando nos teus documentos",
+      "searchingCount": "Buscando nos teus documentos ({count} buscas)",
+      "reading": "Revisando os resultados da busca",
+      "expanding": "Mirando un documento con máis detalle",
+      "expandingTitle": "Mirando con máis detalle {title}",
+      "refining": "Afondando no que falta",
+      "refiningCount": "Afondando ({count} buscas máis)",
+      "writingDocument": "Preparando o teu documento",
+      "writingDocumentFormat": "Preparando o teu {format}",
+      "composing": "Redactando a resposta",
+      "summarizing": "Resumindo a conversa"
+    },
     "errors": {
       "title": "Non se puido cargar o chat",
       "loadFailed": "Non se puido cargar o espazo de chat. Téntao de novo.",
@@ -346,7 +363,8 @@
       "downloadFailed": "Non se puido descargar o documento. Téntao de novo.",
       "pinFailed": "Non se puido fixar a conversa. Téntao de novo.",
       "archiveFailed": "Non se puido arquivar a conversa. Téntao de novo.",
-      "unarchiveFailed": "Non se puido desarquivar a conversa. Téntao de novo."
+      "unarchiveFailed": "Non se puido desarquivar a conversa. Téntao de novo.",
+      "turnInterrupted": "Perdeuse a conexión mentres se escribía a resposta. Recargando a conversa."
     },
     "sources": {
       "openPanel": "Fontes",
@@ -467,9 +485,9 @@
     "unavailable": "Estado non dispoñible",
     "lastKnownState": "Último estado coñecido",
     "lastKnownDescription": "Último estado comunicado: {status}. Esta información pode estar desactualizada.",
-    "open": "Abrir o estado do indexado de Qdrant",
-    "openRunning": "Indexado de Qdrant en curso: {status}",
-    "title": "Indexado de Qdrant",
+    "open": "Abrir o estado do indexado de documentos",
+    "openRunning": "Indexado de documentos en curso: {status}",
+    "title": "Indexado de documentos",
     "description": "Estado do traballo que mantén actualizada a base de datos vectorial.",
     "loading": "Cargando o estado do indexado…",
     "loadFailed": "Non se puido consultar o estado do indexado.",

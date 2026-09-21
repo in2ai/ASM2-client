@@ -18,6 +18,7 @@ Este sistema permite:
 
 - Chat RAG sobre documentos de Google Drive y Dropbox, con filtrado de resultados por los permisos reales de cada usuario.
 - Generación de documentos (`pdf`, `markdown`, `txt`) como herramienta del agente, descargables desde el chat.
+- Seguimiento en vivo de lo que hace el backend mientras prepara una respuesta (búsquedas, lectura de fragmentos, redacción), sin mostrar la respuesta a medio escribir.
 - Indexado compartido gestionado por administradores, con progreso visible para managers y administradores.
 - Protección ante borrados masivos durante el indexado, con alertas y notificaciones.
 - Extraer y visualizar métricas de uso (modelos, tokens, latencia, actividad de usuarios).

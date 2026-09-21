@@ -188,6 +188,18 @@ function jsonResponse(payload: unknown) {
   })
 }
 
+/** A finished turn, as the streaming endpoint reports one. */
+function turnResponse(payload: unknown) {
+  return new Response(
+    `event: progress\ndata: {"phase": "thinking"}\n\n` +
+      `event: result\ndata: ${JSON.stringify(payload)}\n\n`,
+    {
+      headers: { 'Content-Type': 'text/event-stream' },
+      status: 200,
+    },
+  )
+}
+
 /** Sources + VDB state that allows sending chat messages (matches backend contract). */
 const sourcesStatusChatReady = {
   can_chat: true,
@@ -263,7 +275,7 @@ describe('ChatPage', () => {
         }
 
         if (
-          requestUrl.endsWith('/chats/chat-1/messages') &&
+          requestUrl.endsWith('/chats/chat-1/messages/stream') &&
           method === 'POST'
         ) {
           return sendResponse.promise
@@ -302,7 +314,7 @@ describe('ChatPage', () => {
     })
 
     sendResponse.resolve(
-      jsonResponse({
+      turnResponse({
         assistant_message: {
           chat_id: 'chat-1',
           content: 'Consulta el portal interno de RRHH.',
@@ -425,7 +437,7 @@ describe('ChatPage', () => {
         }
 
         if (
-          requestUrl.endsWith('/chats/chat-1/messages') &&
+          requestUrl.endsWith('/chats/chat-1/messages/stream') &&
           method === 'POST'
         ) {
           return sendResponse.promise
@@ -481,7 +493,7 @@ describe('ChatPage', () => {
     expect(conversationRenderStates.at(-1)?.isSending).toBe(false)
 
     sendResponse.resolve(
-      jsonResponse({
+      turnResponse({
         assistant_message: {
           chat_id: 'chat-1',
           content: 'respuesta final',
@@ -570,7 +582,7 @@ describe('ChatPage', () => {
         }
 
         if (
-          requestUrl.endsWith('/chats/chat-1/messages') &&
+          requestUrl.endsWith('/chats/chat-1/messages/stream') &&
           method === 'POST'
         ) {
           return sendResponse.promise
@@ -635,7 +647,7 @@ describe('ChatPage', () => {
     })
 
     sendResponse.resolve(
-      jsonResponse({
+      turnResponse({
         assistant_message: {
           chat_id: 'chat-1',
           content: 'respuesta final',
