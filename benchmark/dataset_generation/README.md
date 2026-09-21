@@ -20,6 +20,7 @@ Todos los datasets comparten el mismo esquema de columnas:
 ```text
 dataset_generation/
 ├── merge_datasets.py                    # Une los dos datasets y guarda el resultado en benchmark/data
+├── export_corpus.py                     # Reúne los .txt que usa el dataset, listos para subir al conector
 ├── narrativeqa/
 │   ├── dataset_generation_narrativeqa.py
 │   ├── download_stories.sh
@@ -142,6 +143,53 @@ python benchmark/dataset_generation/merge_datasets.py
 
 ---
 
+## 4. Exportación del corpus a indexar
+
+Script: [`export_corpus.py`](export_corpus.py)
+
+**Los corpus generados contienen más documentos de los que usa el dataset**, porque la
+generación del corpus y el muestreo del QA son pasos independientes:
+
+| Fuente | `.txt` generados en `corpus/` | Documentos en el dataset |
+| --- | --- | --- |
+| `squad2.0` | 442 (uno por artículo del JSON) | 200 (los 200 primeros artículos) |
+| `narrativeqa` | 655 (todo gutenberg de > 100 KB) | 200 (los 200 primeros por nombre) |
+
+Por eso **no hay que subir las carpetas `corpus/` tal cual**: indexarías ~700 documentos que
+ninguna pregunta consulta, lo que alarga el indexado y añade ruido al retrieval, hundiendo
+artificialmente `context_precision`.
+
+El subconjunto necesario es derivable del propio dataset: la columna `document_id` **es el
+nombre del `.txt`** (sin extensión). `export_corpus.py` hace esa correspondencia y copia solo
+esos ficheros, en una subcarpeta por fuente para poder subir e indexar cada una por separado.
+
+### Entrada
+
+- `benchmark/data/dataset_asm2.csv`
+- `squad2.0/corpus/` y `narrativeqa/corpus/`
+
+### Salida
+
+```text
+benchmark/data/corpus_to_upload/
+├── squad2.0/       # 200 .txt
+└── narrativeqa/    # 200 .txt
+```
+
+Ese es el contenido que se sube al **conector** que se vaya a evaluar para que el sistema lo
+indexe. Cada
+ejecución borra la exportación anterior, de modo que la carpeta siempre refleja el dataset
+actual. Si un `document_id` del dataset no tiene su `.txt` en el corpus, el script falla
+indicando qué script de generación hay que volver a ejecutar.
+
+### Ejecución
+
+```bash
+python benchmark/dataset_generation/export_corpus.py
+```
+
+---
+
 ## Flujo completo
 
 ```text
@@ -149,6 +197,9 @@ asm2-narrativeqa-documents.csv ┐
 asm2-narrativeqa-qaps.csv      ┴─► dataset_narrativeqa_qa_5_docs_200.csv ┐
                                                                          ├─► benchmark/data/dataset_asm2.csv
 asm2-squad-train-v2.0.json ───────► dataset_squad2.0_qa_5_docs_200.csv ──┘
+                                                                                        │
+narrativeqa/corpus/ + squad2.0/corpus/ ─────────────────────────────────────────────────┴─► benchmark/data/corpus_to_upload/
+                                                                                             (200 + 200 .txt → conector)
 ```
 
 > **Nota:** los scripts usan rutas relativas a la raíz del repositorio, por lo que deben

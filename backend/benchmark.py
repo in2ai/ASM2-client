@@ -1,12 +1,14 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
-import json
 import os
 from pathlib import Path
+import re
+import sys
 import threading
 import time
 import traceback
+import types
 from typing import Any
 
 from dotenv import load_dotenv
@@ -14,12 +16,29 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 import numpy as np
 import openai
 import pandas as pd
-from ragas.embeddings.base import embedding_factory
-from ragas.llms.base import llm_factory
-from ragas.metrics.collections import ContextPrecision, ContextRecall, AnswerRelevancy, Faithfulness
-from ragas.metrics.collections.answer_relevancy.util import AnswerRelevanceInput, AnswerRelevanceOutput
-from ragas.metrics.result import MetricResult
-from langgraph.checkpoint.memory import MemorySaver
+
+# ragas 0.4.3 importa `langchain_community.chat_models.vertexai` desde su modulo
+# legacy `ragas.llms.base`, al que llega `ragas/__init__.py`: rompe *cualquier*
+# import de ragas. langchain-community 0.4 elimino ese modulo (Vertex AI vive
+# ahora en langchain-google-vertexai) y ragas no declara cota superior sobre el.
+# No podemos fijar langchain-community a 0.3.x porque esa serie exige
+# langchain-core <1.0 y la app va con langchain 1.4 / langchain-core 1.6.
+# El stub basta: ragas solo usa ChatVertexAI en un isinstance() de
+# MULTIPLE_COMPLETION_SUPPORTED, y aqui se evalua con OpenAI/Together.
+# Quitar cuando ragas publique el arreglo upstream.
+try:
+    import langchain_community.chat_models.vertexai  # noqa: F401
+except ModuleNotFoundError:
+    _vertexai_shim = types.ModuleType("langchain_community.chat_models.vertexai")
+    _vertexai_shim.ChatVertexAI = type("ChatVertexAI", (), {})
+    sys.modules["langchain_community.chat_models.vertexai"] = _vertexai_shim
+
+from ragas.embeddings.base import embedding_factory  # noqa: E402
+from ragas.llms.base import llm_factory  # noqa: E402
+from ragas.metrics.collections import ContextPrecision, ContextRecall, AnswerRelevancy, Faithfulness  # noqa: E402
+from ragas.metrics.collections.answer_relevancy.util import AnswerRelevanceInput, AnswerRelevanceOutput  # noqa: E402
+from ragas.metrics.result import MetricResult  # noqa: E402
+from langgraph.checkpoint.memory import MemorySaver  # noqa: E402
 
 from graph.agent import build_graph
 from graph.model import get_llm_with_tools
@@ -65,7 +84,7 @@ QUERY_TIMING_CSV_PATH = Path("/app/benchmark/results/query_timings.csv")
 BATCH_TIMING_CSV_PATH = Path("/app/benchmark/results/batch_timings.csv")
 SUMMARY_CSV_PATH = Path("/app/benchmark/results/rag_evaluation_summary.csv")
 
-BENCHMARK_SOURCES: list[str] = ["squad2.0"] # narrativeqa, squad2.0
+BENCHMARK_SOURCES: list[str] = [] # narrativeqa, squad2.0
 
 EVAL_LLM_PROVIDER = "openai" # Evaluation LLM provider: "openai" or "together"
 EVAL_LLM_CONFIG = {
@@ -196,17 +215,46 @@ def _get_thread_eval_ctx() -> tuple[Any, dict[str, Any]]:
     return ctx
 
 
-def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> tuple[bool, Any | None]:
+# Matches the provenance headers that vectordb_search prefixes to each context block.
+# Keep in sync with the header construction in graph/tools.py: RAGAS needs the chunk
+# texts, and under the tool's content_and_artifact convention they only exist inside
+# the tool message's content, never in its artifact.
+CONTEXT_HEADER_RE = re.compile(
+    r"^\[(?:file: [^\]]*; authors: [^\]]*; date: [^\]]*; page [^\]]*"
+    r"|Long context summary for [^\]]*)\]$",
+    re.MULTILINE,
+)
+
+
+def split_context_blocks(content: str) -> list[str]:
+    """Split a vectordb_search content string back into its individual context blocks.
+
+    The tool joins blocks with a blank line, so splitting on that alone would also
+    break apart any chunk that contains one; this slices on the block headers instead.
+    Returns [] when the content carries no context at all (a fallback or error
+    message), letting callers tell "found chunks" from "searched and found none".
+    """
+    starts = [match.start() for match in CONTEXT_HEADER_RE.finditer(content or "")]
+
+    if not starts:
+        return []
+
+    bounds = starts + [len(content)]
+    return [content[bounds[i]:bounds[i + 1]].strip() for i in range(len(starts))]
+
+
+def get_vectordb_search_contexts_in_latest_turn(messages: list[Any]) -> tuple[bool, list[str]]:
     """Report the vectordb_search outcome of the latest conversation turn.
 
-    Scans the messages after the last HumanMessage for a vectordb_search tool call
-    and its matching ToolMessage. Returns (retrieval_done, search_output):
+    Mirrors server.py's get_vectordb_search_sources_in_latest_turn, but recovers the
+    chunk texts RAGAS scores instead of the source metadata. Returns
+    (retrieval_done, contexts):
     - retrieval_done: True if the tool was called this turn, regardless of result.
-    - search_output: the parsed tool result (a dict with "chunks") when chunks were
-      returned; None when the tool returned a fallback/error string or no search ran.
+    - contexts: the retrieved context blocks, gathered across every search call in the
+      turn; empty when the tool only returned a fallback/error message.
 
-    The two together separate "no retrieval" (False, None) from "retrieval with no
-    relevant chunks" (True, None).
+    The two together separate "no retrieval" (False, []) from "retrieval with no
+    relevant chunks" (True, []).
     """
 
     last_human_index = next(
@@ -219,35 +267,28 @@ def get_vectordb_search_output_in_latest_turn(messages: list[Any]) -> tuple[bool
     )
 
     if last_human_index == -1:
-        return False, None
+        return False, []
 
-    retrieval_done = False
+    turn = messages[last_human_index + 1:]
 
-    for i in range(last_human_index + 1, len(messages)):
-        message = messages[i]
+    call_ids = {
+        tool_call["id"]
+        for message in turn
+        if isinstance(message, AIMessage)
+        for tool_call in (message.tool_calls or [])
+        if tool_call.get("name") == "vectordb_search" and tool_call.get("id")
+    }
 
-        if not isinstance(message, AIMessage):
-            continue
+    contexts = []
 
-        for tool_call in message.tool_calls or []:
-            if tool_call.get("name") != "vectordb_search":
-                continue
+    for message in turn:
+        if isinstance(message, ToolMessage) and message.tool_call_id in call_ids:
+            contexts.extend(split_context_blocks(str(message.content)))
 
-            retrieval_done = True
-            call_id = tool_call.get("id")
-
-            for followup in messages[i + 1:]:
-                if isinstance(followup, ToolMessage) and followup.tool_call_id == call_id:
-                    try:
-                        return True, json.loads(followup.content)
-
-                    except (json.JSONDecodeError, TypeError):
-                        return True, None
-
-    return retrieval_done, None
+    return bool(call_ids), contexts
 
 
-def call_rag(query: str, thread_id: str) -> tuple[str, bool, Any | None]:
+def call_rag(query: str, thread_id: str) -> tuple[str, bool, list[str]]:
     """Run the RAG graph for a query."""
     config: dict[str, Any] = {
         "configurable": {
@@ -268,9 +309,9 @@ def call_rag(query: str, thread_id: str) -> tuple[str, bool, Any | None]:
 
     messages = result.get("messages") or []
     answer = message_text(messages[-1])
-    retrieval_done, search_results = get_vectordb_search_output_in_latest_turn(messages)
+    retrieval_done, contexts = get_vectordb_search_contexts_in_latest_turn(messages)
 
-    return answer, retrieval_done, search_results
+    return answer, retrieval_done, contexts
 
 
 def eval_dataset(
@@ -472,14 +513,12 @@ def process_row(row: Any, run_attempt: int) -> tuple[Any, str, dict[str, Any] | 
                 print(f"[BENCHMARK][eval_id={eval_id}] Query:\t\t {query}")
                 print(f"[BENCHMARK][eval_id={eval_id}] Reference Answer:\t {reference_answer}")
 
-                answer, retrieval_done, search_results = call_rag(
+                answer, retrieval_done, chunks = call_rag(
                     query,
                     thread_id=f"benchmark-{run_attempt}-{eval_id}-{attempt}",
                 )
 
                 print(f"[BENCHMARK][eval_id={eval_id}] Generated Answer:\t {answer}")
-
-                chunks = search_results.get("chunks", []) if search_results else []
 
                 if not retrieval_done:
                     print(
@@ -495,7 +534,7 @@ def process_row(row: Any, run_attempt: int) -> tuple[Any, str, dict[str, Any] | 
                     )
 
                 else:
-                    print(f"[BENCHMARK][eval_id={eval_id}] Search Results:\t {len(chunks)}")
+                    print(f"[BENCHMARK][eval_id={eval_id}] Number of chunks retrieved:\t {len(chunks)}")
 
             print(f"\n[BENCHMARK][eval_id={eval_id}] Evaluating the generated answer...")
             results = eval_dataset(query, chunks, answer, reference_answer, eval_id)
