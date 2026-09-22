@@ -7,15 +7,37 @@ export const getDateFormatter = (locale: string) =>
     timeStyle: 'short',
   })
 
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/**
+ * Read a metric bucket's date on the local clock.
+ *
+ * The API returns bare `YYYY-MM-DD` days, and those parse as UTC midnight,
+ * which formats as the day before anywhere west of Greenwich. The buckets are
+ * already cut in the viewer's zone server-side, so they are read back in it.
+ */
+export function parseMetricDate(dateValue: string | Date): Date {
+  if (typeof dateValue !== 'string') {
+    return dateValue
+  }
+
+  const parts = DATE_ONLY_PATTERN.exec(dateValue)
+
+  if (!parts) {
+    return new Date(dateValue)
+  }
+
+  return new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
+}
+
 export function formatShortDate(
   dateValue: string | Date,
   locale: string,
 ): string {
-  const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue
   return new Intl.DateTimeFormat(toIntlLocale(locale), {
     day: '2-digit',
     month: 'short',
-  }).format(date)
+  }).format(parseMetricDate(dateValue))
 }
 
 export type MetricsErrorCode =

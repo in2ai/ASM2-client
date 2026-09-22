@@ -97,13 +97,13 @@
       "label": "Avg session",
       "helper": "Usage time"
     },
-    "ragLatency": {
-      "label": "RAG latency",
-      "helper": "LLM response"
+    "turnLatency": {
+      "label": "Turn latency",
+      "helper": "Full turn"
     },
-    "ragMetrics": {
-      "label": "RAG metrics",
-      "helper": "Total records"
+    "assistantMetrics": {
+      "label": "Assistant metrics",
+      "helper": "Excludes hardware telemetry"
     }
   },
   "UsageMetrics": {
@@ -134,36 +134,37 @@
     "title": "RAG quality and performance",
     "subtitle": "Response times, token usage, and system health",
     "chartLabels": {
-      "llmMs": "LLM (ms)",
-      "ragMs": "RAG (ms)",
+      "turnMs": "Full turn (ms)",
+      "retrievalMs": "Retrieval (ms)",
       "input": "Input",
       "output": "Output"
     },
     "responseTimeTrend": {
       "title": "Response time trend",
-      "hint": "Shows how LLM response time and RAG retrieval time evolve over time. High values can indicate performance issues.",
-      "description": "LLM and RAG latency by day (ms)"
+      "hint": "The full turn includes document retrieval: the retrieval line is part of the turn line, not a separate stage. The gap between them is the time the model spends writing the answer.",
+      "description": "Latency by day (ms)"
     },
     "tokenUsage": {
       "title": "Token usage",
-      "hint": "Compares input tokens (user content + context) versus output tokens (generated response) for LLM and RAG. More tokens mean higher cost and processing time.",
+      "hint": "Separates the answer's tokens (LLM) from what retrieval spends: planning subqueries, filtering each chunk and checking whether the context is enough. More tokens means higher cost.",
       "total": "Total: {count} tokens"
     },
     "systemHealth": {
       "title": "System health",
-      "hint": "Monitors server resource consumption. Sustained high CPU, RAM, or GPU usage may indicate that infrastructure scaling is needed.",
-      "description": "Average resource usage",
+      "hint": "The server is sampled every 30 seconds. The average includes idle periods, so use the maximum when sizing infrastructure.",
+      "description": "Mean of samples every 30s, idle and under load alike",
       "noData": "No resource usage data available"
     },
     "resources": {
       "cpu": "CPU",
       "ram": "RAM",
       "gpu": "GPU",
-      "usageWithMax": "{average}% (max: {max}%)"
+      "usageWithMax": "{average}% (max: {max}%)",
+      "notSampled": "Not sampled"
     },
-    "docsPerQuery": {
-      "title": "Docs per query",
-      "description": "Average retrieved documents"
+    "chunksPerSearch": {
+      "title": "Chunks per search",
+      "description": "Average relevant chunks per search"
     }
   },
   "InsightsView": {
@@ -192,10 +193,10 @@
       "hint": "Groups queries by detected topic. Helps understand which knowledge areas are consulted most and where to prioritize content improvements.",
       "description": "Top topics by frequency",
       "filters": {
-        "ariaLabel": "Filter top topics by language",
-        "placeholder": "Select language",
+        "ariaLabel": "Language of the topic labels",
+        "placeholder": "Label language",
         "loading": "Loading top topics",
-        "empty": "No top topics found for {language}",
+        "empty": "No topics found in this period",
         "error": "Failed to load top topics. Please try again."
       }
     }

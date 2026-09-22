@@ -15,7 +15,7 @@ describe('chart visibility config', () => {
       'hourlyActivityPattern',
     ])
     expect(getChartsForView('rag-quality').map((chart) => chart.id)).toEqual([
-      'metricsByTag',
+      'responseTimeTrend',
       'tokenUsage',
       'resourceConsumption',
     ])

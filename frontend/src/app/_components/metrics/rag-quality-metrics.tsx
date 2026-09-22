@@ -53,8 +53,8 @@ export function RAGQualityMetrics({
   const ragResponseTimeChartConfig = useMemo(
     () =>
       createRagResponseTimeChartConfig({
-        llm: t('chartLabels.llmMs'),
-        rag: t('chartLabels.ragMs'),
+        turn: t('chartLabels.turnMs'),
+        retrieval: t('chartLabels.retrievalMs'),
       }),
     [t],
   )
@@ -72,7 +72,7 @@ export function RAGQualityMetrics({
       ragQuality.response_time_trend.map((item) => ({
         ...item,
         date: formatShortDate(item.date, locale),
-        llm_ms: item.llm_response_time * 1000,
+        turn_ms: item.turn_response_time * 1000,
         doc_ms: item.doc_response_time * 1000,
       })),
     [locale, ragQuality.response_time_trend],
@@ -101,10 +101,29 @@ export function RAGQualityMetrics({
     ragQuality.token_usage.rag_tokens_out
 
   const systemHealth = ragQuality.system_health
-  const hasSystemData =
-    systemHealth.avg_cpu > 0 ||
-    systemHealth.avg_ram > 0 ||
-    systemHealth.avg_gpu > 0
+  // A resource with no samples reads as null, which is not the same as a
+  // resource measured at 0% -- a machine with no GPU must say so.
+  const resources = useMemo(
+    () => [
+      {
+        key: 'cpu' as const,
+        average: systemHealth.avg_cpu,
+        max: systemHealth.max_cpu,
+      },
+      {
+        key: 'ram' as const,
+        average: systemHealth.avg_ram,
+        max: systemHealth.max_ram,
+      },
+      {
+        key: 'gpu' as const,
+        average: systemHealth.avg_gpu,
+        max: systemHealth.max_gpu,
+      },
+    ],
+    [systemHealth],
+  )
+  const hasSystemData = resources.some((resource) => resource.average !== null)
 
   return (
     <div className="space-y-6">
@@ -115,7 +134,7 @@ export function RAGQualityMetrics({
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {visibility.metricsByTag && responseTimeData.length > 0 && (
+        {visibility.responseTimeTrend && responseTimeData.length > 0 && (
           <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
@@ -141,15 +160,15 @@ export function RAGQualityMetrics({
                   margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                 >
                   <defs>
-                    <linearGradient id="fillLLM" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="fillTurn" x1="0" y1="0" x2="0" y2="1">
                       <stop
                         offset="5%"
-                        stopColor="var(--color-llm_ms)"
+                        stopColor="var(--color-turn_ms)"
                         stopOpacity={0.3}
                       />
                       <stop
                         offset="95%"
-                        stopColor="var(--color-llm_ms)"
+                        stopColor="var(--color-turn_ms)"
                         stopOpacity={0}
                       />
                     </linearGradient>
@@ -192,9 +211,9 @@ export function RAGQualityMetrics({
                   />
                   <Area
                     type="monotone"
-                    dataKey="llm_ms"
-                    stroke="var(--color-llm_ms)"
-                    fill="url(#fillLLM)"
+                    dataKey="turn_ms"
+                    stroke="var(--color-turn_ms)"
+                    fill="url(#fillTurn)"
                     strokeWidth={2}
                   />
                   <Area
@@ -306,44 +325,24 @@ export function RAGQualityMetrics({
             </CardHeader>
             <CardContent className="space-y-6 pt-4">
               {hasSystemData ? (
-                <>
-                  <div className="space-y-2">
+                resources.map(({ key, average, max }) => (
+                  <div key={key} className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{t('resources.cpu')}</span>
+                      <span className="font-medium">
+                        {t(`resources.${key}`)}
+                      </span>
                       <span className="text-muted-foreground">
-                        {t('resources.usageWithMax', {
-                          average: systemHealth.avg_cpu.toFixed(1),
-                          max: systemHealth.max_cpu.toFixed(1),
-                        })}
+                        {average === null
+                          ? t('resources.notSampled')
+                          : t('resources.usageWithMax', {
+                              average: average.toFixed(1),
+                              max: (max ?? average).toFixed(1),
+                            })}
                       </span>
                     </div>
-                    <Progress value={systemHealth.avg_cpu} className="h-2" />
+                    <Progress value={average ?? 0} className="h-2" />
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{t('resources.ram')}</span>
-                      <span className="text-muted-foreground">
-                        {t('resources.usageWithMax', {
-                          average: systemHealth.avg_ram.toFixed(1),
-                          max: systemHealth.max_ram.toFixed(1),
-                        })}
-                      </span>
-                    </div>
-                    <Progress value={systemHealth.avg_ram} className="h-2" />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{t('resources.gpu')}</span>
-                      <span className="text-muted-foreground">
-                        {t('resources.usageWithMax', {
-                          average: systemHealth.avg_gpu.toFixed(1),
-                          max: systemHealth.max_gpu.toFixed(1),
-                        })}
-                      </span>
-                    </div>
-                    <Progress value={systemHealth.avg_gpu} className="h-2" />
-                  </div>
-                </>
+                ))
               ) : (
                 <p className="text-muted-foreground py-4 text-center text-sm">
                   {t('systemHealth.noData')}
@@ -357,14 +356,14 @@ export function RAGQualityMetrics({
                   </div>
                   <div>
                     <p className="text-sm font-medium">
-                      {t('docsPerQuery.title')}
+                      {t('chunksPerSearch.title')}
                     </p>
                     <p className="text-muted-foreground text-xs">
-                      {t('docsPerQuery.description')}
+                      {t('chunksPerSearch.description')}
                     </p>
                   </div>
                   <div className="ml-auto text-2xl font-bold">
-                    {ragQuality.avg_docs_per_query.toFixed(1)}
+                    {ragQuality.avg_chunks_per_query.toFixed(1)}
                   </div>
                 </div>
               </div>

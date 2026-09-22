@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import type { MetricsResponse } from './types'
-import { getMetricsErrorCode, isEmptyData, isRecoverableError } from './utils'
+import {
+  formatShortDate,
+  getMetricsErrorCode,
+  isEmptyData,
+  isRecoverableError,
+  parseMetricDate,
+} from './utils'
 
 function createMetricsResponse(
   totalEvents: number,
@@ -14,6 +20,33 @@ function createMetricsResponse(
     },
   } as MetricsResponse
 }
+
+describe('metric bucket dates', () => {
+  it('reads a bare day on the local clock, not as UTC midnight', () => {
+    // `new Date('2026-09-17')` is UTC midnight, which is 16 Sept anywhere west
+    // of Greenwich. The buckets are cut in the viewer's zone server-side, so
+    // they have to be read back in it.
+    const parsed = parseMetricDate('2026-09-17')
+
+    expect(parsed.getFullYear()).toBe(2026)
+    expect(parsed.getMonth()).toBe(8)
+    expect(parsed.getDate()).toBe(17)
+  })
+
+  it('keeps the day the API reported when formatting', () => {
+    expect(formatShortDate('2026-01-01', 'en')).toContain('01')
+    expect(formatShortDate('2026-01-01', 'en')).toContain('Jan')
+  })
+
+  it('still accepts full timestamps and Date objects', () => {
+    const fromDate = parseMetricDate(new Date(2026, 8, 17))
+
+    expect(fromDate.getDate()).toBe(17)
+    expect(parseMetricDate('2026-09-17T10:30:00Z').getTime()).toBe(
+      new Date('2026-09-17T10:30:00Z').getTime(),
+    )
+  })
+})
 
 describe('metrics utils', () => {
   it('detects empty metric responses from activity totals', () => {

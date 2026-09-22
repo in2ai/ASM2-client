@@ -22,12 +22,11 @@ const dashboardMetrics: DashboardMetrics = {
     updatedAt: '2026-06-03T12:00:00.000Z',
   },
   metrics: {
-    by_tag: [],
-    response_time: 0.2,
     total_count: 12,
+    turn_response_time: 0.2,
   },
   rag_quality: {
-    avg_docs_per_query: 2.5,
+    avg_chunks_per_query: 2.5,
     response_time_trend: [],
     system_health: {
       avg_cpu: 10,

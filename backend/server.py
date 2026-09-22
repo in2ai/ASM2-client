@@ -1,4 +1,5 @@
 import asyncio
+import glob
 import logging
 import os
 import json
@@ -81,17 +82,16 @@ from src.metrics.dashboard_queries import (
     build_query_params,
     count_metrics,
     get_activity_by_day,
-    get_avg_docs_per_query,
+    get_avg_chunks_per_query,
     get_hourly_activity_pattern,
-    get_metrics_by_tag,
     get_response_time_trend,
     get_system_health_stats,
     get_token_usage_stats,
     get_total_activity_events,
     get_unique_users,
     get_user_role_distribution,
-    mean_metric,
     mean_session_length,
+    mean_turn_latency,
     top_k_search_terms,
     top_k_topics,
 )
@@ -348,8 +348,64 @@ def update_vdb():
     periodic_task(update, 7000, lock_name='vdb-update')  # Once an hour
 
 
-def extract_usage_metrics():
+AMD_GPU_BUSY_PATHS = "/sys/class/drm/card*/device/gpu_busy_percent"
+
+
+def read_nvidia_gpu_usage() -> float | None:
+    """Percent busy of the first NVIDIA card, or None if there is none.
+
+    GPUtil shells out to `nvidia-smi`, so this answers None on every other
+    vendor -- including a perfectly healthy AMD card.
+    """
     import GPUtil
+
+    try:
+        gpus = GPUtil.getGPUs()
+
+    except Exception:
+        logging.warning("Could not read NVIDIA GPU usage", exc_info=True)
+
+        return None
+
+    if not gpus:
+        return None
+
+    return gpus[0].load * 100
+
+
+def read_amd_gpu_usage() -> float | None:
+    """Percent busy of the first AMD card, straight from the amdgpu driver.
+
+    The driver publishes utilisation in sysfs, which needs no ROCm tooling on
+    PATH and no extra dependency. Nothing exposes it under a vendor-neutral
+    name, so the file has to be read by hand.
+    """
+    for path in sorted(glob.glob(AMD_GPU_BUSY_PATHS)):
+        try:
+            with open(path) as busy:
+                return float(busy.read().strip())
+
+        except (OSError, ValueError):
+            logging.warning("Could not read AMD GPU usage from %s", path, exc_info=True)
+
+    return None
+
+
+def read_gpu_usage() -> float | None:
+    """Percent busy of the GPU this container can see, whoever makes it.
+
+    None means no GPU was found, which the dashboard reports as "not sampled"
+    rather than as a card sitting idle at 0%.
+    """
+    nvidia = read_nvidia_gpu_usage()
+
+    if nvidia is not None:
+        return nvidia
+
+    return read_amd_gpu_usage()
+
+
+def extract_usage_metrics():
     import psutil
 
     def calc():
@@ -366,10 +422,10 @@ def extract_usage_metrics():
         insert_system_metric(pg_pool, Metrics.RAM_USAGE.value, mem.percent)
 
         # GPU (if available)
-        gpus = GPUtil.getGPUs()
+        gpu_usage = read_gpu_usage()
 
-        if len(gpus) > 0:
-            insert_system_metric(pg_pool, Metrics.GPU_USAGE.value, gpus[0].load * 100)
+        if gpu_usage is not None:
+            insert_system_metric(pg_pool, Metrics.GPU_USAGE.value, gpu_usage)
 
     periodic_task(calc, 30)
 
@@ -635,7 +691,12 @@ def _get_chat_or_404(
     return chat
 
 
-def get_vectordb_search_sources_in_latest_turn(messages: list[Any]) -> list[dict]:
+def messages_in_latest_turn(messages: list[Any]) -> list[Any]:
+    """The messages produced since the user's last question.
+
+    Graph state accumulates the whole thread, so anything derived per turn has
+    to cut the history here first or it re-reads every previous turn.
+    """
     last_human_index = next(
         (
             i
@@ -648,7 +709,11 @@ def get_vectordb_search_sources_in_latest_turn(messages: list[Any]) -> list[dict
     if last_human_index == -1:
         return []
 
-    turn = messages[last_human_index + 1:]
+    return messages[last_human_index + 1:]
+
+
+def get_vectordb_search_sources_in_latest_turn(messages: list[Any]) -> list[dict]:
+    turn = messages_in_latest_turn(messages)
 
     call_ids = {
         tool_call["id"]
@@ -832,7 +897,7 @@ async def _run_chat_turn(
         }
 
     with TimedMetric(
-        pg_pool, Metrics.LLM_RESPONSE_TIME.value, actor=metrics_actor
+        pg_pool, Metrics.TURN_RESPONSE_TIME.value, actor=metrics_actor
     ):
         try:
             state: dict[str, Any] = {}
@@ -1041,7 +1106,7 @@ def _ensure_valid_date_range(start_date: date | None, end_date: date | None) -> 
 def _fetch_shared_metrics_data(
     pool, params, search_terms_limit: int, topics_limit: int
 ):
-    mean_response_time = mean_metric(pool, Metrics.LLM_RESPONSE_TIME.value, params)
+    mean_turn_response_time = mean_turn_latency(pool, params)
     search_terms = top_k_search_terms(pool, params, search_terms_limit)
     topics = top_k_topics(pool, params, topics_limit)
     session_length = mean_session_length(pool, params, 10)
@@ -1053,10 +1118,10 @@ def _fetch_shared_metrics_data(
     response_time_trend = get_response_time_trend(pool, params)
     token_usage = get_token_usage_stats(pool, params)
     system_health = get_system_health_stats(pool, params)
-    avg_docs_per_query = get_avg_docs_per_query(pool, params)
+    avg_chunks_per_query = get_avg_chunks_per_query(pool, params)
 
     return {
-        "mean_response_time": mean_response_time,
+        "mean_turn_response_time": mean_turn_response_time,
         "search_terms": search_terms,
         "topics": topics,
         "session_length": session_length,
@@ -1068,27 +1133,36 @@ def _fetch_shared_metrics_data(
         "response_time_trend": response_time_trend,
         "token_usage": token_usage,
         "system_health": system_health,
-        "avg_docs_per_query": avg_docs_per_query,
+        "avg_chunks_per_query": avg_chunks_per_query,
     }
 
 
 def record_token_usage_metrics(pg_pool, messages: list[Any], actor) -> None:
+    """Record what this turn spent.
+
+    Only the latest turn: `messages` is the whole thread, so walking all of it
+    would re-record every earlier turn on every question.
+    """
     try:
-        for msg in messages:
+        input_tokens = 0
+        output_tokens = 0
+
+        for msg in messages_in_latest_turn(messages):
             if isinstance(msg, AIMessage) and msg.usage_metadata:
                 usage = msg.usage_metadata
-                insert_metric(
-                    pg_pool,
-                    Metrics.NUM_LLM_TOKENS_IN.value,
-                    usage.get("input_tokens", 0),
-                    actor=actor,
-                )
-                insert_metric(
-                    pg_pool,
-                    Metrics.NUM_LLM_TOKENS_OUT.value,
-                    usage.get("output_tokens", 0),
-                    actor=actor,
-                )
+                input_tokens += usage.get("input_tokens", 0) or 0
+                output_tokens += usage.get("output_tokens", 0) or 0
+
+        if not (input_tokens or output_tokens):
+            return
+
+        insert_metric(
+            pg_pool, Metrics.NUM_LLM_TOKENS_IN.value, input_tokens, actor=actor
+        )
+        insert_metric(
+            pg_pool, Metrics.NUM_LLM_TOKENS_OUT.value, output_tokens, actor=actor
+        )
+
     except Exception:
         logging.warning("Failed to record token usage metrics", exc_info=True)
 
@@ -1106,21 +1180,20 @@ async def metrics_dashboard(
     userId: str | None = Query(default=None),
     userRole: str | None = Query(default=None),
     lang: str | None = Query(default=None),
+    tz: str | None = Query(default=None),
 ):
     _ensure_valid_date_range(startDate, endDate)
 
     pg_pool = app.state.pg_pool
-    params = build_query_params(startDate, endDate, userId, userRole, lang)
+    params = build_query_params(startDate, endDate, userId, userRole, lang, tz)
     shared = _fetch_shared_metrics_data(pg_pool, params, 10, 10)
-
-    metrics_count = count_metrics(pg_pool, params)
-    metrics_by_tag = get_metrics_by_tag(pg_pool, params)
 
     return {
         "metrics": {
-            "response_time": shared["mean_response_time"],
-            "total_count": metrics_count,
-            "by_tag": metrics_by_tag,
+            "turn_response_time": shared["mean_turn_response_time"],
+            # Hardware samples land in the same table on a timer, so they are
+            # left out of a count meant to describe assistant usage.
+            "total_count": count_metrics(pg_pool, params, exclude_system_tags=True),
         },
         "top_words": shared["search_terms"],
         "top_topics": shared["topics"],
@@ -1136,8 +1209,37 @@ async def metrics_dashboard(
             "response_time_trend": shared["response_time_trend"],
             "token_usage": shared["token_usage"],
             "system_health": shared["system_health"],
-            "avg_docs_per_query": shared["avg_docs_per_query"],
+            "avg_chunks_per_query": shared["avg_chunks_per_query"],
         },
+        "metadata": {
+            "updatedAt": datetime.now().isoformat(),
+        },
+    }
+
+
+@app.get("/metrics/insights", response_model=InsightsResponseModel)
+async def metrics_insights(
+    auth: MetricsReadAuth,
+    startDate: date | None = Query(default=None),
+    endDate: date | None = Query(default=None),
+    userId: str | None = Query(default=None),
+    userRole: str | None = Query(default=None),
+    lang: str | None = Query(default=None),
+    tz: str | None = Query(default=None),
+):
+    """Just the query-analysis charts.
+
+    The insights view re-reads these under two different languages, which is
+    not a reason to recompute the whole dashboard twice.
+    """
+    _ensure_valid_date_range(startDate, endDate)
+
+    pg_pool = app.state.pg_pool
+    params = build_query_params(startDate, endDate, userId, userRole, lang, tz)
+
+    return {
+        "top_words": top_k_search_terms(pg_pool, params, 10),
+        "top_topics": top_k_topics(pg_pool, params, 10),
         "metadata": {
             "updatedAt": datetime.now().isoformat(),
         },
@@ -1152,22 +1254,21 @@ async def metrics_stats(
     userId: str | None = Query(default=None),
     userRole: str | None = Query(default=None),
     lang: str | None = Query(default=None),
+    tz: str | None = Query(default=None),
 ):
     _ensure_valid_date_range(startDate, endDate)
 
     pg_pool = app.state.pg_pool
-    params = build_query_params(startDate, endDate, userId, userRole, lang)
+    params = build_query_params(startDate, endDate, userId, userRole, lang, tz)
 
-    mean_response_time = mean_metric(
-        pg_pool, Metrics.LLM_RESPONSE_TIME.value, params
-    )
+    mean_turn_response_time = mean_turn_latency(pg_pool, params)
     session_length = mean_session_length(pg_pool, params, 10)
     unique_users_count = get_unique_users(pg_pool, params)
-    total_events = get_total_activity_events(pg_pool, params)
 
     return {
-        "totalMetricsRecords": total_events,
-        "avgResponseTime": mean_response_time or 0,
+        "totalMetricsRecords": count_metrics(pg_pool, params, exclude_system_tags=True),
+        "totalEvents": get_total_activity_events(pg_pool, params),
+        "avgTurnResponseTimeMs": (mean_turn_response_time or 0) * 1000,
         "avgSessionLength": session_length or 0,
         "uniqueUsers": unique_users_count,
     }
@@ -1181,11 +1282,12 @@ async def metrics_export(
     userId: str | None = Query(default=None),
     userRole: str | None = Query(default=None),
     lang: str | None = Query(default=None),
+    tz: str | None = Query(default=None),
 ):
     _ensure_valid_date_range(startDate, endDate)
 
     pg_pool = app.state.pg_pool
-    params = build_query_params(startDate, endDate, userId, userRole, lang)
+    params = build_query_params(startDate, endDate, userId, userRole, lang, tz)
     shared = _fetch_shared_metrics_data(pg_pool, params, 100, 100)
 
     token_usage = shared["token_usage"]
@@ -1202,8 +1304,9 @@ async def metrics_export(
                 "unique_users": shared["unique_users_count"],
                 "total_events": shared["total_events"],
                 "avg_session_length_seconds": shared["session_length"] or 0,
-                "avg_llm_response_time_ms": shared["mean_response_time"] or 0,
-                "avg_docs_per_query": shared["avg_docs_per_query"],
+                # Stored in seconds; the column this feeds is labelled ms.
+                "avg_turn_response_time_ms": (shared["mean_turn_response_time"] or 0) * 1000,
+                "avg_chunks_per_query": shared["avg_chunks_per_query"],
             },
             "token_usage": {
                 "llm_tokens_in": token_usage["llm_tokens_in"],

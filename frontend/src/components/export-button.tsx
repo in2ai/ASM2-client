@@ -68,6 +68,14 @@ export function ExportButton({ dateRange }: ExportButtonProps) {
   )
 }
 
+/** A resource that was never sampled reports as such, not as 0.0. */
+function formatPercent(
+  value: number | null,
+  copy: ReturnType<typeof getCsvCopy>,
+): string {
+  return value === null ? copy.noData : value.toFixed(1)
+}
+
 export function generateCSV(data: ExportMetricsOutput, locale: string): string {
   const { data: metricsData, metadata } = data
   const copy = getCsvCopy(locale)
@@ -90,8 +98,8 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
     `${copy.metrics.uniqueUsers},${metricsData.summary.unique_users},${copy.units.users}`,
     `${copy.metrics.totalEvents},${metricsData.summary.total_events},${copy.units.events}`,
     `${copy.metrics.avgSession},${metricsData.summary.avg_session_length_seconds.toFixed(1)},${copy.units.seconds}`,
-    `${copy.metrics.avgLlmLatency},${metricsData.summary.avg_llm_response_time_ms.toFixed(2)},ms`,
-    `${copy.metrics.docsPerQuery},${metricsData.summary.avg_docs_per_query.toFixed(1)},docs`,
+    `${copy.metrics.avgTurnLatency},${metricsData.summary.avg_turn_response_time_ms.toFixed(2)},ms`,
+    `${copy.metrics.chunksPerSearch},${metricsData.summary.avg_chunks_per_query.toFixed(1)},${copy.units.chunks}`,
     '',
   ]
 
@@ -100,16 +108,16 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
     `${copy.columns.type},${copy.columns.input},${copy.columns.output},${copy.columns.total}`,
     `LLM,${metricsData.token_usage.llm_tokens_in},${metricsData.token_usage.llm_tokens_out},${metricsData.token_usage.llm_tokens_in + metricsData.token_usage.llm_tokens_out}`,
     `RAG,${metricsData.token_usage.rag_tokens_in},${metricsData.token_usage.rag_tokens_out},${metricsData.token_usage.rag_tokens_in + metricsData.token_usage.rag_tokens_out}`,
-    `${copy.columns.total},,${metricsData.token_usage.total_tokens}`,
+    `${copy.columns.total},,,${metricsData.token_usage.total_tokens}`,
     '',
   ]
 
   const healthSection = [
     `=== ${copy.sections.systemHealth} ===`,
     `${copy.columns.resource},${copy.columns.averagePercent},${copy.columns.maxPercent}`,
-    `CPU,${metricsData.system_health.avg_cpu_percent.toFixed(1)},${metricsData.system_health.max_cpu_percent.toFixed(1)}`,
-    `RAM,${metricsData.system_health.avg_ram_percent.toFixed(1)},${metricsData.system_health.max_ram_percent.toFixed(1)}`,
-    `GPU,${metricsData.system_health.avg_gpu_percent.toFixed(1)},${metricsData.system_health.max_gpu_percent.toFixed(1)}`,
+    `CPU,${formatPercent(metricsData.system_health.avg_cpu_percent, copy)},${formatPercent(metricsData.system_health.max_cpu_percent, copy)}`,
+    `RAM,${formatPercent(metricsData.system_health.avg_ram_percent, copy)},${formatPercent(metricsData.system_health.max_ram_percent, copy)}`,
+    `GPU,${formatPercent(metricsData.system_health.avg_gpu_percent, copy)},${formatPercent(metricsData.system_health.max_gpu_percent, copy)}`,
     '',
   ]
 
@@ -146,10 +154,10 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
     metricsData.response_time_trend.length > 0
       ? [
           `=== ${copy.sections.responseTimeTrend} ===`,
-          `${copy.columns.date},LLM (ms),RAG (ms)`,
+          `${copy.columns.date},${copy.columns.turnMs},${copy.columns.retrievalMs}`,
           ...metricsData.response_time_trend.map(
             (trend) =>
-              `${trend.date},${(trend.llm_response_time * 1000).toFixed(2)},${(trend.doc_response_time * 1000).toFixed(2)}`,
+              `${trend.date},${(trend.turn_response_time * 1000).toFixed(2)},${(trend.doc_response_time * 1000).toFixed(2)}`,
           ),
           '',
         ]
@@ -216,6 +224,8 @@ function getCsvCopy(locale: string) {
         resource: 'Resource',
         averagePercent: 'Average (%)',
         maxPercent: 'Max (%)',
+        turnMs: 'Full turn (ms)',
+        retrievalMs: 'Retrieval, part of the turn (ms)',
         role: 'Role',
         users: 'Users',
         date: 'Date',
@@ -230,13 +240,14 @@ function getCsvCopy(locale: string) {
         uniqueUsers: 'Unique users',
         totalEvents: 'Total events',
         avgSession: 'Average session',
-        avgLlmLatency: 'Average LLM latency',
-        docsPerQuery: 'Docs per query',
+        avgTurnLatency: 'Average full-turn latency',
+        chunksPerSearch: 'Chunks per search',
       },
       units: {
         users: 'users',
         events: 'events',
         seconds: 'seconds',
+        chunks: 'chunks',
       },
     }
   }
@@ -269,6 +280,8 @@ function getCsvCopy(locale: string) {
       resource: 'Recurso',
       averagePercent: 'Promedio (%)',
       maxPercent: 'Maximo (%)',
+      turnMs: 'Turno completo (ms)',
+      retrievalMs: 'Recuperacion, parte del turno (ms)',
       role: 'Rol',
       users: 'Usuarios',
       date: 'Fecha',
@@ -283,13 +296,14 @@ function getCsvCopy(locale: string) {
       uniqueUsers: 'Usuarios unicos',
       totalEvents: 'Eventos totales',
       avgSession: 'Sesion media',
-      avgLlmLatency: 'Latencia LLM promedio',
-      docsPerQuery: 'Documentos por consulta',
+      avgTurnLatency: 'Latencia media del turno completo',
+      chunksPerSearch: 'Fragmentos por busqueda',
     },
     units: {
       users: 'usuarios',
       events: 'eventos',
       seconds: 'segundos',
+      chunks: 'fragmentos',
     },
   }
 }

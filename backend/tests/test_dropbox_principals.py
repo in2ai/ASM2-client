@@ -56,8 +56,11 @@ class FakeAccessType:
 
 
 class FakeSharedFolder:
-    def __init__(self, shared_folder_id, kind="viewer"):
+    def __init__(self, shared_folder_id, kind="viewer", name=None, path_display=None):
         self.shared_folder_id = shared_folder_id
+        self.name = name or shared_folder_id
+        # None when the member has not mounted the folder.
+        self.path_display = path_display
         self.access_type = FakeAccessType(kind)
 
 
@@ -172,6 +175,9 @@ def build_source(team_id=TEAM_ID):
         display_name="Jane",
         team_id=team_id,
         root_namespace_id="1234",
+        # On a team account the member's own folder sits below the team space.
+        # A personal account has no team space above it, so the two coincide.
+        home_namespace_id="5678" if team_id else "1234",
     )
     source.exclude = set()
 
@@ -635,6 +641,8 @@ class HasAccessTests(unittest.TestCase):
 
 
 class IndexableEntryTests(unittest.TestCase):
+    ROOT = "/seguridad"
+
     def build_file(self, path):
         return dropbox.files.FileMetadata(
             name=path.rsplit("/", 1)[-1],
@@ -647,33 +655,54 @@ class IndexableEntryTests(unittest.TestCase):
             path_display=path,
         )
 
-    def test_accepts_a_supported_extension(self):
-        self.assertTrue(
-            build_source().is_indexable(self.build_file("/Seguridad/report.pdf"))
+    def indexable(self, source, path):
+        """Ask the question the way `list_root` does.
+
+        Both arguments are derived rather than written out, so the test keeps
+        agreeing with the caller instead of with a snapshot of it: the path is
+        cut relative to the root, and the exclusions are rebased onto it.
+        """
+        entry = self.build_file(path)
+        relative = entry.path_lower[len(self.ROOT):]
+
+        return source.is_indexable(
+            entry, relative, source.relative_excludes(self.ROOT)
         )
 
+    def test_accepts_a_supported_extension(self):
+        self.assertTrue(self.indexable(build_source(), "/Seguridad/report.pdf"))
+
     def test_rejects_an_unsupported_extension(self):
-        self.assertFalse(
-            build_source().is_indexable(self.build_file("/Seguridad/photo.png"))
-        )
+        self.assertFalse(self.indexable(build_source(), "/Seguridad/photo.png"))
 
     def test_rejects_folders(self):
         folder = dropbox.files.FolderMetadata(
-            name="Seguridad", path_lower="/seguridad", path_display="/Seguridad"
+            name="Drafts",
+            path_lower="/seguridad/drafts",
+            path_display="/Seguridad/Drafts",
         )
 
-        self.assertFalse(build_source().is_indexable(folder))
+        self.assertFalse(build_source().is_indexable(folder, "/drafts", ()))
 
     def test_rejects_excluded_subtrees(self):
         source = build_source()
         source.exclude = {"/seguridad/drafts"}
 
-        self.assertFalse(
-            source.is_indexable(self.build_file("/Seguridad/Drafts/report.pdf"))
-        )
-        self.assertTrue(
-            source.is_indexable(self.build_file("/Seguridad/Final/report.pdf"))
-        )
+        self.assertFalse(self.indexable(source, "/Seguridad/Drafts/report.pdf"))
+        self.assertTrue(self.indexable(source, "/Seguridad/Final/report.pdf"))
+
+    def test_rejects_a_single_excluded_file(self):
+        source = build_source()
+        source.exclude = {"/seguridad/secret.pdf"}
+
+        self.assertFalse(self.indexable(source, "/Seguridad/secret.pdf"))
+        self.assertTrue(self.indexable(source, "/Seguridad/secret.pdf.pdf"))
+
+    def test_an_exclusion_outside_the_root_matches_nothing(self):
+        source = build_source()
+        source.exclude = {"/otra/drafts"}
+
+        self.assertTrue(self.indexable(source, "/Seguridad/Drafts/report.pdf"))
 
 
 if __name__ == "__main__":

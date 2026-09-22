@@ -13,12 +13,6 @@ from src.config.logto_auth import (
 )
 
 
-class MetricsByTagModel(BaseModel):
-    tag: str
-    avg_value: float
-    count: int
-
-
 class SearchTermModel(BaseModel):
     word: str
     count: int
@@ -42,7 +36,9 @@ class HourlyActivityModel(BaseModel):
 
 class ResponseTimeTrendModel(BaseModel):
     date: str
-    llm_response_time: float
+    # Whole turn, retrieval included. `doc_response_time` is the retrieval
+    # portion of it, not a separate stage running alongside.
+    turn_response_time: float
     doc_response_time: float
 
 
@@ -54,18 +50,19 @@ class TokenUsageModel(BaseModel):
 
 
 class SystemHealthModel(BaseModel):
-    avg_cpu: float
-    avg_ram: float
-    avg_gpu: float
-    max_cpu: float
-    max_ram: float
-    max_gpu: float
+    """`None` means the resource was never sampled, which is not the same as 0%."""
+
+    avg_cpu: float | None
+    avg_ram: float | None
+    avg_gpu: float | None
+    max_cpu: float | None
+    max_ram: float | None
+    max_gpu: float | None
 
 
 class MetricsSectionModel(BaseModel):
-    response_time: float | None
+    turn_response_time: float | None
     total_count: int
-    by_tag: list[MetricsByTagModel]
 
 
 class UserActivitySectionModel(BaseModel):
@@ -81,7 +78,7 @@ class RagQualitySectionModel(BaseModel):
     response_time_trend: list[ResponseTimeTrendModel]
     token_usage: TokenUsageModel
     system_health: SystemHealthModel
-    avg_docs_per_query: float
+    avg_chunks_per_query: float
 
 
 class MetricsMetadataModel(BaseModel):
@@ -99,17 +96,24 @@ class DashboardMetricsResponseModel(BaseModel):
 
 class StatsResponseModel(BaseModel):
     totalMetricsRecords: int
-    avgResponseTime: float
+    totalEvents: int
+    avgTurnResponseTimeMs: float
     avgSessionLength: float
     uniqueUsers: int
+
+
+class InsightsResponseModel(BaseModel):
+    top_words: list[SearchTermModel]
+    top_topics: list[TopicCountModel]
+    metadata: MetricsMetadataModel
 
 
 class ExportSummaryModel(BaseModel):
     unique_users: int
     total_events: int
     avg_session_length_seconds: float
-    avg_llm_response_time_ms: float
-    avg_docs_per_query: float
+    avg_turn_response_time_ms: float
+    avg_chunks_per_query: float
 
 
 class ExportTokenUsageModel(BaseModel):
@@ -121,12 +125,12 @@ class ExportTokenUsageModel(BaseModel):
 
 
 class ExportSystemHealthModel(BaseModel):
-    avg_cpu_percent: float
-    max_cpu_percent: float
-    avg_ram_percent: float
-    max_ram_percent: float
-    avg_gpu_percent: float
-    max_gpu_percent: float
+    avg_cpu_percent: float | None
+    max_cpu_percent: float | None
+    avg_ram_percent: float | None
+    max_ram_percent: float | None
+    avg_gpu_percent: float | None
+    max_gpu_percent: float | None
 
 
 class ExportDataModel(BaseModel):

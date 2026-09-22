@@ -25,6 +25,7 @@ from src.metrics.metrics import (
     register_topics,
     register_words,
 )
+from src.metrics.token_usage import TokenUsageCounter, track_token_usage
 from src.utils.nlp import extract_search_terms
 from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources, generate_subqueries, is_context_enough
 from src.utils.topic import resolve_topic_names
@@ -63,7 +64,51 @@ def format_context(vectorstore, chunks, long_context):
         formatted_chunks.append(f'{header}\n\n{chunk.page_content}')
  
     return "\n\n".join(formatted_chunks + long_context)
- 
+
+
+def _record_token_usage(pool, counter, metrics_actor, in_tag, out_tag):
+    """Store a tool's model spend.
+
+    A tool's model calls never produce a message that reaches graph state, so
+    this is the only place their tokens are counted.
+    """
+    if pool is None or metrics_actor is None:
+        return
+
+    input_tokens, output_tokens = counter.totals
+
+    if not (input_tokens or output_tokens):
+        return
+
+    try:
+        insert_metric(pool, in_tag, input_tokens, actor=metrics_actor)
+        insert_metric(pool, out_tag, output_tokens, actor=metrics_actor)
+
+    except Exception:
+        logging.warning("Failed to record token usage for %s", in_tag, exc_info=True)
+
+
+def record_rag_token_usage(pool, counter, metrics_actor):
+    """Subquery planning, relevance checks and the sufficiency verdict."""
+    _record_token_usage(
+        pool,
+        counter,
+        metrics_actor,
+        Metrics.NUM_RAG_TOKENS_IN.value,
+        Metrics.NUM_RAG_TOKENS_OUT.value,
+    )
+
+
+def record_answer_token_usage(pool, counter, metrics_actor):
+    """Answer-path drafting that happens inside a tool rather than the graph."""
+    _record_token_usage(
+        pool,
+        counter,
+        metrics_actor,
+        Metrics.NUM_LLM_TOKENS_IN.value,
+        Metrics.NUM_LLM_TOKENS_OUT.value,
+    )
+
 
 @tool(response_format="content_and_artifact")
 def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
@@ -79,12 +124,18 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
  
     USE_LONG_CONTEXT = get_bool_env('LONG_CONTEXT')
     USE_LONG_CONTEXT_BEFORE = get_bool_env('LONG_CONTEXT_BEFORE_FILTER')
-    lc_llm = get_configured_long_context_llm(llm) if USE_LONG_CONTEXT else None
+
+    # Every model call in this tool belongs to retrieval, not to the answer.
+    # Counting on the model itself is what catches the relevance checks, which
+    # run across a thread pool and so escape any context-local callback.
+    rag_tokens = TokenUsageCounter()
+    rag_llm = track_token_usage(llm, rag_tokens)
+    lc_llm = get_configured_long_context_llm(rag_llm) if USE_LONG_CONTEXT else None
  
     progress.emit(progress.SEARCHING)
  
     # The original query is always searched, so a bad decomposition can't lose the baseline
-    pending = [query] + generate_subqueries(llm, query, [query]).queries
+    pending = [query] + generate_subqueries(rag_llm, query, [query]).queries
     executed, chunks, seen = [], [], set()
     long_context, long_context_used = [], []
     context, lang_code = "", None
@@ -111,6 +162,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
 
             if not results:
                 if not chunks:
+                    record_rag_token_usage(pool, rag_tokens, metrics_actor)
+
                     return "[Search error: the document search is temporarily unavailable.]", {"sources": []}
  
                 break
@@ -125,7 +178,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
  
             with ThreadPoolExecutor() as executor:
                 relevance = list(executor.map(
-                    lambda c: is_relevant_source(llm, query, c.page_content).is_relevant, new
+                    lambda c: is_relevant_source(rag_llm, query, c.page_content).is_relevant, new
                 ))
  
             relevant = [c for c, ok in zip(new, relevance) if ok]
@@ -152,12 +205,12 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
                     long_context_used.append(source)
  
             context = format_context(vectorstore, chunks, long_context)
-            verdict = is_context_enough(llm, query, context)
+            verdict = is_context_enough(rag_llm, query, context)
  
             if verdict.is_enough or len(chunks) >= MAX_TOTAL_CHUNKS:
                 break
  
-            subqueries = generate_subqueries(llm, query, executed, verdict.reason).queries
+            subqueries = generate_subqueries(rag_llm, query, executed, verdict.reason).queries
             pending = [q for q in subqueries if q not in executed]
  
             logging.info(f'Context is not enough, retrying with: {pending}')
@@ -168,6 +221,8 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
     available_sources = get_chunk_sources(chunks, sources)
  
     # Send usage metrics
+    record_rag_token_usage(pool, rag_tokens, metrics_actor)
+
     if pool is not None and metrics_actor is not None:
         try:
             insert_metric(
@@ -226,10 +281,17 @@ def generate_document(
     # Get config
     configurable = config.get("configurable", {})
     llm = configurable["llm"]
+    pool = configurable.get("pg_pool")
+    metrics_actor = configurable.get("metrics_actor")
+
+    # Drafting is answer-path work, but it happens inside a tool and so never
+    # reaches graph state where the turn's tokens are read from.
+    doc_tokens = TokenUsageCounter()
+    doc_llm = track_token_usage(llm, doc_tokens)
 
     # Generate document
     try:
-        document = generate_document_from_context(llm, query, messages)
+        document = generate_document_from_context(doc_llm, query, messages)
 
     except InsufficientContextError as e:
         searches = "\n".join(f"- {q}" for q in e.suggested_searches)
@@ -240,6 +302,10 @@ def generate_document(
             f"{searches}",
             None,
         )
+
+    finally:
+        # A draft that was refused still cost tokens.
+        record_answer_token_usage(pool, doc_tokens, metrics_actor)
 
     # Render document
     try:

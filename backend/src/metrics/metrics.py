@@ -16,15 +16,16 @@ class Metrics(Enum):
     RAM_USAGE='RAM_USAGE'                       # Percentage of RAM used
     GPU_USAGE='GPU_USAGE'                       # Percentage of GPU used
 
-    LLM_RESPONSE_TIME='LLM_RESPONSE_TIME'       # LLM response time
-    DOC_RESPONSE_TIME='DOC_RESPONSE_TIME'       # RAG latency
+    TURN_RESPONSE_TIME='TURN_RESPONSE_TIME'     # End-to-end latency of one chat turn
+    LLM_RESPONSE_TIME='LLM_RESPONSE_TIME'       # Legacy name for TURN_RESPONSE_TIME, read-only
+    DOC_RESPONSE_TIME='DOC_RESPONSE_TIME'       # Retrieval latency, nested inside the turn
 
-    NUM_DOCS_RAG='NUM_DOCS_RAG'                 # Number of docs returned for each query
+    NUM_DOCS_RAG='NUM_DOCS_RAG'                 # Number of chunks kept for each search
 
-    NUM_LLM_TOKENS_IN='NUM_LLM_TOKENS_IN'       # Number of LLM input tokens
-    NUM_LLM_TOKENS_OUT='NUM_LLM_TOKENS_OUT'     # Number of LLM output tokens
-    NUM_RAG_TOKENS_IN='NUM_RAG_TOKENS_IN'       # Number of RAG input tokens
-    NUM_RAG_TOKENS_OUT='NUM_RAG_TOKENS_OUT'     # Number of RAG output tokens
+    NUM_LLM_TOKENS_IN='NUM_LLM_TOKENS_IN'       # Answer-path LLM input tokens
+    NUM_LLM_TOKENS_OUT='NUM_LLM_TOKENS_OUT'     # Answer-path LLM output tokens
+    NUM_RAG_TOKENS_IN='NUM_RAG_TOKENS_IN'       # Retrieval-path LLM input tokens
+    NUM_RAG_TOKENS_OUT='NUM_RAG_TOKENS_OUT'     # Retrieval-path LLM output tokens
 
 # ---------------------------------
 # Metric storage

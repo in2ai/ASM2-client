@@ -1,9 +1,24 @@
 from dataclasses import dataclass
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from psycopg2.pool import ThreadedConnectionPool
 
 from src.metrics.connection import execute_query_dict
+
+# Server-wide samples. They carry no user attribution, so they are never part
+# of the per-user metric counts the dashboard reports.
+SYSTEM_METRIC_TAGS = ("CPU_USAGE", "RAM_USAGE", "GPU_USAGE")
+
+# End-to-end latency of one chat turn. `LLM_RESPONSE_TIME` is the name this
+# measurement was written under before it was clear it timed the whole turn
+# (retrieval included) rather than the model alone; it is still read so the
+# history stays on the chart.
+TURN_LATENCY_TAGS = ("TURN_RESPONSE_TIME", "LLM_RESPONSE_TIME")
+
+# A day-bucketed chart never returns more rows than this, however wide the
+# selected range is. A year of daily points is already past what is readable.
+MAX_DAY_BUCKETS = 366
 
 
 @dataclass(frozen=True)
@@ -13,6 +28,22 @@ class MetricsQueryParams:
     user_id: str | None = None
     user_role: str | None = None
     lang: str | None = None
+    # IANA name. Day and hour buckets are cut on this clock, not the server's.
+    timezone: str = "UTC"
+
+
+def normalize_timezone(timezone: str | None) -> str:
+    """Fall back to UTC rather than let an unknown zone fail every query."""
+    if not timezone:
+        return "UTC"
+
+    try:
+        ZoneInfo(timezone)
+
+    except (ZoneInfoNotFoundError, ValueError):
+        return "UTC"
+
+    return timezone
 
 
 def build_query_params(
@@ -21,8 +52,10 @@ def build_query_params(
     user_id: str | None,
     user_role: str | None,
     lang: str | None,
+    timezone: str | None = None,
 ) -> MetricsQueryParams:
     normalized_start = start_date.isoformat() if start_date else None
+    # Stored as the exclusive upper bound, so the filter can stay a plain `<`.
     normalized_end = (end_date + timedelta(days=1)).isoformat() if end_date else None
 
     return MetricsQueryParams(
@@ -31,6 +64,7 @@ def build_query_params(
         user_id=user_id,
         user_role=user_role,
         lang=lang,
+        timezone=normalize_timezone(timezone),
     )
 
 
@@ -38,6 +72,24 @@ def _parse_count(value) -> int:
     if value is None:
         return 0
     return int(value)
+
+
+def _parse_optional_float(value) -> float | None:
+    """Keep "no samples" distinct from "measured zero"."""
+    if value is None:
+        return None
+    return float(value)
+
+
+def _day_bucket_limit(params: MetricsQueryParams) -> int:
+    """How many daily rows the selected range can hold."""
+    if not (params.start_date and params.end_date):
+        return MAX_DAY_BUCKETS
+
+    start = date.fromisoformat(params.start_date)
+    end = date.fromisoformat(params.end_date)
+
+    return max(1, min((end - start).days, MAX_DAY_BUCKETS))
 
 
 def _build_filter_conditions(
@@ -50,13 +102,15 @@ def _build_filter_conditions(
     conditions: list[str] = []
     query_params: list[str] = []
 
+    # The dates arrive as calendar days on the viewer's clock, so they are read
+    # back in that zone instead of the database's.
     if params.start_date:
-        conditions.append("ts >= %s")
-        query_params.append(params.start_date)
+        conditions.append("ts >= (%s::timestamp AT TIME ZONE %s)")
+        query_params.extend([params.start_date, params.timezone])
 
     if params.end_date:
-        conditions.append("ts <= %s")
-        query_params.append(params.end_date)
+        conditions.append("ts < (%s::timestamp AT TIME ZONE %s)")
+        query_params.extend([params.end_date, params.timezone])
 
     if include_user_id and params.user_id:
         conditions.append("user_id = %s")
@@ -100,8 +154,35 @@ def mean_metric(
     return rows[0].get("avg")
 
 
+def mean_turn_latency(
+    pool: ThreadedConnectionPool, params: MetricsQueryParams
+) -> float | None:
+    """Mean seconds for a whole chat turn, across the old and new tag names."""
+    conditions, query_params = _build_filter_conditions(
+        params,
+        include_user_id=True,
+        include_user_role=True,
+    )
+    placeholders = ", ".join(["%s"] * len(TURN_LATENCY_TAGS))
+
+    query = _append_and_conditions(
+        f"SELECT AVG(value) as avg FROM metrics WHERE tag IN ({placeholders})",
+        conditions,
+    )
+
+    rows = execute_query_dict(pool, query, [*TURN_LATENCY_TAGS, *query_params])
+    if not rows:
+        return None
+
+    return rows[0].get("avg")
+
+
 def count_metrics(
-    pool: ThreadedConnectionPool, params: MetricsQueryParams, tag: str | None = None
+    pool: ThreadedConnectionPool,
+    params: MetricsQueryParams,
+    tag: str | None = None,
+    *,
+    exclude_system_tags: bool = False,
 ) -> int:
     query_params: list[str] = []
     query = "SELECT COUNT(*) as cnt FROM metrics WHERE 1=1"
@@ -109,6 +190,11 @@ def count_metrics(
     if tag:
         query += " AND tag = %s"
         query_params.append(tag)
+
+    if exclude_system_tags:
+        placeholders = ", ".join(["%s"] * len(SYSTEM_METRIC_TAGS))
+        query += f" AND tag NOT IN ({placeholders})"
+        query_params.extend(SYSTEM_METRIC_TAGS)
 
     conditions, filter_params = _build_filter_conditions(
         params,
@@ -120,38 +206,6 @@ def count_metrics(
     rows = execute_query_dict(pool, query, [*query_params, *filter_params])
 
     return _parse_count(rows[0].get("cnt") if rows else None)
-
-
-def get_metrics_by_tag(
-    pool: ThreadedConnectionPool, params: MetricsQueryParams
-) -> list[dict]:
-    conditions, query_params = _build_filter_conditions(
-        params,
-        include_user_id=True,
-        include_user_role=True,
-    )
-
-    query = f"""
-    SELECT
-      tag,
-      AVG(value) as avg_value,
-      COUNT(*) as cnt
-    FROM metrics
-    {_append_and_conditions("WHERE tag IS NOT NULL", conditions)}
-    GROUP BY tag
-    ORDER BY cnt DESC
-    LIMIT 20
-    """
-
-    rows = execute_query_dict(pool, query, query_params)
-    return [
-        {
-            "tag": row.get("tag"),
-            "avg_value": row.get("avg_value") or 0,
-            "count": _parse_count(row.get("cnt")),
-        }
-        for row in rows
-    ]
 
 
 def mean_session_length(
@@ -193,6 +247,9 @@ def mean_session_length(
             MAX(ts) - MIN(ts) AS session_length
         FROM sessions
         GROUP BY user_id, session_id
+        -- A lone event spans no time. Counting it as a zero-second session
+        -- drags the mean toward zero instead of describing real sessions.
+        HAVING COUNT(*) > 1
     ) t
     """
 
@@ -266,16 +323,16 @@ def get_activity_by_day(
     )
     query = f"""
     SELECT
-      to_char(ts, 'YYYY-MM-DD') as date,
+      to_char(ts AT TIME ZONE %s, 'YYYY-MM-DD') as date,
       COUNT(*) as event_count,
       COUNT(DISTINCT user_id) as unique_users
     FROM user_activity
     {_append_and_conditions("WHERE 1=1", conditions)}
-    GROUP BY to_char(ts, 'YYYY-MM-DD')
-    ORDER BY date DESC
-    LIMIT 30
+    GROUP BY 1
+    ORDER BY 1 DESC
+    LIMIT {_day_bucket_limit(params)}
     """
-    rows = execute_query_dict(pool, query, query_params)
+    rows = execute_query_dict(pool, query, [params.timezone, *query_params])
     mapped = [
         {
             "date": row.get("date"),
@@ -298,14 +355,14 @@ def get_hourly_activity_pattern(
     )
     query = f"""
     SELECT
-      EXTRACT(HOUR FROM ts) as hour,
+      EXTRACT(HOUR FROM ts AT TIME ZONE %s) as hour,
       COUNT(*) as event_count
     FROM user_activity
     {_append_and_conditions("WHERE 1=1", conditions)}
-    GROUP BY EXTRACT(HOUR FROM ts)
-    ORDER BY hour
+    GROUP BY 1
+    ORDER BY 1
     """
-    rows = execute_query_dict(pool, query, query_params)
+    rows = execute_query_dict(pool, query, [params.timezone, *query_params])
     hourly_map = {
         int(row.get("hour")): _parse_count(row.get("event_count")) for row in rows
     }
@@ -318,23 +375,28 @@ def get_hourly_activity_pattern(
 def get_response_time_trend(
     pool: ThreadedConnectionPool, params: MetricsQueryParams
 ) -> list[dict]:
-    conditions, query_params = _build_filter_conditions(params)
+    conditions, query_params = _build_filter_conditions(
+        params,
+        include_user_id=True,
+        include_user_role=True,
+    )
+    turn_tags = ", ".join(f"'{tag}'" for tag in TURN_LATENCY_TAGS)
     query = f"""
     SELECT
-      to_char(ts, 'YYYY-MM-DD') as date,
-      AVG(CASE WHEN tag = 'LLM_RESPONSE_TIME' THEN value ELSE NULL END) as llm_response_time,
+      to_char(ts AT TIME ZONE %s, 'YYYY-MM-DD') as date,
+      AVG(CASE WHEN tag IN ({turn_tags}) THEN value ELSE NULL END) as turn_response_time,
       AVG(CASE WHEN tag = 'DOC_RESPONSE_TIME' THEN value ELSE NULL END) as doc_response_time
     FROM metrics
-    {_append_and_conditions("WHERE tag IN ('LLM_RESPONSE_TIME', 'DOC_RESPONSE_TIME')", conditions)}
-    GROUP BY to_char(ts, 'YYYY-MM-DD')
-    ORDER BY date DESC
-    LIMIT 30
+    {_append_and_conditions(f"WHERE tag IN ({turn_tags}, 'DOC_RESPONSE_TIME')", conditions)}
+    GROUP BY 1
+    ORDER BY 1 DESC
+    LIMIT {_day_bucket_limit(params)}
     """
-    rows = execute_query_dict(pool, query, query_params)
+    rows = execute_query_dict(pool, query, [params.timezone, *query_params])
     mapped = [
         {
             "date": row.get("date"),
-            "llm_response_time": row.get("llm_response_time") or 0,
+            "turn_response_time": row.get("turn_response_time") or 0,
             "doc_response_time": row.get("doc_response_time") or 0,
         }
         for row in rows
@@ -346,7 +408,11 @@ def get_response_time_trend(
 def get_token_usage_stats(
     pool: ThreadedConnectionPool, params: MetricsQueryParams
 ) -> dict:
-    conditions, query_params = _build_filter_conditions(params)
+    conditions, query_params = _build_filter_conditions(
+        params,
+        include_user_id=True,
+        include_user_role=True,
+    )
     query = f"""
     SELECT
       SUM(CASE WHEN tag = 'NUM_LLM_TOKENS_IN' THEN value ELSE 0 END) as llm_tokens_in,
@@ -369,6 +435,8 @@ def get_token_usage_stats(
 def get_system_health_stats(
     pool: ThreadedConnectionPool, params: MetricsQueryParams
 ) -> dict:
+    # Hardware samples are server-wide and carry no user, so filtering them by
+    # user would always empty the result.
     conditions, query_params = _build_filter_conditions(params)
     query = f"""
     SELECT
@@ -383,29 +451,35 @@ def get_system_health_stats(
     """
     rows = execute_query_dict(pool, query, query_params)
     row = rows[0] if rows else {}
+    # None means the resource was never sampled -- a machine with no GPU must
+    # not read as a GPU sitting at 0%.
     return {
-        "avg_cpu": row.get("avg_cpu") or 0,
-        "avg_ram": row.get("avg_ram") or 0,
-        "avg_gpu": row.get("avg_gpu") or 0,
-        "max_cpu": row.get("max_cpu") or 0,
-        "max_ram": row.get("max_ram") or 0,
-        "max_gpu": row.get("max_gpu") or 0,
+        "avg_cpu": _parse_optional_float(row.get("avg_cpu")),
+        "avg_ram": _parse_optional_float(row.get("avg_ram")),
+        "avg_gpu": _parse_optional_float(row.get("avg_gpu")),
+        "max_cpu": _parse_optional_float(row.get("max_cpu")),
+        "max_ram": _parse_optional_float(row.get("max_ram")),
+        "max_gpu": _parse_optional_float(row.get("max_gpu")),
     }
 
 
-def get_avg_docs_per_query(
+def get_avg_chunks_per_query(
     pool: ThreadedConnectionPool, params: MetricsQueryParams
 ) -> float:
-    conditions, query_params = _build_filter_conditions(params)
+    conditions, query_params = _build_filter_conditions(
+        params,
+        include_user_id=True,
+        include_user_role=True,
+    )
     query = f"""
-    SELECT AVG(value) as avg_docs
+    SELECT AVG(value) as avg_chunks
     FROM metrics
     {_append_and_conditions("WHERE tag = 'NUM_DOCS_RAG'", conditions)}
     """
     rows = execute_query_dict(pool, query, query_params)
     if not rows:
         return 0
-    return rows[0].get("avg_docs") or 0
+    return rows[0].get("avg_chunks") or 0
 
 
 def top_k_search_terms(
@@ -432,6 +506,7 @@ def top_k_search_terms(
 def top_k_topics(
     pool: ThreadedConnectionPool, params: MetricsQueryParams, k: int = 10
 ) -> list[dict]:
+    """Topics are language-independent; `lang` only picks the label to show."""
     conditions, query_params = _build_filter_conditions(
         params,
         include_user_id=True,

@@ -9,10 +9,7 @@ export const chartsByView = {
     { id: 'hourlyActivityPattern', labelKey: 'hourlyPattern' },
   ],
   'rag-quality': [
-    {
-      id: 'metricsByTag',
-      labelKey: 'responseTimeTrend',
-    },
+    { id: 'responseTimeTrend', labelKey: 'responseTimeTrend' },
     { id: 'tokenUsage', labelKey: 'tokenUsage' },
     { id: 'resourceConsumption', labelKey: 'systemHealth' },
   ],

@@ -4,6 +4,9 @@ import { useLocale, useTranslations } from 'next-intl'
 import { StatCard } from './stat-card'
 import { type MetricsResponse } from './types'
 
+/** Shown where there is nothing to measure, as opposed to a measured zero. */
+const NO_VALUE = '—'
+
 interface StatsRowProps {
   metrics: MetricsResponse
 }
@@ -17,12 +20,16 @@ export function StatsRow({ metrics }: Readonly<StatsRowProps>) {
 
   const uniqueUsers = userActivity.unique_users.toLocaleString(locale)
   const totalEvents = userActivity.total_events.toLocaleString(locale)
+  // A session needs at least two events to span any time, so a period with
+  // only one-shot questions has nothing to average rather than zero minutes.
   const avgSession = userActivity.mean_session_length_seconds
-    ? (userActivity.mean_session_length_seconds / 60).toFixed(1)
-    : '0.0'
-  const ragLatency = metricsData.response_time
-    ? metricsData.response_time.toFixed(0)
-    : '0'
+    ? `${(userActivity.mean_session_length_seconds / 60).toFixed(1)}m`
+    : NO_VALUE
+  // Already in seconds. A turn runs tens of seconds, so milliseconds only
+  // added digits nobody reads.
+  const turnLatency = metricsData.turn_response_time
+    ? `${metricsData.turn_response_time.toFixed(1)}s`
+    : NO_VALUE
   const totalMetrics = metricsData.total_count.toLocaleString(locale)
 
   return (
@@ -41,20 +48,20 @@ export function StatsRow({ metrics }: Readonly<StatsRowProps>) {
       />
       <StatCard
         label={t('avgSession.label')}
-        value={`${avgSession}m`}
+        value={avgSession}
         helper={t('avgSession.helper')}
         icon={Clock}
       />
       <StatCard
-        label={t('ragLatency.label')}
-        value={`${ragLatency}ms`}
-        helper={t('ragLatency.helper')}
+        label={t('turnLatency.label')}
+        value={turnLatency}
+        helper={t('turnLatency.helper')}
         icon={Sparkles}
       />
       <StatCard
-        label={t('ragMetrics.label')}
+        label={t('assistantMetrics.label')}
         value={totalMetrics}
-        helper={t('ragMetrics.helper')}
+        helper={t('assistantMetrics.helper')}
         icon={Database}
       />
     </div>

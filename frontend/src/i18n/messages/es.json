@@ -97,13 +97,13 @@
       "label": "Sesión media",
       "helper": "Tiempo de uso"
     },
-    "ragLatency": {
-      "label": "Latencia RAG",
-      "helper": "Respuesta LLM"
+    "turnLatency": {
+      "label": "Latencia por turno",
+      "helper": "Turno completo"
     },
-    "ragMetrics": {
-      "label": "Métricas RAG",
-      "helper": "Registros totales"
+    "assistantMetrics": {
+      "label": "Métricas del asistente",
+      "helper": "Sin telemetría de hardware"
     }
   },
   "UsageMetrics": {
@@ -134,36 +134,37 @@
     "title": "Calidad y rendimiento del RAG",
     "subtitle": "Tiempos de respuesta, consumo de tokens y salud del sistema",
     "chartLabels": {
-      "llmMs": "LLM (ms)",
-      "ragMs": "RAG (ms)",
+      "turnMs": "Turno completo (ms)",
+      "retrievalMs": "Recuperación (ms)",
       "input": "Entrada",
       "output": "Salida"
     },
     "responseTimeTrend": {
       "title": "Tendencia de tiempos de respuesta",
-      "hint": "Muestra como evolucionan los tiempos de respuesta del LLM (modelo de lenguaje) y del RAG (recuperación de documentos) a lo largo del tiempo. Valores altos pueden indicar problemas de rendimiento.",
-      "description": "Latencia LLM y RAG por día (ms)"
+      "hint": "El turno completo incluye la recuperación de documentos: la línea de recuperación es una parte de la del turno, no una etapa aparte. La diferencia entre ambas es el tiempo que dedica el modelo a redactar la respuesta.",
+      "description": "Latencia por día (ms)"
     },
     "tokenUsage": {
       "title": "Consumo de tokens",
-      "hint": "Compara los tokens de entrada (lo que envía el usuario + contexto) vs salida (respuesta generada) para LLM y RAG. Mas tokens = mayor coste y tiempo de procesamiento.",
+      "hint": "Separa los tokens de la respuesta (LLM) de los que consume la recuperación: planificar subconsultas, filtrar cada fragmento y comprobar si el contexto basta. Más tokens = mayor coste.",
       "total": "Total: {count} tokens"
     },
     "systemHealth": {
       "title": "Salud del sistema",
-      "hint": "Monitoriza el uso de recursos del servidor. Un uso alto sostenido de CPU, RAM o GPU puede indicar la necesidad de escalar la infraestructura.",
-      "description": "Uso promedio de recursos",
+      "hint": "Muestreo continuo del servidor cada 30 segundos. La media incluye los periodos en reposo, así que para dimensionar la infraestructura conviene mirar el máximo.",
+      "description": "Media de muestras cada 30 s, en reposo y en uso",
       "noData": "No hay datos de uso de recursos"
     },
     "resources": {
       "cpu": "CPU",
       "ram": "RAM",
       "gpu": "GPU",
-      "usageWithMax": "{average}% (max: {max}%)"
+      "usageWithMax": "{average}% (max: {max}%)",
+      "notSampled": "Sin muestras"
     },
-    "docsPerQuery": {
-      "title": "Docs por consulta",
-      "description": "Promedio de documentos recuperados"
+    "chunksPerSearch": {
+      "title": "Fragmentos por búsqueda",
+      "description": "Media de fragmentos relevantes por búsqueda"
     }
   },
   "InsightsView": {
@@ -192,10 +193,10 @@
       "hint": "Agrupa las consultas por temática detectada automáticamente. Permite entender que áreas del conocimiento son más consultadas y priorizar la mejora del contenido.",
       "description": "Top temas por frecuencia",
       "filters": {
-        "ariaLabel": "Filtrar temas más frecuentes por idioma",
-        "placeholder": "Seleccionar idioma",
+        "ariaLabel": "Idioma de las etiquetas de los temas",
+        "placeholder": "Idioma de las etiquetas",
         "loading": "Cargando temas más frecuentes",
-        "empty": "No se encontraron temas más frecuentes para {language}",
+        "empty": "No se encontraron temas en este periodo",
         "error": "Error al cargar los temas más frecuentes. Por favor, intenta nuevamente."
       }
     }

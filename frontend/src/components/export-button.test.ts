@@ -19,7 +19,7 @@ const exportPayload: ExportMetricsOutput = {
       {
         date: '2026-05-01',
         doc_response_time: 0.456,
-        llm_response_time: 0.123,
+        turn_response_time: 0.123,
       },
     ],
     role_distribution: {
@@ -28,8 +28,8 @@ const exportPayload: ExportMetricsOutput = {
     },
     search_terms: [{ count: 5, word: 'contract, renewal' }],
     summary: {
-      avg_docs_per_query: 2.5,
-      avg_llm_response_time_ms: 123.456,
+      avg_chunks_per_query: 2.5,
+      avg_turn_response_time_ms: 123.456,
       avg_session_length_seconds: 45.67,
       total_events: 11,
       unique_users: 4,
@@ -71,6 +71,42 @@ describe('export helpers', () => {
     expect(csv).toContain('"contract, renewal",5')
     expect(csv).toContain('"policy ""A""",2')
     expect(csv).toContain('2026-05-01,123.00,456.00')
+  })
+
+  it('puts the token total under the total column', () => {
+    const csv = generateCSV(exportPayload, 'en')
+
+    // Header is type,input,output,total -- a three-field row would file the
+    // total under "output".
+    expect(csv).toContain('Type,Input,Output,Total')
+    expect(csv).toContain('Total,,,200')
+  })
+
+  it('converts the stored seconds into the millisecond column', () => {
+    const csv = generateCSV(exportPayload, 'en')
+
+    expect(csv).toContain('Average full-turn latency,123.46,ms')
+    expect(csv).toContain('Full turn (ms)')
+  })
+
+  it('reports an unsampled resource instead of printing 0.0', () => {
+    const csv = generateCSV(
+      {
+        ...exportPayload,
+        data: {
+          ...exportPayload.data,
+          system_health: {
+            ...exportPayload.data.system_health,
+            avg_gpu_percent: null,
+            max_gpu_percent: null,
+          },
+        },
+      },
+      'en',
+    )
+
+    expect(csv).toContain('GPU,No data available,No data available')
+    expect(csv).toContain('CPU,12.3,22.3')
   })
 
   it('uses Spanish copy for non-English exports', () => {

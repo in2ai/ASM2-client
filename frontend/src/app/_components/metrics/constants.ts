@@ -98,16 +98,16 @@ export function createOverviewActivityChartConfig(labels: {
 }
 
 export function createRagResponseTimeChartConfig(labels: {
-  llm: string
-  rag: string
+  turn: string
+  retrieval: string
 }): ChartConfig {
   return {
-    llm_ms: {
-      label: labels.llm,
+    turn_ms: {
+      label: labels.turn,
       color: 'oklch(0.6 0.25 250)',
     },
     doc_ms: {
-      label: labels.rag,
+      label: labels.retrieval,
       color: 'oklch(0.7 0.2 150)',
     },
   }

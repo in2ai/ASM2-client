@@ -27,7 +27,7 @@ import {
   TrendingUp,
   AlertCircle,
 } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { useMemo, useState } from 'react'
 import { type DateRange } from 'react-day-picker'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
@@ -46,10 +46,14 @@ interface InsightsViewProps {
 export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
   const t = useTranslations('InsightsView')
   const languageSwitcherT = useTranslations('LanguageSwitcher')
+  const locale = useLocale() as AppLocale
+  // Search terms are stored per language, so this genuinely filters them.
   const [topWordsLanguage, setTopWordsLanguage] =
     useState<LanguageFilter>('all')
-  const [topTopicsLanguage, setTopTopicsLanguage] =
-    useState<LanguageFilter>('all')
+  // Topics are language-independent: this only picks which translation of the
+  // topic name to show, so it starts on the language being read.
+  const [topicLabelLanguage, setTopicLabelLanguage] =
+    useState<AppLocale>(locale)
 
   const {
     state: { visibility },
@@ -69,7 +73,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
     [t],
   )
 
-  const topWordsQuery = api.metrics.get.useQuery(
+  const topWordsQuery = api.metrics.getInsights.useQuery(
     {
       startDate: dateRange?.from,
       endDate: dateRange?.to,
@@ -86,11 +90,11 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
   const isTopWordsUpdating = topWordsQuery.isFetching && !isTopWordsPending
   const isTopWordsError = topWordsQuery.isError
 
-  const topTopicsQuery = api.metrics.get.useQuery(
+  const topTopicsQuery = api.metrics.getInsights.useQuery(
     {
       startDate: dateRange?.from,
       endDate: dateRange?.to,
-      lang: topTopicsLanguage === 'all' ? undefined : topTopicsLanguage,
+      lang: topicLabelLanguage,
     },
     {
       refetchInterval: 60_000,
@@ -131,7 +135,6 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
 
   const hasNoData =
     topWordsLanguage === 'all' &&
-    topTopicsLanguage === 'all' &&
     !isTopWordsPending &&
     !isTopTopicsPending &&
     !isTopWordsError &&
@@ -277,9 +280,9 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Select
-                    value={topTopicsLanguage}
+                    value={topicLabelLanguage}
                     onValueChange={(value) =>
-                      setTopTopicsLanguage(value as LanguageFilter)
+                      setTopicLabelLanguage(value as AppLocale)
                     }
                   >
                     <SelectTrigger
@@ -294,7 +297,6 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                       </div>
                     </SelectTrigger>
                     <SelectContent align="end">
-                      <SelectItem value="all">{languageLabels.all}</SelectItem>
                       <SelectItem value="es">{languageLabels.es}</SelectItem>
                       <SelectItem value="en">{languageLabels.en}</SelectItem>
                       <SelectItem value="gl">{languageLabels.gl}</SelectItem>
@@ -389,9 +391,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                   </ChartContainer>
                 ) : (
                   <div className="text-muted-foreground flex h-100 items-center justify-center px-6 text-center text-sm">
-                    {t('topTopics.filters.empty', {
-                      language: languageLabels[topTopicsLanguage],
-                    })}
+                    {t('topTopics.filters.empty')}
                   </div>
                 )}
               </CardContent>
