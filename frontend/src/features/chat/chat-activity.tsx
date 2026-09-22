@@ -12,6 +12,12 @@ interface ChatActivityProps {
   formatEvent: (event: ChatProgressEvent) => string
   /** Seconds spent so far, as the user reads it. */
   formatElapsed: (seconds: number) => string
+  /**
+   * When the turn started, as epoch milliseconds. Passing it keeps the count
+   * honest when this component remounts -- switching conversations away and
+   * back would otherwise restart it from zero.
+   */
+  startedAt?: number
   title: string
 }
 
@@ -27,9 +33,10 @@ export function ChatActivity({
   fallbackLabel,
   formatElapsed,
   formatEvent,
+  startedAt,
   title,
 }: Readonly<ChatActivityProps>) {
-  const elapsed = useElapsedSeconds()
+  const elapsed = useElapsedSeconds(startedAt)
   const steps = events.length > 0 ? events.map(formatEvent) : [fallbackLabel]
 
   return (
@@ -73,17 +80,26 @@ export function ChatActivity({
 }
 
 /** Seconds since this turn started, ticking while it runs. */
-function useElapsedSeconds() {
-  const [seconds, setSeconds] = useState(0)
+function useElapsedSeconds(startedAt?: number) {
+  // A caller that does not track when its turn began still gets a live count,
+  // just one that starts here instead of at the real beginning.
+  const [mountedAt] = useState(() => Date.now())
+  const origin = startedAt ?? mountedAt
+  const [seconds, setSeconds] = useState(() => elapsedSince(origin))
 
   useEffect(() => {
-    const startedAt = Date.now()
+    setSeconds(elapsedSince(origin))
+
     const timer = setInterval(() => {
-      setSeconds(Math.floor((Date.now() - startedAt) / 1000))
+      setSeconds(elapsedSince(origin))
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [])
+  }, [origin])
 
   return seconds
+}
+
+function elapsedSince(startedAt: number) {
+  return Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
 }

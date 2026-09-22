@@ -20,6 +20,8 @@ type ConversationRenderState = {
   isSending: boolean
   pendingContent: string | null
   persistedUserContents: string[]
+  progressSteps: string[]
+  progressStartedAt?: number
 }
 
 let conversationRenderStates: ConversationRenderState[] = []
@@ -134,6 +136,11 @@ vi.mock('./conversation-view', () => ({
     onComposerChange: (value: string) => void
     onSendMessage: () => void
     pendingMessage?: { content: string; id: string }
+    progress?: {
+      events: readonly { phase: string }[]
+      formatStep: (event: { phase: string }) => string
+      startedAt?: number
+    }
   }) => {
     const messages = [
       ...(props.chat?.messages ?? []),
@@ -150,6 +157,10 @@ vi.mock('./conversation-view', () => ({
       persistedUserContents: (props.chat?.messages ?? [])
         .filter((message) => message.role === 'user')
         .map((message) => message.content),
+      progressStartedAt: props.progress?.startedAt,
+      progressSteps: (props.progress?.events ?? []).map((event) =>
+        props.progress!.formatStep(event),
+      ),
     })
 
     return (
@@ -162,6 +173,11 @@ vi.mock('./conversation-view', () => ({
         />
         <button onClick={props.onSendMessage}>send</button>
         {props.isSending ? <div>sending-indicator</div> : null}
+        <div data-testid="progress-steps">
+          {(props.progress?.events ?? [])
+            .map((event) => props.progress!.formatStep(event))
+            .join('|')}
+        </div>
         <div data-testid="message-count">{messages.length}</div>
         {messages.map((message) => (
           <div key={message.id}>{message.content}</div>
@@ -179,6 +195,35 @@ function createDeferred<T>() {
   })
 
   return { promise, resolve }
+}
+
+/** A turn the test drives step by step, as the backend would stream it. */
+function controllableTurn() {
+  const encoder = new TextEncoder()
+  let controller!: ReadableStreamDefaultController<Uint8Array>
+
+  const body = new ReadableStream<Uint8Array>({
+    start(streamController) {
+      controller = streamController
+    },
+  })
+
+  const send = (name: string, payload: unknown) =>
+    controller.enqueue(
+      encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`),
+    )
+
+  return {
+    response: new Response(body, {
+      headers: { 'Content-Type': 'text/event-stream' },
+      status: 200,
+    }),
+    reportProgress: (phase: string) => send('progress', { phase }),
+    finish: (payload: unknown) => {
+      send('result', payload)
+      controller.close()
+    },
+  }
 }
 
 function jsonResponse(payload: unknown) {
@@ -375,6 +420,155 @@ describe('ChatPage', () => {
           state.persistedUserContents.includes('dime como pedir vacaciones'),
       ),
     ).toBe(false)
+  })
+
+  it('keeps a running turn visible when another conversation is asked something', async () => {
+    // Reported from the app: ask in one conversation, start a second one and
+    // ask there, and the first conversation lost its progress panel until the
+    // answer landed. The turn state used to be one global slot.
+    const firstTurn = controllableTurn()
+    const secondTurn = controllableTurn()
+
+    const chatOf = (id: string, title: string) => ({
+      created_at: '2026-04-14T18:30:00.000Z',
+      id,
+      last_message_preview: null,
+      messages: [],
+      title,
+      updated_at: '2026-04-14T18:30:00.000Z',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse(
+            isArchivedListRequest(requestUrl)
+              ? []
+              : [chatOf('chat-1', 'ASM2'), chatOf('chat-2', 'IN2AI')],
+          )
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse(chatOf('chat-1', 'ASM2'))
+        }
+
+        if (requestUrl.endsWith('/chats/chat-2') && method === 'GET') {
+          return jsonResponse(chatOf('chat-2', 'IN2AI'))
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1/messages/stream')) {
+          return firstTurn.response
+        }
+
+        if (requestUrl.endsWith('/chats/chat-2/messages/stream')) {
+          return secondTurn.response
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByLabelText('composer')
+
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'Dime de que va ASM2' },
+    })
+    fireEvent.click(screen.getByText('send'))
+
+    await act(async () => {
+      firstTurn.reportProgress('searching')
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('progress-steps').textContent).toBe(
+        'progress.searching',
+      )
+    })
+
+    // Move to the other conversation and ask there while the first still runs.
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-2"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('progress-steps').textContent).toBe('')
+    })
+
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'Dime quien compone IN2AI' },
+    })
+    fireEvent.click(screen.getByText('send'))
+
+    await act(async () => {
+      secondTurn.reportProgress('reading')
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('progress-steps').textContent).toBe(
+        'progress.reading',
+      )
+    })
+
+    // Back to the first conversation: its own turn is still running, still
+    // showing its own steps rather than the other conversation's.
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('sending-indicator')).toBeTruthy()
+    })
+
+    expect(screen.getByTestId('progress-steps').textContent).toBe(
+      'progress.searching',
+    )
+    expect(screen.getAllByText('Dime de que va ASM2').length).toBeGreaterThan(0)
+
+    const latest = conversationRenderStates.at(-1)
+    expect(latest?.isSending).toBe(true)
+    expect(typeof latest?.progressStartedAt).toBe('number')
   })
 
   it('keeps the pending user message scoped to the originating chat', async () => {

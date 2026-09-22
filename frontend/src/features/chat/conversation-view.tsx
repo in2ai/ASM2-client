@@ -67,6 +67,8 @@ interface ConversationViewProps {
     events: readonly ChatProgressEvent[]
     formatElapsed: (seconds: number) => string
     formatStep: (event: ChatProgressEvent) => string
+    /** When this turn started, so the elapsed count is not reset by a remount. */
+    startedAt?: number
     title: string
   }
 }
@@ -157,6 +159,7 @@ export function ConversationView({
                   fallbackLabel={messageLabels.sending}
                   formatElapsed={progress.formatElapsed}
                   formatEvent={progress.formatStep}
+                  startedAt={progress.startedAt}
                   title={progress.title}
                 />
               ) : null}

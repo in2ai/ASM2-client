@@ -5,7 +5,7 @@ import type { LogtoUser } from '@/lib/auth'
 import { useQueryClient } from '@tanstack/react-query'
 import { Settings2 } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   chatQueryKeys,
   useChatQuery,
@@ -29,7 +29,10 @@ import { SourcesPanel } from './sources-panel'
 import type { ChatMessage, ChatProgressEvent } from './types'
 import { getChatTitle, toErrorMessage } from './utils'
 
-function omitKey(source: Record<string, string>, key: string) {
+function omitKey<T>(
+  source: Readonly<Record<string, T>>,
+  key: string,
+): Readonly<Record<string, T>> {
   if (!(key in source)) {
     return source
   }
@@ -37,6 +40,18 @@ function omitKey(source: Record<string, string>, key: string) {
   const { [key]: _removed, ...rest } = source
   return rest
 }
+
+/** A turn the backend is still working on, and what it has reported so far. */
+interface TurnInFlight {
+  progress: readonly ChatProgressEvent[]
+  /**
+   * When the turn started. Kept here rather than in the activity component so
+   * the elapsed count survives the user switching conversations and back.
+   */
+  startedAt: number
+}
+
+const EMPTY_PROGRESS: readonly ChatProgressEvent[] = []
 
 interface ChatPageProps {
   onSelectChat: (chatId?: string, options?: { replace?: boolean }) => void
@@ -53,9 +68,14 @@ export function ChatPage({
   const locale = useLocale() as AppLocale
   const [composerValue, setComposerValue] = useState('')
   const [composerError, setComposerError] = useState<string | undefined>()
-  const [pendingMessage, setPendingMessage] = useState<ChatMessage | null>(null)
-  const [progressEvents, setProgressEvents] = useState<ChatProgressEvent[]>([])
-  const [sendingChatId, setSendingChatId] = useState<string | null>(null)
+  // Keyed by conversation, because a turn keeps running when the user moves on
+  // to another one: a second question must not blank out the first's progress.
+  const [pendingMessages, setPendingMessages] = useState<
+    Readonly<Record<string, ChatMessage>>
+  >({})
+  const [turnsInFlight, setTurnsInFlight] = useState<
+    Readonly<Record<string, TurnInFlight>>
+  >({})
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [documentDownloadErrors, setDocumentDownloadErrors] = useState<
     Record<string, string>
@@ -100,17 +120,21 @@ export function ChatPage({
   const visibleConversationId =
     activeChat?.id ?? effectiveChatId ?? createChatMutation.data?.id
   const lastPersistedMessage = activeChat?.messages.at(-1)
+  const pendingMessage = visibleConversationId
+    ? (pendingMessages[visibleConversationId] ?? null)
+    : null
   const hasPersistedPendingMessage =
     pendingMessage != null &&
     lastPersistedMessage?.role === 'user' &&
     lastPersistedMessage.content === pendingMessage.content
-  const visiblePendingMessage =
-    pendingMessage?.chat_id === visibleConversationId &&
-    !hasPersistedPendingMessage
-      ? pendingMessage
-      : null
-  const isSendingActiveConversation =
-    sendMessageMutation.isPending && sendingChatId === visibleConversationId
+  const visiblePendingMessage = hasPersistedPendingMessage
+    ? null
+    : pendingMessage
+  // This conversation's own turn, not whichever one happens to be running.
+  const activeTurn = visibleConversationId
+    ? turnsInFlight[visibleConversationId]
+    : undefined
+  const isSendingActiveConversation = activeTurn != null
 
   const pageError =
     chatsQuery.error ??
@@ -270,6 +294,14 @@ export function ChatPage({
     }
   }
 
+  const clearPendingMessage = useCallback((chatId: string) => {
+    setPendingMessages((current) => omitKey(current, chatId))
+  }, [])
+
+  const clearTurnInFlight = useCallback((chatId: string) => {
+    setTurnsInFlight((current) => omitKey(current, chatId))
+  }, [])
+
   const handleSendMessage = async () => {
     const content = composerValue.trim()
     if (!content || !chatEnabled) {
@@ -286,10 +318,11 @@ export function ChatPage({
         onSelectChat(chat.id)
       }
 
-      setSendingChatId(activeChatId)
+      // Narrowed for the callbacks below, which outlive this statement.
+      const turnChatId = activeChatId
 
       const optimisticMessage: ChatMessage = {
-        chat_id: activeChatId,
+        chat_id: turnChatId,
         content,
         created_at: new Date().toISOString(),
         id: `pending-${Date.now()}`,
@@ -299,21 +332,44 @@ export function ChatPage({
       }
 
       setComposerValue('')
-      setPendingMessage(optimisticMessage)
-      setProgressEvents([])
+      setPendingMessages((current) => ({
+        ...current,
+        [turnChatId]: optimisticMessage,
+      }))
+      setTurnsInFlight((current) => ({
+        ...current,
+        [turnChatId]: { progress: [], startedAt: Date.now() },
+      }))
 
       const result = await sendMessageMutation.mutateAsync({
-        chatId: activeChatId,
+        chatId: turnChatId,
         content,
         onProgress: (event) =>
-          setProgressEvents((current) => appendProgress(current, event)),
+          setTurnsInFlight((current) => {
+            const turn = current[turnChatId]
+
+            // The turn was cleared -- its conversation was deleted mid-flight.
+            if (!turn) {
+              return current
+            }
+
+            return {
+              ...current,
+              [turnChatId]: {
+                ...turn,
+                progress: appendProgress(turn.progress, event),
+              },
+            }
+          }),
       })
 
-      setPendingMessage(null)
-      queryClient.setQueryData(chatQueryKeys.detail(activeChatId), result.chat)
+      clearPendingMessage(turnChatId)
+      queryClient.setQueryData(chatQueryKeys.detail(turnChatId), result.chat)
       await queryClient.invalidateQueries({ queryKey: chatQueryKeys.list })
     } catch (error) {
-      setPendingMessage(null)
+      if (activeChatId) {
+        clearPendingMessage(activeChatId)
+      }
 
       // A turn the backend kept working on after the connection broke may have
       // been answered anyway, so ask it rather than assume the message is lost.
@@ -327,7 +383,9 @@ export function ChatPage({
         setComposerError(toErrorMessage(error, t('errors.sendFailed')))
       }
     } finally {
-      setSendingChatId((current) => (current === activeChatId ? null : current))
+      if (activeChatId) {
+        clearTurnInFlight(activeChatId)
+      }
     }
   }
 
@@ -468,7 +526,8 @@ export function ChatPage({
           onSendMessage={() => void handleSendMessage()}
           pendingMessage={visiblePendingMessage}
           progress={{
-            events: progressEvents,
+            events: activeTurn?.progress ?? EMPTY_PROGRESS,
+            startedAt: activeTurn?.startedAt,
             formatElapsed: (seconds) => t('progress.elapsed', { seconds }),
             formatStep: (event) => {
               const { key, values } = describeProgress(event)
