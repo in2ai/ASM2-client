@@ -53,6 +53,9 @@ interface TurnInFlight {
 
 const EMPTY_PROGRESS: readonly ChatProgressEvent[] = []
 
+/** Where a draft lives while its conversation does not exist yet. */
+const NEW_CONVERSATION_KEY = ''
+
 interface ChatPageProps {
   onSelectChat: (chatId?: string, options?: { replace?: boolean }) => void
   selectedChatId?: string
@@ -66,8 +69,15 @@ export function ChatPage({
 }: Readonly<ChatPageProps>) {
   const t = useTranslations('ChatPage')
   const locale = useLocale() as AppLocale
-  const [composerValue, setComposerValue] = useState('')
-  const [composerError, setComposerError] = useState<string | undefined>()
+  // Per conversation as well: a draft belongs to the conversation it was
+  // typed in, and a failed send must report itself there rather than under
+  // whichever conversation the user has since moved to.
+  const [composerDrafts, setComposerDrafts] = useState<
+    Readonly<Record<string, string>>
+  >({})
+  const [composerErrors, setComposerErrors] = useState<
+    Readonly<Record<string, string>>
+  >({})
   // Keyed by conversation, because a turn keeps running when the user moves on
   // to another one: a second question must not blank out the first's progress.
   const [pendingMessages, setPendingMessages] = useState<
@@ -135,6 +145,9 @@ export function ChatPage({
     ? turnsInFlight[visibleConversationId]
     : undefined
   const isSendingActiveConversation = activeTurn != null
+  const composerKey = visibleConversationId ?? NEW_CONVERSATION_KEY
+  const composerValue = composerDrafts[composerKey] ?? ''
+  const composerError = composerErrors[composerKey]
 
   const pageError =
     chatsQuery.error ??
@@ -196,13 +209,13 @@ export function ChatPage({
   }
 
   const handleCreateChat = async () => {
-    setComposerError(undefined)
+    clearComposerError(composerKey)
     const chat = await createChatMutation.mutateAsync(undefined)
     onSelectChat(chat.id)
   }
 
   const handleDeleteChat = async (chatId: string) => {
-    setComposerError(undefined)
+    clearComposerError(composerKey)
     const nextChatId =
       effectiveChatId === chatId
         ? chatsQuery.data?.find((chat) => chat.id !== chatId)?.id
@@ -211,26 +224,34 @@ export function ChatPage({
     try {
       await deleteChatMutation.mutateAsync(chatId)
 
+      forgetConversation(chatId)
+
       if (effectiveChatId === chatId) {
         onSelectChat(nextChatId, { replace: true })
       }
     } catch (error) {
-      setComposerError(toErrorMessage(error, t('errors.deleteFailed')))
+      setComposerErrorFor(
+        composerKey,
+        toErrorMessage(error, t('errors.deleteFailed')),
+      )
     }
   }
 
   const handleSetChatPinned = async (chatId: string, pinned: boolean) => {
-    setComposerError(undefined)
+    clearComposerError(composerKey)
 
     try {
       await setChatPinnedMutation.mutateAsync({ chatId, pinned })
     } catch (error) {
-      setComposerError(toErrorMessage(error, t('errors.pinFailed')))
+      setComposerErrorFor(
+        composerKey,
+        toErrorMessage(error, t('errors.pinFailed')),
+      )
     }
   }
 
   const handleSetChatArchived = async (chatId: string, archived: boolean) => {
-    setComposerError(undefined)
+    clearComposerError(composerKey)
     // Archiving takes the chat out of the list on screen, so the pane it was
     // filling has to move on to a chat that is still there.
     const nextChatId =
@@ -245,7 +266,8 @@ export function ChatPage({
         onSelectChat(nextChatId, { replace: true })
       }
     } catch (error) {
-      setComposerError(
+      setComposerErrorFor(
+        composerKey,
         toErrorMessage(
           error,
           archived ? t('errors.archiveFailed') : t('errors.unarchiveFailed'),
@@ -255,12 +277,15 @@ export function ChatPage({
   }
 
   const handleRenameChat = async (chatId: string, title: string) => {
-    setComposerError(undefined)
+    clearComposerError(composerKey)
 
     try {
       await renameChatMutation.mutateAsync({ chatId, title })
     } catch (error) {
-      setComposerError(toErrorMessage(error, t('errors.renameFailed')))
+      setComposerErrorFor(
+        composerKey,
+        toErrorMessage(error, t('errors.renameFailed')),
+      )
     }
   }
 
@@ -294,6 +319,25 @@ export function ChatPage({
     }
   }
 
+  const setComposerDraft = useCallback((chatId: string, value: string) => {
+    setComposerDrafts((current) => ({ ...current, [chatId]: value }))
+  }, [])
+
+  const setComposerErrorFor = useCallback((chatId: string, message: string) => {
+    setComposerErrors((current) => ({ ...current, [chatId]: message }))
+  }, [])
+
+  const clearComposerError = useCallback((chatId: string) => {
+    setComposerErrors((current) => omitKey(current, chatId))
+  }, [])
+
+  const forgetConversation = useCallback((chatId: string) => {
+    setComposerDrafts((current) => omitKey(current, chatId))
+    setComposerErrors((current) => omitKey(current, chatId))
+    setPendingMessages((current) => omitKey(current, chatId))
+    setTurnsInFlight((current) => omitKey(current, chatId))
+  }, [])
+
   const clearPendingMessage = useCallback((chatId: string) => {
     setPendingMessages((current) => omitKey(current, chatId))
   }, [])
@@ -308,7 +352,17 @@ export function ChatPage({
       return
     }
 
-    setComposerError(undefined)
+    // One turn at a time per conversation. Different conversations may run
+    // together, but a single thread cannot be advanced twice at once: both
+    // turns would write over each other in the checkpointer.
+    if (visibleConversationId && turnsInFlight[visibleConversationId]) {
+      return
+    }
+
+    // Where the text came from, which is not where it ends up if this send
+    // is the one that creates the conversation.
+    const draftKey = composerKey
+    clearComposerError(draftKey)
     let activeChatId = effectiveChatId
 
     try {
@@ -331,7 +385,7 @@ export function ChatPage({
         status: 'sending',
       }
 
-      setComposerValue('')
+      setComposerDraft(draftKey, '')
       setPendingMessages((current) => ({
         ...current,
         [turnChatId]: optimisticMessage,
@@ -373,14 +427,21 @@ export function ChatPage({
 
       // A turn the backend kept working on after the connection broke may have
       // been answered anyway, so ask it rather than assume the message is lost.
+      // Report against the conversation that was asked, so the message and
+      // its error stay together even if the user has moved on.
+      const failedKey = activeChatId ?? draftKey
+
       if (error instanceof UnfinishedTurnError && activeChatId) {
-        setComposerError(t('errors.turnInterrupted'))
+        setComposerErrorFor(failedKey, t('errors.turnInterrupted'))
         await queryClient.invalidateQueries({
           queryKey: chatQueryKeys.detail(activeChatId),
         })
       } else {
-        setComposerValue(content)
-        setComposerError(toErrorMessage(error, t('errors.sendFailed')))
+        setComposerDraft(failedKey, content)
+        setComposerErrorFor(
+          failedKey,
+          toErrorMessage(error, t('errors.sendFailed')),
+        )
       }
     } finally {
       if (activeChatId) {
@@ -522,7 +583,7 @@ export function ChatPage({
           }}
           onDownloadDocument={(message) => void handleDownloadDocument(message)}
           onEmptyPrimaryAction={() => setSourcesOpen(true)}
-          onComposerChange={setComposerValue}
+          onComposerChange={(value) => setComposerDraft(composerKey, value)}
           onSendMessage={() => void handleSendMessage()}
           pendingMessage={visiblePendingMessage}
           progress={{

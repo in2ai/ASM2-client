@@ -22,6 +22,8 @@ type ConversationRenderState = {
   persistedUserContents: string[]
   progressSteps: string[]
   progressStartedAt?: number
+  composerValue: string
+  errorMessage?: string
 }
 
 let conversationRenderStates: ConversationRenderState[] = []
@@ -132,6 +134,7 @@ vi.mock('./conversation-view', () => ({
     composerValue: string
     emptyDescription?: string
     emptyTitle?: string
+    errorMessage?: string
     isSending?: boolean
     onComposerChange: (value: string) => void
     onSendMessage: () => void
@@ -157,6 +160,8 @@ vi.mock('./conversation-view', () => ({
       persistedUserContents: (props.chat?.messages ?? [])
         .filter((message) => message.role === 'user')
         .map((message) => message.content),
+      composerValue: props.composerValue,
+      errorMessage: props.errorMessage,
       progressStartedAt: props.progress?.startedAt,
       progressSteps: (props.progress?.events ?? []).map((event) =>
         props.progress!.formatStep(event),
@@ -173,6 +178,7 @@ vi.mock('./conversation-view', () => ({
         />
         <button onClick={props.onSendMessage}>send</button>
         {props.isSending ? <div>sending-indicator</div> : null}
+        <div data-testid="composer-error">{props.errorMessage ?? ''}</div>
         <div data-testid="progress-steps">
           {(props.progress?.events ?? [])
             .map((event) => props.progress!.formatStep(event))
@@ -569,6 +575,304 @@ describe('ChatPage', () => {
     const latest = conversationRenderStates.at(-1)
     expect(latest?.isSending).toBe(true)
     expect(typeof latest?.progressStartedAt).toBe('number')
+  })
+
+  it('keeps each conversation composer and errors to itself', async () => {
+    const firstTurn = createDeferred<Response>()
+
+    const chatOf = (id: string, title: string) => ({
+      created_at: '2026-04-14T18:30:00.000Z',
+      id,
+      last_message_preview: null,
+      messages: [],
+      title,
+      updated_at: '2026-04-14T18:30:00.000Z',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse(
+            isArchivedListRequest(requestUrl)
+              ? []
+              : [chatOf('chat-1', 'ASM2'), chatOf('chat-2', 'IN2AI')],
+          )
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse(chatOf('chat-1', 'ASM2'))
+        }
+
+        if (requestUrl.endsWith('/chats/chat-2') && method === 'GET') {
+          return jsonResponse(chatOf('chat-2', 'IN2AI'))
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1/messages/stream')) {
+          return firstTurn.promise
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    const show = (chatId: string) => (
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId={chatId}
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>
+    )
+
+    const view = render(show('chat-1'))
+
+    await screen.findByLabelText('composer')
+
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'Dime de que va ASM2' },
+    })
+    fireEvent.click(screen.getByText('send'))
+
+    // Move over and start typing while the first conversation is still working.
+    view.rerender(show('chat-2'))
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText('composer') as HTMLInputElement).value,
+      ).toBe('')
+    })
+
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'Dime quien compone IN2AI' },
+    })
+
+    // The first conversation's turn now fails.
+    firstTurn.resolve(
+      new Response(JSON.stringify({ detail: 'boom' }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 500,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(
+        conversationRenderStates.some((state) => state.isSending === false),
+      ).toBe(true)
+    })
+
+    // The draft being typed here is untouched, and the failure is not reported
+    // under this conversation.
+    expect((screen.getByLabelText('composer') as HTMLInputElement).value).toBe(
+      'Dime quien compone IN2AI',
+    )
+    expect(screen.getByTestId('composer-error').textContent).toBe('')
+
+    // The failure and the text that caused it belong to the conversation asked.
+    view.rerender(show('chat-1'))
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText('composer') as HTMLInputElement).value,
+      ).toBe('Dime de que va ASM2')
+    })
+
+    expect(screen.getByTestId('composer-error').textContent).not.toBe('')
+  })
+
+  it('keeps an unsent draft with the conversation it was typed in', async () => {
+    const chatOf = (id: string, title: string) => ({
+      created_at: '2026-04-14T18:30:00.000Z',
+      id,
+      last_message_preview: null,
+      messages: [],
+      title,
+      updated_at: '2026-04-14T18:30:00.000Z',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse(
+            isArchivedListRequest(requestUrl)
+              ? []
+              : [chatOf('chat-1', 'ASM2'), chatOf('chat-2', 'IN2AI')],
+          )
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse(chatOf('chat-1', 'ASM2'))
+        }
+
+        if (requestUrl.endsWith('/chats/chat-2') && method === 'GET') {
+          return jsonResponse(chatOf('chat-2', 'IN2AI'))
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    const show = (chatId: string) => (
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId={chatId}
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>
+    )
+
+    const view = render(show('chat-1'))
+
+    await screen.findByLabelText('composer')
+
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'borrador de ASM2' },
+    })
+
+    view.rerender(show('chat-2'))
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText('composer') as HTMLInputElement).value,
+      ).toBe('')
+    })
+
+    view.rerender(show('chat-1'))
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText('composer') as HTMLInputElement).value,
+      ).toBe('borrador de ASM2')
+    })
+  })
+
+  it('refuses a second turn in a conversation already answering', async () => {
+    const firstTurn = createDeferred<Response>()
+    let streamRequests = 0
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse([])
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse({
+            created_at: '2026-04-14T18:30:00.000Z',
+            id: 'chat-1',
+            last_message_preview: null,
+            messages: [],
+            title: 'ASM2',
+            updated_at: '2026-04-14T18:30:00.000Z',
+          })
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1/messages/stream')) {
+          streamRequests += 1
+          return firstTurn.promise
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    await screen.findByLabelText('composer')
+
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'primera' },
+    })
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(() => {
+      expect(screen.getByText('sending-indicator')).toBeTruthy()
+    })
+
+    // The button is disabled meanwhile, but the Enter key reaches the handler
+    // directly, so the handler itself has to refuse.
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'segunda' },
+    })
+    fireEvent.click(screen.getByText('send'))
+
+    await waitFor(() => {
+      expect(streamRequests).toBe(1)
+    })
+
+    // The second question is still in the composer, unsent.
+    expect((screen.getByLabelText('composer') as HTMLInputElement).value).toBe(
+      'segunda',
+    )
   })
 
   it('keeps the pending user message scoped to the originating chat', async () => {

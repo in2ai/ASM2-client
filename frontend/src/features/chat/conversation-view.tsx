@@ -189,7 +189,10 @@ export function ConversationView({
               value={composerValue}
               onChange={(event) => onComposerChange(event.target.value)}
               onKeyDown={(event) => {
-                if (composerDisabled) {
+                // The send button is already disabled while a turn runs; the
+                // keyboard has to refuse it too, or the same conversation gets
+                // asked twice at once.
+                if (composerDisabled || isSending) {
                   return
                 }
                 if (event.key === 'Enter' && !event.shiftKey) {
