@@ -51,6 +51,11 @@ code {
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -87,6 +92,13 @@ code {
   --accent: oklch(0.94 0.015 200);
   --accent-foreground: oklch(0.25 0.02 260);
   --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0.002 90);
+  /* Status hues carry meaning, so they are tokens like everything else:
+     each side of the theme can tune them for contrast on its own background. */
+  --success: oklch(0.58 0.14 160);
+  --success-foreground: oklch(0.985 0.002 90);
+  --warning: oklch(0.62 0.15 70);
+  --warning-foreground: oklch(0.16 0.02 260);
   --border: oklch(0.91 0.008 240);
   --input: oklch(0.91 0.008 240);
   --ring: oklch(0.55 0.15 200);
@@ -122,6 +134,13 @@ code {
   --accent: oklch(0.22 0.03 200);
   --accent-foreground: oklch(0.93 0.008 240);
   --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.14 0.02 260);
+  /* Lifted and desaturated against the dark background, where the light
+     theme's values would read as muddy rather than as a status. */
+  --success: oklch(0.75 0.15 160);
+  --success-foreground: oklch(0.14 0.02 260);
+  --warning: oklch(0.78 0.14 75);
+  --warning-foreground: oklch(0.14 0.02 260);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.7 0.14 195);
@@ -146,5 +165,30 @@ code {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/**
+ * Motion is decoration here -- nothing in this app is explained by a thing
+ * sliding in. Where someone has asked their system for less of it, the
+ * animations collapse to an instant rather than being tuned down, and the
+ * indefinite ones (spinners, the live pulse) are left a slow beat so that
+ * "still working" remains visible.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin,
+  .animate-ping,
+  .animate-pulse {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
   }
 }

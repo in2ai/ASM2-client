@@ -142,7 +142,10 @@ describe('indexing progress API', () => {
       expect(result.current.isError).toBe(true)
     })
 
-    expect(result.current.error).toEqual(new Error('Forbidden'))
+    expect(result.current.error).toMatchObject({
+      message: 'Forbidden',
+      status: 403,
+    })
 
     queryClient.clear()
   })

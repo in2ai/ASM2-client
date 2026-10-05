@@ -138,6 +138,7 @@ vi.mock('./conversation-view', () => ({
     isSending?: boolean
     onComposerChange: (value: string) => void
     onSendMessage: () => void
+    onStopGeneration?: () => void
     pendingMessage?: { content: string; id: string }
     progress?: {
       events: readonly { phase: string }[]
@@ -177,6 +178,7 @@ vi.mock('./conversation-view', () => ({
           onChange={(event) => props.onComposerChange(event.target.value)}
         />
         <button onClick={props.onSendMessage}>send</button>
+        <button onClick={props.onStopGeneration}>stop</button>
         {props.isSending ? <div>sending-indicator</div> : null}
         <div data-testid="composer-error">{props.errorMessage ?? ''}</div>
         <div data-testid="progress-steps">
@@ -577,6 +579,154 @@ describe('ChatPage', () => {
     expect(typeof latest?.progressStartedAt).toBe('number')
   })
 
+  it('keeps a running turn visible after leaving the chat and coming back', async () => {
+    // Reported from the app: ask, go to the dashboard, come back, and the
+    // steps were gone until the answer landed. Going to the dashboard
+    // unmounts the page, and the turn's state used to go with it.
+    const turn = controllableTurn()
+    const chat = {
+      created_at: '2026-04-14T18:30:00.000Z',
+      id: 'chat-1',
+      last_message_preview: null,
+      messages: [],
+      title: 'ASM2',
+      updated_at: '2026-04-14T18:30:00.000Z',
+    }
+    const userMessage = {
+      chat_id: 'chat-1',
+      content: 'what is asm2?',
+      created_at: '2026-04-14T18:31:00.000Z',
+      id: 'user-1',
+      metadata: null,
+      role: 'user',
+      status: null,
+    }
+    const assistantMessage = {
+      chat_id: 'chat-1',
+      content: 'ASM2 is an evaluation benchmark.',
+      created_at: '2026-04-14T18:31:30.000Z',
+      id: 'assistant-1',
+      metadata: null,
+      role: 'assistant',
+      status: null,
+    }
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse(isArchivedListRequest(requestUrl) ? [] : [chat])
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse(chat)
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1/messages/stream')) {
+          return turn.response
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    const chatPage = (
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>
+    )
+
+    const view = render(chatPage)
+
+    await screen.findByLabelText('composer')
+
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'what is asm2?' },
+    })
+    fireEvent.click(screen.getByText('send'))
+
+    await act(async () => {
+      turn.reportProgress('searching')
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('progress-steps').textContent).toBe(
+        'progress.searching',
+      )
+    })
+
+    const startedAt = conversationRenderStates.at(-1)?.progressStartedAt
+
+    // Off to the dashboard: the chat page goes away entirely, and the
+    // backend carries on reporting while nobody is looking.
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <div>dashboard</div>
+      </QueryClientProvider>,
+    )
+    expect(screen.queryByLabelText('composer')).toBeNull()
+
+    await act(async () => {
+      turn.reportProgress('reading')
+    })
+
+    view.rerender(chatPage)
+
+    await waitFor(() => {
+      expect(screen.getByText('sending-indicator')).toBeTruthy()
+    })
+
+    expect(screen.getByTestId('progress-steps').textContent).toBe(
+      'progress.searching|progress.reading',
+    )
+    expect(screen.getAllByText('what is asm2?').length).toBeGreaterThan(0)
+    expect(conversationRenderStates.at(-1)?.progressStartedAt).toBe(startedAt)
+
+    await act(async () => {
+      turn.finish({
+        assistant_message: assistantMessage,
+        chat: {
+          ...chat,
+          last_message_preview: assistantMessage.content,
+          messages: [userMessage, assistantMessage],
+        },
+        detected_lang: 'en',
+        user_message: userMessage,
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('ASM2 is an evaluation benchmark.')).toBeTruthy()
+    })
+
+    expect(screen.queryByText('sending-indicator')).toBeNull()
+    expect(screen.getByTestId('progress-steps').textContent).toBe('')
+    expect(screen.getAllByText('what is asm2?')).toHaveLength(1)
+  })
+
   it('keeps each conversation composer and errors to itself', async () => {
     const firstTurn = createDeferred<Response>()
 
@@ -785,6 +935,99 @@ describe('ChatPage', () => {
         (screen.getByLabelText('composer') as HTMLInputElement).value,
       ).toBe('borrador de ASM2')
     })
+  })
+
+  it('keeps the turn active when cancellation fails and allows retrying stop', async () => {
+    let signal: AbortSignal | null | undefined
+    let streamRequests = 0
+    let cancelRequests = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        if (url.endsWith('/sources/status'))
+          return jsonResponse(sourcesStatusChatReady)
+        if (isChatsListRequest(url, init?.method ?? 'GET'))
+          return jsonResponse([])
+        if (url.endsWith('/chats/chat-1'))
+          return jsonResponse({
+            id: 'chat-1',
+            messages: [],
+            title: 'ASM2',
+            created_at: '2026-04-14T18:30:00.000Z',
+            updated_at: '2026-04-14T18:30:00.000Z',
+          })
+        if (url.endsWith('/messages/stream')) {
+          streamRequests += 1
+          signal = init?.signal
+          return new Promise<Response>((_resolve, reject) => {
+            signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('Aborted', 'AbortError')),
+              { once: true },
+            )
+          })
+        }
+        if (url.endsWith('/turn/cancel')) {
+          cancelRequests += 1
+          return cancelRequests === 1
+            ? Response.json({ detail: 'Service unavailable' }, { status: 503 })
+            : new Response(null, { status: 204 })
+        }
+        throw new Error(`Unexpected request: ${url}`)
+      }),
+    )
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByLabelText('composer')).toHaveProperty(
+        'disabled',
+        false,
+      ),
+    )
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'first' },
+    })
+    fireEvent.click(screen.getByText('send'))
+    await waitFor(() => expect(streamRequests).toBe(1))
+    fireEvent.click(screen.getByText('stop'))
+    await waitFor(() =>
+      expect(screen.getByTestId('composer-error').textContent).toBe(
+        'errors.cancelFailed',
+      ),
+    )
+    expect(signal?.aborted).toBe(false)
+    expect(screen.getByText('sending-indicator')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('composer'), {
+      target: { value: 'second' },
+    })
+    fireEvent.click(screen.getByText('send'))
+    expect(streamRequests).toBe(1)
+    fireEvent.click(screen.getByText('stop'))
+    await waitFor(() =>
+      expect(screen.queryByText('sending-indicator')).toBeNull(),
+    )
+    expect(cancelRequests).toBe(2)
+    expect(signal?.aborted).toBe(true)
+    expect(screen.getByTestId('composer-error').textContent).toBe('')
   })
 
   it('refuses a second turn in a conversation already answering', async () => {

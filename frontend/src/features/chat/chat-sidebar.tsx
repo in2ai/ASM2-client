@@ -38,9 +38,11 @@ import {
   Pin,
   PinOff,
   Plus,
+  Search,
   Trash2,
+  X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChatSidebarLoadingState } from './chat-loading-state'
 import type { ChatSummary } from './types'
 import { formatChatTimestamp, getChatPreview, getChatTitle } from './utils'
@@ -221,6 +223,10 @@ interface ChatSidebarProps {
   renameTitle: string
   renamingChatId?: string
   rowActionsLabel: string
+  searchClearLabel: string
+  searchNoResultsDescription: string
+  searchNoResultsTitle: string
+  searchPlaceholder: string
   showArchived: boolean
   unarchiveChatLabel: string
   unpinChatLabel: string
@@ -266,6 +272,10 @@ export function ChatSidebar({
   renameTitle,
   renamingChatId,
   rowActionsLabel,
+  searchClearLabel,
+  searchNoResultsDescription,
+  searchNoResultsTitle,
+  searchPlaceholder,
   showArchived,
   unarchiveChatLabel,
   unpinChatLabel,
@@ -277,15 +287,37 @@ export function ChatSidebar({
   const [chatPendingRename, setChatPendingRename] =
     useState<ChatSummary | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [query, setQuery] = useState('')
 
   const isRenaming = Boolean(renamingChatId)
   const trimmedRenameValue = renameValue.trim()
+  const trimmedQuery = query.trim()
+
+  // Title and preview, because the title is often the default one and what
+  // the reader remembers is a phrase from the conversation itself.
+  const matchingChats = useMemo(() => {
+    if (!trimmedQuery) {
+      return chats
+    }
+
+    const needle = trimmedQuery.toLocaleLowerCase()
+
+    return chats.filter((chat) =>
+      [chat.title, chat.last_message_preview].some((field) =>
+        field?.toLocaleLowerCase().includes(needle),
+      ),
+    )
+  }, [chats, trimmedQuery])
+
+  const hasNoMatches = Boolean(trimmedQuery) && matchingChats.length === 0
 
   // Archiving clears the pin, so the archived list never has a pinned section.
-  const pinnedChats = showArchived ? [] : chats.filter((chat) => chat.pinned)
+  const pinnedChats = showArchived
+    ? []
+    : matchingChats.filter((chat) => chat.pinned)
   const unpinnedChats = showArchived
-    ? chats
-    : chats.filter((chat) => !chat.pinned)
+    ? matchingChats
+    : matchingChats.filter((chat) => !chat.pinned)
 
   const handleConfirmDelete = async () => {
     if (!chatPendingDelete) {
@@ -363,8 +395,40 @@ export function ChatSidebar({
         </Button>
       )}
 
+      {!isLoading && chats.length > 0 ? (
+        <div className="relative">
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+          <Input
+            className="h-10 rounded-2xl pr-9 pl-9"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={searchPlaceholder}
+            type="search"
+            value={query}
+          />
+          {query ? (
+            <Button
+              aria-label={searchClearLabel}
+              className="absolute top-1/2 right-1 h-7 w-7 -translate-y-1/2 rounded-full"
+              onClick={() => setQuery('')}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       <ScrollArea className="min-h-0 flex-1 pr-1">
         {isLoading ? <ChatSidebarLoadingState /> : null}
+
+        {!isLoading && hasNoMatches ? (
+          <div className="text-muted-foreground flex h-full min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed px-5 text-center">
+            <Search className="mb-3 h-8 w-8" />
+            <p className="font-semibold">{searchNoResultsTitle}</p>
+            <p className="mt-1 text-sm">{searchNoResultsDescription}</p>
+          </div>
+        ) : null}
 
         {!isLoading && chats.length === 0 ? (
           <div className="text-muted-foreground flex h-full min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed px-5 text-center">
@@ -382,7 +446,7 @@ export function ChatSidebar({
           </div>
         ) : null}
 
-        {!isLoading ? (
+        {!isLoading && !hasNoMatches ? (
           <div className="space-y-2">
             {pinnedChats.length > 0 ? (
               <>

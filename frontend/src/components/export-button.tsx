@@ -4,7 +4,7 @@ import { type DateRange } from 'react-day-picker'
 
 import { Button } from '@/components/ui/button'
 import { toIntlLocale } from '@/i18n/config'
-import { api, type RouterOutputs } from '@/trpc/react'
+import { api, type RouterOutputs } from '@/lib/metrics-api'
 
 interface ExportButtonProps {
   readonly dateRange?: DateRange

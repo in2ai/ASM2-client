@@ -6,11 +6,29 @@
   @compressible not path /api/chats/*/messages/stream
   encode @compressible zstd gzip
 
+  header {
+    -Server
+    Referrer-Policy "strict-origin-when-cross-origin"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+  }
+
   handle_path /api/* {
     reverse_proxy backend:8001
   }
 
   handle {
+    # Vite puts a content hash in every asset name, so a given URL can never
+    # stand for different bytes: it is safe to keep for good and never revalidate.
+    @immutable path /assets/*
+    header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+    # The entry document is the one unhashed file, and it is what points at
+    # the current bundle. Held in cache it would keep serving a deployed-over
+    # build, so it is revalidated every time.
+    @entry path / /index.html
+    header @entry Cache-Control "no-cache"
+
     try_files {path} /index.html
     file_server
   }

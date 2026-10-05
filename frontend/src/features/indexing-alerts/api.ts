@@ -1,3 +1,4 @@
+import { ApiError } from '@/lib/api-error'
 import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 import { useLogto } from '@logto/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -22,7 +23,7 @@ function useAuthorizedIndexingRequest() {
   ) {
     const token = await getAccessToken(API_RESOURCE)
     if (!token) {
-      throw new Error('Missing access token')
+      throw new ApiError(401, 'Missing access token')
     }
 
     const headers = new Headers(init?.headers)
@@ -40,7 +41,10 @@ function useAuthorizedIndexingRequest() {
       const payload = (await response.json().catch(() => null)) as {
         detail?: string
       } | null
-      throw new Error(payload?.detail ?? `Request failed (${response.status})`)
+      throw new ApiError(
+        response.status,
+        payload?.detail ?? `Request failed (${response.status})`,
+      )
     }
 
     if (response.status === 204) {
@@ -98,16 +102,34 @@ export function useUpdateDeletionGuardOverrideMutation() {
   })
 }
 
+/** How often alerts are asked for while someone is looking at the page. */
+const VISIBLE_POLL_INTERVAL_MS = 15_000
+
+/**
+ * And while the tab is hidden.
+ *
+ * Alerts still have to arrive for a tab left open in another window, so the
+ * polling does not stop -- but at fifteen seconds it was some five thousand
+ * requests a day per open tab, nearly all of them into a page nobody could
+ * see. Coming back to the tab refetches at once, so the slower beat costs
+ * the reader no freshness.
+ */
+const HIDDEN_POLL_INTERVAL_MS = 120_000
+
 export function useIndexingAlertsQuery(enabled: boolean) {
   const request = useAuthorizedIndexingRequest()
 
   return useQuery({
     enabled,
     queryKey: indexingAlertQueryKeys.alerts,
-    queryFn: () =>
-      request<IndexingDeletionAlert[]>('/indexing/alerts?limit=50'),
-    refetchInterval: enabled ? 15_000 : false,
+    queryFn: ({ signal }) =>
+      request<IndexingDeletionAlert[]>('/indexing/alerts?limit=50', { signal }),
+    refetchInterval: () =>
+      document.visibilityState === 'hidden'
+        ? HIDDEN_POLL_INTERVAL_MS
+        : VISIBLE_POLL_INTERVAL_MS,
     refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   })
 }
 

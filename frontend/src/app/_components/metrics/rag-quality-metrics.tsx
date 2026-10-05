@@ -135,7 +135,7 @@ export function RAGQualityMetrics({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {visibility.responseTimeTrend && responseTimeData.length > 0 && (
-          <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg lg:col-span-2">
+          <Card className="bg-card border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border transition-shadow duration-300 hover:shadow-lg lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-xl font-bold tracking-tight">
@@ -153,7 +153,7 @@ export function RAGQualityMetrics({
             <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={ragResponseTimeChartConfig}
-                className="h-[300px] w-full"
+                className="h-[240px] sm:h-[270px] lg:h-[300px] w-full"
               >
                 <AreaChart
                   data={responseTimeData}
@@ -234,7 +234,7 @@ export function RAGQualityMetrics({
         )}
 
         {visibility.tokenUsage && (
-          <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+          <Card className="bg-card border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border transition-shadow duration-300 hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-lg font-bold">
@@ -254,7 +254,7 @@ export function RAGQualityMetrics({
             <CardContent className="overflow-hidden p-0 pt-4">
               <ChartContainer
                 config={tokenUsageChartConfig}
-                className="h-[250px] w-full"
+                className="h-[220px] sm:h-[250px] w-full"
               >
                 <BarChart
                   data={tokenData}
@@ -308,7 +308,7 @@ export function RAGQualityMetrics({
         )}
 
         {visibility.resourceConsumption && (
-          <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+          <Card className="bg-card border-border/50 hover:shadow-primary/5 rounded-2xl border transition-shadow duration-300 hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">
                 <CardTitle className="flex items-center text-lg font-bold">

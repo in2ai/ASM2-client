@@ -26,7 +26,7 @@ export function StatCard({
   trend,
 }: Readonly<StatCardProps>) {
   return (
-    <Card className="group border-border/50 bg-card/80 hover:shadow-primary/5 relative overflow-hidden rounded-2xl backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+    <Card className="group border-border/50 bg-card hover:shadow-primary/5 relative overflow-hidden rounded-2xl transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-lg">
       <div className="absolute top-0 right-0 p-4 opacity-[0.04] transition-opacity group-hover:opacity-[0.08]">
         <Icon size={80} />
       </div>
@@ -41,7 +41,7 @@ export function StatCard({
               className={cn(
                 'h-5 px-1 text-[10px] font-bold',
                 trend.positive &&
-                  'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20',
+                  'bg-success/10 text-success hover:bg-success/20',
               )}
             >
               {trend.value}

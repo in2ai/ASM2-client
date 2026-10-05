@@ -838,6 +838,33 @@ SSE_KEEPALIVE_SECONDS = 15
 # garbage collected while they run.
 _running_turns: set[asyncio.Task] = set()
 
+# The same turns, reachable by whose conversation they belong to, so that
+# stopping one is possible without letting a dropped connection stop it. A
+# reader who loses the network keeps their answer; a reader who presses stop
+# is asking for the work itself to end, which is a different thing.
+_turns_by_chat: dict[tuple[str, str], asyncio.Task] = {}
+
+
+def _ensure_no_running_turn(user_id: str, chat_id: str) -> None:
+    task = _turns_by_chat.get((user_id, chat_id))
+    if task is not None and not task.done():
+        raise HTTPException(
+            status_code=409, detail="A turn is already running in this chat"
+        )
+
+
+def _track_chat_turn(user_id: str, chat_id: str, task: asyncio.Task) -> None:
+    key = (user_id, chat_id)
+    _turns_by_chat[key] = task
+    _running_turns.add(task)
+
+    def forget(completed: asyncio.Task) -> None:
+        _running_turns.discard(completed)
+        if _turns_by_chat.get(key) is completed:
+            del _turns_by_chat[key]
+
+    task.add_done_callback(forget)
+
 
 def _ensure_ready_to_chat(auth: AuthInfo) -> dict[str, DataSource]:
     """The sources this turn may search, or a 409 saying why there are none."""
@@ -1001,9 +1028,12 @@ async def send_chat_message(
     chat_store: PostgresChatStore = app.state.tsdb_chat_store
     _get_chat_or_404(chat_store, auth.sub, chat_id)
     sources = _ensure_ready_to_chat(auth)
+    _ensure_no_running_turn(auth.sub, chat_id)
 
     user_message = _append_user_message(chat_store, auth.sub, chat_id, content)
-    result = await _run_chat_turn(auth, chat_id, content, sources)
+    turn_task = asyncio.create_task(_run_chat_turn(auth, chat_id, content, sources))
+    _track_chat_turn(auth.sub, chat_id, turn_task)
+    result = await turn_task
 
     return _store_chat_turn(chat_store, auth.sub, chat_id, user_message, result)
 
@@ -1029,6 +1059,7 @@ async def stream_chat_message(
     chat_store: PostgresChatStore = app.state.tsdb_chat_store
     _get_chat_or_404(chat_store, auth.sub, chat_id)
     sources = _ensure_ready_to_chat(auth)
+    _ensure_no_running_turn(auth.sub, chat_id)
 
     user_message = _append_user_message(chat_store, auth.sub, chat_id, content)
     events: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
@@ -1050,6 +1081,11 @@ async def stream_chat_message(
             finished = SendMessageResultModel.model_validate(turn)
             events.put_nowait(("result", finished.model_dump(mode="json")))
 
+        except asyncio.CancelledError:
+            # The reader asked for this one; see POST /chats/{id}/turn/cancel.
+            events.put_nowait(("cancelled", {}))
+            raise
+
         except HTTPException as exc:
             events.put_nowait(("error", {"detail": exc.detail}))
 
@@ -1063,8 +1099,7 @@ async def stream_chat_message(
             events.put_nowait(None)
 
     turn_task = asyncio.create_task(run_turn())
-    _running_turns.add(turn_task)
-    turn_task.add_done_callback(_running_turns.discard)
+    _track_chat_turn(auth.sub, chat_id, turn_task)
 
     async def event_stream():
         while True:
@@ -1090,6 +1125,27 @@ async def stream_chat_message(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.post("/chats/{chat_id}/turn/cancel", status_code=204)
+async def cancel_chat_turn(auth: AuthenticatedAuth, chat_id: str):
+    """Stops the turn running in this conversation, if one is.
+
+    Deliberate, unlike a dropped connection: a reader who closes the tab still
+    gets their answer written to the conversation, and only an explicit ask
+    gets here. Succeeds either way, because "there is nothing running" is the
+    state the caller wanted.
+    """
+
+    chat_store: PostgresChatStore = app.state.tsdb_chat_store
+    _get_chat_or_404(chat_store, auth.sub, chat_id)
+
+    turn_task = _turns_by_chat.get((auth.sub, chat_id))
+
+    if turn_task is not None and not turn_task.done():
+        turn_task.cancel()
+
+    return Response(status_code=204)
 
 
 # ---------------------------------

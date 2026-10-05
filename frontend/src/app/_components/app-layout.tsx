@@ -17,6 +17,9 @@ import {
 import { ChartVisibilityProvider } from '@/contexts/chart-visibility-context'
 import { IndexingAlertCenter } from '@/features/indexing-alerts/indexing-alert-center'
 import { IndexingProgressIndicator } from '@/features/indexing-progress/indexing-progress-indicator'
+import { useHotkeys } from '@/hooks/use-hotkeys'
+import { useIsDesktop } from '@/hooks/use-media-query'
+import { usePersistentState } from '@/hooks/use-persistent-state'
 import type { LogtoUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { useLogto } from '@logto/react'
@@ -24,7 +27,7 @@ import type { LucideIcon } from 'lucide-react'
 import { BarChart3, Loader2, LogOut, Menu, Shield, User, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 interface AppLayoutProps {
   readonly children: ReactNode
@@ -48,26 +51,45 @@ export function AppLayout({
     insights: t('views.insights'),
   }
 
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // A collapsed sidebar is a preference, not a per-visit accident: it used to
+  // spring back open on every reload.
+  const [sidebarOpen, setSidebarOpen] = usePersistentState(
+    'asm2.dashboard.sidebar-open',
+    true,
+  )
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const isDesktop = useIsDesktop()
+
+  // Widening the window past the breakpoint turns the drawer into the static
+  // column, and the scrim it left behind would have covered the whole page.
+  useEffect(() => {
+    if (isDesktop) {
+      setMobileMenuOpen(false)
+    }
+  }, [isDesktop])
 
   const handleViewChange = (nextView: DashboardView) => {
     onViewChange(nextView)
     setMobileMenuOpen(false)
   }
 
-  const handleSidebarToggle = () => {
-    if (window.innerWidth < 1024) {
-      setMobileMenuOpen((current) => !current)
+  const handleSidebarToggle = useCallback(() => {
+    if (isDesktop) {
+      setSidebarOpen(!sidebarOpen)
       return
     }
 
-    setSidebarOpen((current) => !current)
-  }
+    setMobileMenuOpen((current) => !current)
+  }, [isDesktop, setSidebarOpen, sidebarOpen])
+
+  useHotkeys([
+    { key: 'b', mod: true, onPress: handleSidebarToggle },
+    { key: 'Escape', onPress: () => setMobileMenuOpen(false) },
+  ])
 
   return (
     <ChartVisibilityProvider>
-      <div className="bg-background flex h-screen overflow-hidden">
+      <div className="bg-background flex h-dvh overflow-hidden">
         {mobileMenuOpen && (
           <button
             type="button"
@@ -79,7 +101,7 @@ export function AppLayout({
 
         <aside
           className={cn(
-            'bg-card/40 fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-xl backdrop-blur-xl transition-all duration-300 lg:static lg:translate-x-0 lg:shadow-none',
+            'bg-card fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-xl transition-[transform,width] duration-300 lg:static lg:translate-x-0 lg:shadow-none',
             mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
             sidebarOpen ? 'w-64' : 'w-64 lg:w-20',
           )}
@@ -149,7 +171,7 @@ export function AppLayout({
                 <div className="flex items-center gap-2">
                   <Badge
                     variant="outline"
-                    className="h-4 border-emerald-500/20 bg-emerald-500/10 px-1 text-[8px] font-bold text-emerald-500 uppercase"
+                    className="h-4 border-success/20 bg-success/10 px-1 text-[8px] font-bold text-success uppercase"
                   >
                     {t('live')}
                   </Badge>
@@ -199,7 +221,7 @@ function NavItem({
       aria-label={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group relative flex h-11 w-full items-center justify-start gap-4 px-3 py-2 text-sm font-semibold transition-all',
+        'group relative flex h-11 w-full items-center justify-start gap-4 px-3 py-2 text-sm font-semibold transition-colors',
         active
           ? 'bg-primary text-primary-foreground shadow-primary/20 shadow-lg'
           : 'text-muted-foreground hover:bg-primary/5 hover:text-foreground',

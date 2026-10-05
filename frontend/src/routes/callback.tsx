@@ -1,8 +1,10 @@
+import { RouteError } from '@/components/route-error'
 import { useHandleSignInCallback } from '@logto/react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/callback')({
   component: CallbackPage,
+  errorComponent: RouteError,
 })
 
 function CallbackPage() {
@@ -21,7 +23,7 @@ function CallbackPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-dvh items-center justify-center">
         <p className="text-muted-foreground text-sm">Redirecting...</p>
       </div>
     )

@@ -125,7 +125,9 @@ vi.mock('lucide-react', () => ({
   Pin: () => null,
   PinOff: () => null,
   Plus: () => null,
+  Search: () => null,
   Trash2: () => null,
+  X: () => null,
 }))
 
 const chats: ChatSummary[] = [
@@ -158,6 +160,10 @@ function renderSidebar(
       archiveChatLabel="Archive conversation"
       archivedEmptyDescription="Archived conversations are kept here."
       archivedEmptyTitle="Nothing archived"
+      searchClearLabel="Clear search"
+      searchNoResultsDescription="Try different words."
+      searchNoResultsTitle="No matches"
+      searchPlaceholder="Search conversations"
       archivedTitle="Archived"
       backToChatsLabel="Back to conversations"
       chats={chats}
@@ -364,5 +370,53 @@ describe('ChatSidebar', () => {
 
     fireEvent.click(save)
     expect(onRenameChat).not.toHaveBeenCalled()
+  })
+})
+
+describe('ChatSidebar search', () => {
+  afterEach(cleanup)
+
+  it('narrows the list by title', () => {
+    renderSidebar()
+
+    fireEvent.change(screen.getByPlaceholderText('Search conversations'), {
+      target: { value: 'policy' },
+    })
+
+    expect(screen.queryByText('Project policy')).not.toBeNull()
+    // Only the "new chat" button keeps the phrase; the untitled row is gone.
+    expect(screen.getAllByText('New conversation')).toHaveLength(1)
+  })
+
+  it('also matches what was said in the conversation', () => {
+    renderSidebar()
+
+    fireEvent.change(screen.getByPlaceholderText('Search conversations'), {
+      target: { value: 'latest answer' },
+    })
+
+    expect(screen.queryByText('Project policy')).not.toBeNull()
+  })
+
+  it('says so when nothing matches, rather than looking empty', () => {
+    renderSidebar()
+
+    fireEvent.change(screen.getByPlaceholderText('Search conversations'), {
+      target: { value: 'nothing here' },
+    })
+
+    expect(screen.queryByText('No matches')).not.toBeNull()
+    expect(screen.queryByText('Project policy')).toBeNull()
+  })
+
+  it('brings the whole list back when the search is cleared', () => {
+    renderSidebar()
+
+    const input = screen.getByPlaceholderText('Search conversations')
+    fireEvent.change(input, { target: { value: 'policy' } })
+    fireEvent.click(screen.getByLabelText('Clear search'))
+
+    expect(screen.queryByText('Project policy')).not.toBeNull()
+    expect(screen.getAllByText('New conversation')).toHaveLength(2)
   })
 })

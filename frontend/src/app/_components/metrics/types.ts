@@ -1,4 +1,4 @@
-import { type RouterOutputs } from '@/trpc/react'
+import { type RouterOutputs } from '@/lib/metrics-api'
 
 export type MetricsResponse = RouterOutputs['metrics']['get']
 export type StatsResponse = RouterOutputs['metrics']['getStats']

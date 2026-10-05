@@ -1,3 +1,4 @@
+import { ApiError } from '@/lib/api-error'
 import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 import { useLogto } from '@logto/react'
 import { useQuery } from '@tanstack/react-query'
@@ -16,7 +17,7 @@ function useAuthorizedIndexingProgressRequest() {
   return async function authorizedIndexingProgressRequest<T>(path: string) {
     const token = await getAccessToken(API_RESOURCE)
     if (!token) {
-      throw new Error('Missing access token')
+      throw new ApiError(401, 'Missing access token')
     }
 
     const response = await fetch(`${BACKEND_URL}${path}`, {
@@ -27,7 +28,10 @@ function useAuthorizedIndexingProgressRequest() {
       const payload = (await response.json().catch(() => null)) as {
         detail?: string
       } | null
-      throw new Error(payload?.detail ?? `Request failed (${response.status})`)
+      throw new ApiError(
+        response.status,
+        payload?.detail ?? `Request failed (${response.status})`,
+      )
     }
 
     return (await response.json()) as T

@@ -66,9 +66,17 @@ pnpm test:e2e   # Playwright end-to-end tests (e2e/)
 pnpm build      # production build into dist/
 ```
 
-Translations live in `src/i18n/messages/{es,en,gl}.json` and are compiled by
-`@inlang/paraglide-js` into `src/paraglide` at build time. `pnpm machine-translate`
-fills in missing keys through the inlang CLI.
+### Translations
+
+Translations live in `src/i18n/messages/{es,en,gl}.json`. Spanish is the source
+language: its file defines the key set, `MessageKey` in `src/i18n/dictionary.ts`
+derives the allowed keys from it, and `useTranslations` accepts only those — a
+renamed or mistyped key fails `pnpm check` rather than reaching the screen.
+
+A key missing from a translation falls back to the Spanish text, and says so
+once in the console in development. Only the language in use is downloaded:
+Spanish ships in the bundle, the others are separate chunks fetched when
+chosen.
 
 ## Build
 

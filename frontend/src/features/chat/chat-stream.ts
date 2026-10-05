@@ -14,6 +14,14 @@ export class UnfinishedTurnError extends Error {
   }
 }
 
+/** The turn was stopped because the user asked for it to be. */
+export class CancelledTurnError extends Error {
+  constructor() {
+    super('')
+    this.name = 'CancelledTurnError'
+  }
+}
+
 /**
  * Follows a chat turn from start to finished answer.
  *
@@ -26,6 +34,7 @@ export async function readChatTurn(
   onProgress?: (event: ChatProgressEvent) => void,
 ): Promise<SendMessageResult> {
   let turn: SendMessageResult | undefined
+  let cancelled = false
 
   for await (const { name, data } of readEventStream(response)) {
     const payload = parseJson(data)
@@ -45,16 +54,27 @@ export async function readChatTurn(
       continue
     }
 
+    if (name === 'cancelled') {
+      cancelled = true
+      continue
+    }
+
     if (name === 'error') {
       throw new Error(readDetail(payload))
     }
   }
 
-  if (!turn) {
-    throw new UnfinishedTurnError()
+  // An answer that arrived is an answer, even if the stop landed just after
+  // it: throwing here would discard work the user can have for free.
+  if (turn) {
+    return turn
   }
 
-  return turn
+  if (cancelled) {
+    throw new CancelledTurnError()
+  }
+
+  throw new UnfinishedTurnError()
 }
 
 function parseJson(data: string): unknown {

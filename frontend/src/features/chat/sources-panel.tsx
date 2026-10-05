@@ -48,7 +48,7 @@ interface StatusMessage {
 
 function ConnectedSourceBadge({ label }: Readonly<{ label: string }>) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600">
+    <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
       <CheckCircle2 className="h-3.5 w-3.5" />
       {label}
     </span>
@@ -60,7 +60,7 @@ function StatusMessageText({ message }: Readonly<{ message: StatusMessage }>) {
     <p
       className={
         message.tone === 'error'
-          ? 'text-sm text-red-500'
+          ? 'text-destructive text-sm'
           : 'text-muted-foreground text-sm'
       }
     >
@@ -167,7 +167,7 @@ function VdbStatusBadge({
   label: string
 }>) {
   const className = isActive
-    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700'
+    ? 'border-success/30 bg-success/10 text-success'
     : 'border-border/60 bg-background text-muted-foreground'
 
   return (
@@ -248,10 +248,12 @@ interface ProviderConfig {
     state: string
   }) => string
   callbackPath: string
-  connectLabelKey: string
+  connectLabelKey: 'connectDrive' | 'connectDropbox'
   createOAuthState: () => string
-  descriptionKey: string
-  helpLabelKey: string
+  descriptionKey:
+    | 'providers.drive.description'
+    | 'providers.dropbox.description'
+  helpLabelKey: 'googleDriveHelp' | 'dropboxHelp'
   icon: LucideIcon
   label: string
   persistOAuthRequest: (input: {
@@ -592,7 +594,9 @@ function VdbUpdateCard({
           </p>
         ) : null}
 
-        {vdbError ? <p className="text-sm text-red-500">{vdbError}</p> : null}
+        {vdbError ? (
+          <p className="text-destructive text-sm">{vdbError}</p>
+        ) : null}
 
         <VdbActionButtons
           actionPending={vdbActionPending}

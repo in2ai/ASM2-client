@@ -10,15 +10,19 @@ from src.utils.messages import message_text
 
 # Models that run with reasoning enabled by default. On /v1/chat/completions
 # these reject requests that also bind function tools, unless reasoning is
-# explicitly turned off (reasoning_effort="none").
-REASONING_MODEL_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+# explicitly turned off (reasoning_effort="none"). That is the o-series and
+# every GPT from 5 on (gpt-5, gpt-5.1, gpt-6-luna, ...), so the GPT side is
+# matched by version rather than by a prefix that each new release outgrows.
+O_SERIES_PREFIXES = ("o1", "o3", "o4")
+FIRST_REASONING_GPT = 5
+GPT_VERSION = re.compile(r"^gpt-(\d+)(?:\.(\d+))?")
 
 # "none" is a GPT-5.1-and-newer effort. Older reasoning models reject it, and
 # the Pro models only run at "high", so sending it is a 400 rather than a model
 # that stops reasoning. Each family therefore has a floor: the cheapest effort
 # it actually accepts.
 DEFAULT_EFFORT_FLOOR = "low"
-GPT5_VERSION = re.compile(r"^gpt-5(?:\.(\d+))?")
+FIRST_GPT_WITHOUT_REASONING = (5, 1)
 
 # Cheapest to most expensive, for clamping a configured effort up to the floor.
 # The top two are newer-model only, but they sit above every floor, so listing
@@ -26,10 +30,28 @@ GPT5_VERSION = re.compile(r"^gpt-5(?:\.(\d+))?")
 EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 
 
+def gpt_version(model: str) -> tuple[int, int] | None:
+    """(major, minor) of a GPT model name, or None for anything else."""
+    version = GPT_VERSION.match(model.lower())
+
+    if not version:
+        return None
+
+    return int(version.group(1)), int(version.group(2) or 0)
+
+
 def is_reasoning_model(model: str) -> bool:
     model = model.lower()
 
-    return model.startswith(REASONING_MODEL_PREFIXES) and "chat" not in model
+    if "chat" in model:
+        return False
+
+    if model.startswith(O_SERIES_PREFIXES):
+        return True
+
+    version = gpt_version(model)
+
+    return version is not None and version[0] >= FIRST_REASONING_GPT
 
 
 def reasoning_effort_floor(model: str) -> str:
@@ -44,10 +66,10 @@ def reasoning_effort_floor(model: str) -> str:
     if "-pro" in model:
         return "high"
 
-    version = GPT5_VERSION.match(model)
+    version = gpt_version(model)
 
     if version:
-        return "none" if int(version.group(1) or 0) >= 1 else "minimal"
+        return "none" if version >= FIRST_GPT_WITHOUT_REASONING else "minimal"
 
     return DEFAULT_EFFORT_FLOOR
 

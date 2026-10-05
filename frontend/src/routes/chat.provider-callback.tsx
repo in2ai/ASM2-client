@@ -1,3 +1,5 @@
+import type { MessageKey } from '@/i18n/dictionary'
+import { RouteError } from '@/components/route-error'
 import { LoadingState } from '@/app/_components/metrics/loading-state'
 import { ErrorState } from '@/components/error-state'
 import { useAuthorizedChatRequest } from '@/features/chat/api'
@@ -26,6 +28,7 @@ const callbackSearchSchema = z.object({
 export const Route = createFileRoute('/chat/provider-callback')({
   validateSearch: callbackSearchSchema,
   component: ProviderCallbackRoute,
+  errorComponent: RouteError,
 })
 
 interface MatchedProviderRequest {
@@ -75,7 +78,7 @@ function clearAllProviderRequests() {
 }
 
 type TranslateFn = (
-  key: string,
+  key: MessageKey<'ChatPage'>,
   values?: Record<string, string | number>,
 ) => string
 
@@ -222,7 +225,7 @@ function ProviderCallbackRoute() {
 
   if (isLoading || isSubmitting) {
     return (
-      <div className="h-screen p-4 sm:p-6 lg:p-8">
+      <div className="h-dvh p-4 sm:p-6 lg:p-8">
         <LoadingState />
       </div>
     )
@@ -230,7 +233,7 @@ function ProviderCallbackRoute() {
 
   if (callbackError) {
     return (
-      <div className="h-screen p-4 sm:p-6 lg:p-8">
+      <div className="h-dvh p-4 sm:p-6 lg:p-8">
         <ErrorState
           title={t('sources.callbackFailedTitle')}
           message={callbackError}
@@ -241,7 +244,7 @@ function ProviderCallbackRoute() {
   }
 
   return (
-    <div className="h-screen p-4 sm:p-6 lg:p-8">
+    <div className="h-dvh p-4 sm:p-6 lg:p-8">
       <LoadingState />
     </div>
   )

@@ -67,8 +67,6 @@
   "PersistentHeader": {
     "title": "Overview",
     "updating": "Updating",
-    "updatingOverlayTitle": "Updating metrics",
-    "updatingOverlayDescription": "Fetching fresh data for the current selection.",
     "updatedAt": "Updated {value}",
     "updatedNow": "Updated now",
     "records": "{count} records",
@@ -228,7 +226,9 @@
     "defaultTitle": "Error loading data",
     "retry": "Retry",
     "retrying": "Retrying...",
-    "goHome": "Go home"
+    "goHome": "Go home",
+    "crashTitle": "Something went wrong on this screen",
+    "unexpected": "An unexpected error occurred."
   },
   "EmptyState": {
     "defaultTitle": "No data available",
@@ -303,10 +303,15 @@
       "confirmDeleteCancel": "Cancel",
       "confirmDeleteAction": "Delete",
       "emptyTitle": "No conversations yet",
-      "emptyDescription": "Start a conversation and your recent chats will appear here."
+      "emptyDescription": "Start a conversation and your recent chats will appear here.",
+      "searchPlaceholder": "Search conversations",
+      "searchClear": "Clear search",
+      "searchNoResultsTitle": "No matches",
+      "searchNoResultsDescription": "Try different words."
     },
     "conversation": {
-      "newChatTitle": "New conversation"
+      "newChatTitle": "New conversation",
+      "jumpToLatest": "Jump to latest"
     },
     "empty": {
       "title": "Ask your first question",
@@ -324,7 +329,10 @@
       "disabledHint": "Chat stays disabled until at least one connected source is selected for retrieval.",
       "disabledHintIndexingInactiveAdmin": "Chat will be enabled after the first VDB indexing run. Open the sources panel and start that first run when your sources are selected.",
       "disabledHintIndexingInactiveUser": "Chat will be enabled after the first VDB indexing run. Open the sources panel and ask an administrator to start that first run when your sources are ready.",
-      "finishSetupHint": "Chat will be enabled automatically when the first VDB indexing run finishes."
+      "finishSetupHint": "Chat will be enabled automatically when the first VDB indexing run finishes.",
+      "newLineHint": "for a new line",
+      "sendHint": "to send",
+      "stopGenerating": "Stop generating"
     },
     "messages": {
       "assistant": "Assistant",
@@ -336,7 +344,9 @@
       "user": "You",
       "document": "Generated document",
       "downloadDocument": "Download",
-      "downloadingDocument": "Downloading..."
+      "downloadingDocument": "Downloading...",
+      "copy": "Copy message",
+      "copied": "Copied"
     },
     "progress": {
       "title": "Working on it",
@@ -358,6 +368,7 @@
     "errors": {
       "title": "Unable to load chat",
       "loadFailed": "The chat workspace could not be loaded. Please try again.",
+      "cancelFailed": "Could not stop the response. It may still be running. Try again.",
       "sendFailed": "Your message could not be sent. Please try again.",
       "deleteFailed": "The conversation could not be deleted. Please try again.",
       "renameFailed": "The conversation could not be renamed. Please try again.",
@@ -542,5 +553,10 @@
   "SignInPage": {
     "description": "Sign in to access the metrics dashboard",
     "signInButton": "Sign in"
+  },
+  "NotFound": {
+    "title": "Page not found",
+    "description": "The address you opened does not exist or has moved.",
+    "backHome": "Back to start"
   }
 }

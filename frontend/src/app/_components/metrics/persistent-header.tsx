@@ -31,7 +31,7 @@ export function PersistentHeader({
 
   return (
     <div className="mb-6 flex flex-col gap-4 sm:mb-8">
-      <div className="bg-card/60 border-border/50 relative flex flex-col gap-4 overflow-hidden rounded-2xl border p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div className="bg-card border-border/50 relative flex flex-col gap-4 overflow-hidden rounded-2xl border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
         {isFetching ? (
           <div className="absolute inset-x-0 top-0 h-1 overflow-hidden">
             <div className="from-primary/20 via-primary to-primary/20 h-full w-1/3 animate-[dashboard-progress_1.4s_ease-in-out_infinite] rounded-full bg-linear-to-r" />
@@ -53,8 +53,8 @@ export function PersistentHeader({
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <div className="flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-success"></span>
               </span>
               {lastUpdated
                 ? t('updatedAt', { value: lastUpdated })

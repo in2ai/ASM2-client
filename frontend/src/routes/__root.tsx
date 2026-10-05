@@ -1,3 +1,5 @@
+import { RouteError } from '@/components/route-error'
+import { NotFound } from '@/components/not-found'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { Outlet, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
@@ -5,6 +7,8 @@ import '../styles.css'
 
 export const Route = createRootRoute({
   component: RootComponent,
+  errorComponent: RouteError,
+  notFoundComponent: NotFound,
 })
 
 function RootComponent() {

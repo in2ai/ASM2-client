@@ -10,6 +10,7 @@ import {
   chatQueryKeys,
   useChatQuery,
   useChatsQuery,
+  useCancelTurnMutation,
   useCreateChatMutation,
   useDeleteChatMutation,
   useDownloadDocumentMutation,
@@ -21,13 +22,25 @@ import {
 } from './api'
 import { getMessageDocument } from './chat-document'
 import { appendProgress, describeProgress } from './chat-progress'
-import { UnfinishedTurnError } from './chat-stream'
+import { CancelledTurnError, UnfinishedTurnError } from './chat-stream'
 import { ChatShell } from './chat-shell'
 import { ChatSidebar } from './chat-sidebar'
+import {
+  useConversationState,
+  useConversationStore,
+} from './conversation-store'
 import { ConversationView } from './conversation-view'
 import { SourcesPanel } from './sources-panel'
 import type { ChatMessage, ChatProgressEvent } from './types'
 import { getChatTitle, toErrorMessage } from './utils'
+
+/** True for the DOMException a fetch raises when its signal is aborted. */
+function isAbortError(error: unknown) {
+  return (
+    (error instanceof DOMException || error instanceof Error) &&
+    error.name === 'AbortError'
+  )
+}
 
 function omitKey<T>(
   source: Readonly<Record<string, T>>,
@@ -39,16 +52,6 @@ function omitKey<T>(
 
   const { [key]: _removed, ...rest } = source
   return rest
-}
-
-/** A turn the backend is still working on, and what it has reported so far. */
-interface TurnInFlight {
-  progress: readonly ChatProgressEvent[]
-  /**
-   * When the turn started. Kept here rather than in the activity component so
-   * the elapsed count survives the user switching conversations and back.
-   */
-  startedAt: number
 }
 
 const EMPTY_PROGRESS: readonly ChatProgressEvent[] = []
@@ -72,20 +75,16 @@ export function ChatPage({
   // Per conversation as well: a draft belongs to the conversation it was
   // typed in, and a failed send must report itself there rather than under
   // whichever conversation the user has since moved to.
-  const [composerDrafts, setComposerDrafts] = useState<
-    Readonly<Record<string, string>>
-  >({})
-  const [composerErrors, setComposerErrors] = useState<
-    Readonly<Record<string, string>>
-  >({})
+  const [composerDrafts, setComposerDrafts] = useConversationState('drafts')
+  const [composerErrors, setComposerErrors] = useConversationState('errors')
   // Keyed by conversation, because a turn keeps running when the user moves on
   // to another one: a second question must not blank out the first's progress.
-  const [pendingMessages, setPendingMessages] = useState<
-    Readonly<Record<string, ChatMessage>>
-  >({})
-  const [turnsInFlight, setTurnsInFlight] = useState<
-    Readonly<Record<string, TurnInFlight>>
-  >({})
+  // Held outside this page, too, because the turn keeps running when the user
+  // leaves for the dashboard, and its steps must be there when they return.
+  const [pendingMessages, setPendingMessages] =
+    useConversationState('pendingMessages')
+  const [turnsInFlight, setTurnsInFlight] = useConversationState('turns')
+  const conversationStore = useConversationStore()
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [documentDownloadErrors, setDocumentDownloadErrors] = useState<
     Record<string, string>
@@ -106,6 +105,7 @@ export function ChatPage({
   const setChatPinnedMutation = useSetChatPinnedMutation()
   const setChatArchivedMutation = useSetChatArchivedMutation()
   const sendMessageMutation = useSendMessageMutation()
+  const cancelTurnMutation = useCancelTurnMutation()
   const downloadDocumentMutation = useDownloadDocumentMutation()
 
   useEffect(() => {
@@ -289,62 +289,92 @@ export function ChatPage({
     }
   }
 
-  const handleDownloadDocument = async (message: ChatMessage) => {
-    const generatedDocument = getMessageDocument(message)
+  const handleDownloadDocument = useCallback(
+    async (message: ChatMessage) => {
+      const generatedDocument = getMessageDocument(message)
 
-    if (!generatedDocument) {
-      return
-    }
+      if (!generatedDocument) {
+        return
+      }
 
-    setDocumentDownloadErrors((current) => omitKey(current, message.id))
-    setDownloadingDocumentIds((current) => new Set(current).add(message.id))
+      setDocumentDownloadErrors((current) => omitKey(current, message.id))
+      setDownloadingDocumentIds((current) => new Set(current).add(message.id))
 
-    try {
-      await downloadDocumentMutation.mutateAsync({
-        chatId: message.chat_id,
-        filename: generatedDocument.filename,
-        messageId: message.id,
-      })
-    } catch (error) {
-      setDocumentDownloadErrors((current) => ({
-        ...current,
-        [message.id]: toErrorMessage(error, t('errors.downloadFailed')),
-      }))
-    } finally {
-      setDownloadingDocumentIds((current) => {
-        const next = new Set(current)
-        next.delete(message.id)
-        return next
-      })
-    }
-  }
+      try {
+        await downloadDocumentMutation.mutateAsync({
+          chatId: message.chat_id,
+          filename: generatedDocument.filename,
+          messageId: message.id,
+        })
+      } catch (error) {
+        setDocumentDownloadErrors((current) => ({
+          ...current,
+          [message.id]: toErrorMessage(error, t('errors.downloadFailed')),
+        }))
+      } finally {
+        setDownloadingDocumentIds((current) => {
+          const next = new Set(current)
+          next.delete(message.id)
+          return next
+        })
+      }
+    },
+    [downloadDocumentMutation, t],
+  )
 
-  const setComposerDraft = useCallback((chatId: string, value: string) => {
-    setComposerDrafts((current) => ({ ...current, [chatId]: value }))
-  }, [])
+  const setComposerDraft = useCallback(
+    (chatId: string, value: string) => {
+      setComposerDrafts((current) => ({ ...current, [chatId]: value }))
+    },
+    [setComposerDrafts],
+  )
 
-  const setComposerErrorFor = useCallback((chatId: string, message: string) => {
-    setComposerErrors((current) => ({ ...current, [chatId]: message }))
-  }, [])
+  const setComposerErrorFor = useCallback(
+    (chatId: string, message: string) => {
+      setComposerErrors((current) => ({ ...current, [chatId]: message }))
+    },
+    [setComposerErrors],
+  )
 
-  const clearComposerError = useCallback((chatId: string) => {
-    setComposerErrors((current) => omitKey(current, chatId))
-  }, [])
+  const clearComposerError = useCallback(
+    (chatId: string) => {
+      setComposerErrors((current) => omitKey(current, chatId))
+    },
+    [setComposerErrors],
+  )
 
-  const forgetConversation = useCallback((chatId: string) => {
-    setComposerDrafts((current) => omitKey(current, chatId))
-    setComposerErrors((current) => omitKey(current, chatId))
-    setPendingMessages((current) => omitKey(current, chatId))
-    setTurnsInFlight((current) => omitKey(current, chatId))
-  }, [])
+  const forgetConversation = useCallback(
+    (chatId: string) => {
+      // Read from the store, not from this render: the turn may have started
+      // after the delete was asked for.
+      conversationStore.getSnapshot().turns[chatId]?.abort()
+      setComposerDrafts((current) => omitKey(current, chatId))
+      setComposerErrors((current) => omitKey(current, chatId))
+      setPendingMessages((current) => omitKey(current, chatId))
+      setTurnsInFlight((current) => omitKey(current, chatId))
+    },
+    [
+      conversationStore,
+      setComposerDrafts,
+      setComposerErrors,
+      setPendingMessages,
+      setTurnsInFlight,
+    ],
+  )
 
-  const clearPendingMessage = useCallback((chatId: string) => {
-    setPendingMessages((current) => omitKey(current, chatId))
-  }, [])
+  const clearPendingMessage = useCallback(
+    (chatId: string) => {
+      setPendingMessages((current) => omitKey(current, chatId))
+    },
+    [setPendingMessages],
+  )
 
-  const clearTurnInFlight = useCallback((chatId: string) => {
-    setTurnsInFlight((current) => omitKey(current, chatId))
-  }, [])
+  const clearTurnInFlight = useCallback(
+    (chatId: string) => {
+      setTurnsInFlight((current) => omitKey(current, chatId))
+    },
+    [setTurnsInFlight],
+  )
 
   const handleSendMessage = async () => {
     const content = composerValue.trim()
@@ -390,14 +420,20 @@ export function ChatPage({
         ...current,
         [turnChatId]: optimisticMessage,
       }))
+      const controller = new AbortController()
       setTurnsInFlight((current) => ({
         ...current,
-        [turnChatId]: { progress: [], startedAt: Date.now() },
+        [turnChatId]: {
+          abort: () => controller.abort(),
+          progress: [],
+          startedAt: Date.now(),
+        },
       }))
 
       const result = await sendMessageMutation.mutateAsync({
         chatId: turnChatId,
         content,
+        signal: controller.signal,
         onProgress: (event) =>
           setTurnsInFlight((current) => {
             const turn = current[turnChatId]
@@ -431,7 +467,16 @@ export function ChatPage({
       // its error stay together even if the user has moved on.
       const failedKey = activeChatId ?? draftKey
 
-      if (error instanceof UnfinishedTurnError && activeChatId) {
+      // The user asked for this one, so it is not a failure. The conversation
+      // is reloaded either way, because whatever the turn managed to write
+      // before it stopped is what should now be on screen.
+      if (isAbortError(error) || error instanceof CancelledTurnError) {
+        if (activeChatId) {
+          await queryClient.invalidateQueries({
+            queryKey: chatQueryKeys.detail(activeChatId),
+          })
+        }
+      } else if (error instanceof UnfinishedTurnError && activeChatId) {
         setComposerErrorFor(failedKey, t('errors.turnInterrupted'))
         await queryClient.invalidateQueries({
           queryKey: chatQueryKeys.detail(activeChatId),
@@ -450,6 +495,25 @@ export function ChatPage({
     }
   }
 
+  const handleStopGeneration = async () => {
+    if (!visibleConversationId) {
+      return
+    }
+
+    // The backend first: it is what actually stops the work. Hanging up on
+    // the stream alone leaves the turn running to completion by design, so
+    // the button would only have hidden it.
+    clearComposerError(visibleConversationId)
+    try {
+      await cancelTurnMutation.mutateAsync(visibleConversationId)
+    } catch {
+      setComposerErrorFor(visibleConversationId, t('errors.cancelFailed'))
+      return
+    }
+
+    turnsInFlight[visibleConversationId]?.abort()
+  }
+
   const retry = () => {
     void chatsQuery.refetch()
     if (effectiveChatId) {
@@ -457,6 +521,29 @@ export function ChatPage({
     }
     void sourcesQuery.refetch()
   }
+
+  const messageLabels = useMemo(
+    () => ({
+      assistant: t('messages.assistant'),
+      copiedMessage: t('messages.copied'),
+      copyMessage: t('messages.copy'),
+      document: t('messages.document'),
+      downloadDocument: t('messages.downloadDocument'),
+      downloadingDocument: t('messages.downloadingDocument'),
+      openSource: t('messages.openSource'),
+      page: t('messages.page'),
+      pages: t('messages.pages'),
+      sources: t('messages.sources'),
+      sending: t('messages.sending'),
+      user: t('messages.user'),
+    }),
+    [t],
+  )
+
+  const downloadDocument = useCallback(
+    (message: ChatMessage) => void handleDownloadDocument(message),
+    [handleDownloadDocument],
+  )
 
   const conversationTitle = getChatTitle(
     activeChat?.title,
@@ -472,8 +559,12 @@ export function ChatPage({
           className="rounded-2xl"
           onClick={() => setSourcesOpen(true)}
         >
-          <Settings2 className="mr-2 h-4 w-4" />
-          {t('sources.openPanel')}
+          <Settings2 className="h-4 w-4 sm:mr-2" />
+          {/* A phone header has no room for the word next to everything
+              else; the icon carries it there, and the name stays spoken. */}
+          <span className="sr-only sm:not-sr-only">
+            {t('sources.openPanel')}
+          </span>
         </Button>
       }
       openSidebarLabel={t('shell.openSidebar')}
@@ -530,6 +621,10 @@ export function ChatPage({
               : undefined
           }
           rowActionsLabel={t('sidebar.rowActions')}
+          searchClearLabel={t('sidebar.searchClear')}
+          searchNoResultsDescription={t('sidebar.searchNoResultsDescription')}
+          searchNoResultsTitle={t('sidebar.searchNoResultsTitle')}
+          searchPlaceholder={t('sidebar.searchPlaceholder')}
           showArchived={showArchived}
           unarchiveChatLabel={t('sidebar.unarchiveChat')}
           unpinChatLabel={t('sidebar.unpinChat')}
@@ -569,22 +664,18 @@ export function ChatPage({
           isLoading={Boolean(effectiveChatId) && chatQuery.isLoading}
           isSending={isSendingActiveConversation}
           locale={locale}
-          messageLabels={{
-            assistant: t('messages.assistant'),
-            document: t('messages.document'),
-            downloadDocument: t('messages.downloadDocument'),
-            downloadingDocument: t('messages.downloadingDocument'),
-            openSource: t('messages.openSource'),
-            page: t('messages.page'),
-            pages: t('messages.pages'),
-            sources: t('messages.sources'),
-            sending: t('messages.sending'),
-            user: t('messages.user'),
-          }}
-          onDownloadDocument={(message) => void handleDownloadDocument(message)}
+          messageLabels={messageLabels}
+          onDownloadDocument={downloadDocument}
           onEmptyPrimaryAction={() => setSourcesOpen(true)}
           onComposerChange={(value) => setComposerDraft(composerKey, value)}
           onSendMessage={() => void handleSendMessage()}
+          onStopGeneration={() => void handleStopGeneration()}
+          shellLabels={{
+            jumpToLatest: t('conversation.jumpToLatest'),
+            newLineHint: t('composer.newLineHint'),
+            sendHint: t('composer.sendHint'),
+            stopGenerating: t('composer.stopGenerating'),
+          }}
           pendingMessage={visiblePendingMessage}
           progress={{
             events: activeTurn?.progress ?? EMPTY_PROGRESS,

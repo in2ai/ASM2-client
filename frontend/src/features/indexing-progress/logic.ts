@@ -1,3 +1,4 @@
+import type { MessageKey } from '@/i18n/dictionary'
 import { INDEXING_PHASES, INDEXING_STATUSES } from './types'
 import type { IndexingPhase, IndexingProgress, IndexingStatus } from './types'
 
@@ -75,21 +76,34 @@ export function formatRemainingTime(
     : `${formatters.hour.format(hours)} ${formatters.minute.format(minutes)}`
 }
 
-export function statusLabelKey(status: string | undefined): string {
+/**
+ * These three narrow a value the backend sent into a message key.
+ *
+ * The return types are the keys the catalogue defines, so a status or phase
+ * added on the backend without wording to match fails to compile here rather
+ * than showing its own key path on screen.
+ */
+export function statusLabelKey(
+  status: string | undefined,
+): MessageKey<'IndexingProgress'> {
   return INDEXING_STATUSES.includes(status as IndexingStatus)
-    ? `status.${status}`
+    ? (`status.${status as IndexingStatus}` as const)
     : 'status.unknown'
 }
 
-export function statusDescriptionKey(status: string | undefined): string {
+export function statusDescriptionKey(
+  status: string | undefined,
+): MessageKey<'IndexingProgress'> {
   return INDEXING_STATUSES.includes(status as IndexingStatus)
-    ? `statusDescription.${status}`
+    ? (`statusDescription.${status as IndexingStatus}` as const)
     : 'statusDescription.unknown'
 }
 
-export function phaseLabelKey(phase: string | null | undefined): string {
+export function phaseLabelKey(
+  phase: string | null | undefined,
+): MessageKey<'IndexingProgress'> {
   return INDEXING_PHASES.includes(phase as IndexingPhase)
-    ? `phase.${phase}`
+    ? (`phase.${phase as IndexingPhase}` as const)
     : 'phase.unknown'
 }
 

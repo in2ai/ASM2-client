@@ -1,3 +1,4 @@
+import type { MessageKey } from '@/i18n/dictionary'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,7 +108,9 @@ function rememberStoredSeenAlertId(userId: string, alertId: number): void {
   }
 }
 
-function notificationStatusKey(permission: BrowserNotificationState): string {
+function notificationStatusKey(
+  permission: BrowserNotificationState,
+): MessageKey<'IndexingAlerts'> {
   if (permission === 'granted') return 'browser.granted'
   if (permission === 'denied') return 'browser.denied'
   if (permission === 'unsupported') return 'browser.unsupported'

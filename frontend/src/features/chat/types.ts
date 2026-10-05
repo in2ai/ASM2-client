@@ -95,6 +95,8 @@ export interface SendMessageInput {
   chatId: string
   content: string
   onProgress?: (event: ChatProgressEvent) => void
+  /** Abandons the turn when the user stops waiting for it. */
+  signal?: AbortSignal
 }
 
 export interface DownloadDocumentInput {

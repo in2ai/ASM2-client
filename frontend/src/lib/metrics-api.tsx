@@ -1,3 +1,11 @@
+import { ApiError } from '@/lib/api-error'
+/**
+ * The metrics endpoints, as React Query hooks.
+ *
+ * Shaped like a tRPC router (`api.metrics.get.useQuery`) because it replaced
+ * one, but it is a plain REST client: the backend is FastAPI and the types
+ * below are kept in step with it by hand.
+ */
 import { useLogto } from '@logto/react'
 import {
   keepPreviousData,
@@ -200,10 +208,11 @@ function useAuthorizedFetch() {
   return async function authorizedFetch<T>(
     path: string,
     input: MetricsQueryInput,
+    signal?: AbortSignal,
   ): Promise<T> {
     const token = await getAccessToken(API_RESOURCE)
     if (!token) {
-      throw new Error('UNAUTHORIZED: missing access token')
+      throw new ApiError(401, 'UNAUTHORIZED: missing access token')
     }
 
     const params = buildSearchParams(input)
@@ -215,6 +224,10 @@ function useAuthorizedFetch() {
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      // Dragging the date picker starts a query per day passed over. Without
+      // this each of those ran to completion against a backend that was
+      // aggregating a range nobody was waiting for any more.
+      signal,
     })
 
     if (!response.ok) {
@@ -224,7 +237,7 @@ function useAuthorizedFetch() {
         detail = payload.detail || detail
       } catch {}
 
-      throw new Error(`${response.status}: ${detail}`)
+      throw new ApiError(response.status, `${response.status}: ${detail}`)
     }
 
     return (await response.json()) as T
@@ -242,8 +255,8 @@ function useMetricsGetQuery(
 
   return useQuery<DashboardMetrics, Error>({
     queryKey: ['metrics', 'dashboard', buildMetricsQueryKey(input)],
-    queryFn: () =>
-      authorizedFetch<DashboardMetrics>('/metrics/dashboard', input),
+    queryFn: ({ signal }) =>
+      authorizedFetch<DashboardMetrics>('/metrics/dashboard', input, signal),
     placeholderData: keepPreviousData,
     ...options,
   })
@@ -257,7 +270,8 @@ function useMetricsStatsQuery(
 
   return useQuery<StatsMetrics, Error>({
     queryKey: ['metrics', 'stats', buildMetricsQueryKey(input)],
-    queryFn: () => authorizedFetch<StatsMetrics>('/metrics/stats', input),
+    queryFn: ({ signal }) =>
+      authorizedFetch<StatsMetrics>('/metrics/stats', input, signal),
     placeholderData: keepPreviousData,
     ...options,
   })
@@ -274,7 +288,8 @@ function useMetricsInsightsQuery(
 
   return useQuery<InsightsMetrics, Error>({
     queryKey: ['metrics', 'insights', buildMetricsQueryKey(input)],
-    queryFn: () => authorizedFetch<InsightsMetrics>('/metrics/insights', input),
+    queryFn: ({ signal }) =>
+      authorizedFetch<InsightsMetrics>('/metrics/insights', input, signal),
     placeholderData: keepPreviousData,
     ...options,
   })
@@ -288,7 +303,8 @@ function useExportMetricsQuery(
 
   return useQuery<ExportMetrics, Error>({
     queryKey: ['metrics', 'export', buildMetricsQueryKey(input)],
-    queryFn: () => authorizedFetch<ExportMetrics>('/metrics/export', input),
+    queryFn: ({ signal }) =>
+      authorizedFetch<ExportMetrics>('/metrics/export', input, signal),
     ...options,
   })
 }

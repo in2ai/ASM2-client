@@ -5,7 +5,7 @@ import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
-import { api, type DashboardMetrics } from './react'
+import { api, type DashboardMetrics } from './metrics-api'
 
 const mocks = vi.hoisted(() => ({
   getAccessToken: vi.fn(),

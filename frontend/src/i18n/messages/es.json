@@ -67,8 +67,6 @@
   "PersistentHeader": {
     "title": "Vista general",
     "updating": "Actualizando",
-    "updatingOverlayTitle": "Actualizando métricas",
-    "updatingOverlayDescription": "Estamos recuperando los datos nuevos para este filtro.",
     "updatedAt": "Actualizado {value}",
     "updatedNow": "Actualizado ahora",
     "records": "{count} registros",
@@ -228,7 +226,9 @@
     "defaultTitle": "Error al cargar datos",
     "retry": "Reintentar",
     "retrying": "Reintentando...",
-    "goHome": "Ir al inicio"
+    "goHome": "Ir al inicio",
+    "crashTitle": "Algo ha fallado en esta pantalla",
+    "unexpected": "Se ha producido un error inesperado."
   },
   "EmptyState": {
     "defaultTitle": "No hay datos disponibles",
@@ -303,10 +303,15 @@
       "confirmDeleteCancel": "Cancelar",
       "confirmDeleteAction": "Eliminar",
       "emptyTitle": "Todavía no hay conversaciones",
-      "emptyDescription": "Inicia una conversación y tus chats recientes aparecerán aquí."
+      "emptyDescription": "Inicia una conversación y tus chats recientes aparecerán aquí.",
+      "searchPlaceholder": "Buscar conversaciones",
+      "searchClear": "Borrar la búsqueda",
+      "searchNoResultsTitle": "Sin coincidencias",
+      "searchNoResultsDescription": "Prueba con otras palabras."
     },
     "conversation": {
-      "newChatTitle": "Nueva conversación"
+      "newChatTitle": "Nueva conversación",
+      "jumpToLatest": "Ir al último mensaje"
     },
     "empty": {
       "title": "Haz tu primera pregunta",
@@ -324,7 +329,10 @@
       "disabledHint": "El chat permanece deshabilitado hasta que al menos una fuente conectada esté seleccionada para recuperación.",
       "disabledHintIndexingInactiveAdmin": "El chat se habilitará después del primer indexado VDB. Abre el panel de fuentes e inicia ese primer indexado cuando tengas fuentes seleccionadas.",
       "disabledHintIndexingInactiveUser": "El chat se habilitará después del primer indexado VDB. Abre el panel de fuentes y pide a un administrador que inicie ese primer indexado cuando las fuentes estén listas.",
-      "finishSetupHint": "El chat se habilitará automáticamente cuando termine el primer indexado VDB."
+      "finishSetupHint": "El chat se habilitará automáticamente cuando termine el primer indexado VDB.",
+      "newLineHint": "nueva línea",
+      "sendHint": "para enviar",
+      "stopGenerating": "Detener la respuesta"
     },
     "messages": {
       "assistant": "Asistente",
@@ -336,7 +344,9 @@
       "user": "Tú",
       "document": "Documento generado",
       "downloadDocument": "Descargar",
-      "downloadingDocument": "Descargando..."
+      "downloadingDocument": "Descargando...",
+      "copy": "Copiar mensaje",
+      "copied": "Copiado"
     },
     "progress": {
       "title": "Trabajando en ello",
@@ -358,6 +368,7 @@
     "errors": {
       "title": "No se pudo cargar el chat",
       "loadFailed": "No se pudo cargar el espacio de chat. Inténtalo de nuevo.",
+      "cancelFailed": "No se pudo detener la respuesta. Puede que siga en curso. Inténtalo de nuevo.",
       "sendFailed": "No se pudo enviar tu mensaje. Inténtalo de nuevo.",
       "deleteFailed": "No se pudo eliminar la conversación. Inténtalo de nuevo.",
       "renameFailed": "No se pudo renombrar la conversación. Inténtalo de nuevo.",
@@ -542,5 +553,10 @@
   "SignInPage": {
     "description": "Inicia sesión para acceder al dashboard de métricas",
     "signInButton": "Iniciar sesión"
+  },
+  "NotFound": {
+    "title": "Página no encontrada",
+    "description": "La dirección que has abierto no existe o ha cambiado.",
+    "backHome": "Volver al inicio"
   }
 }

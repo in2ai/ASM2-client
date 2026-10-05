@@ -2,8 +2,28 @@ import unittest
 
 from langchain_core.messages import AIMessage
 
-from src.connectors.llms import clamp_reasoning_effort, reasoning_effort_floor
+from src.connectors.llms import (
+    clamp_reasoning_effort,
+    is_reasoning_model,
+    reasoning_effort_floor,
+)
 from src.utils.messages import message_text
+
+
+class IsReasoningModelTests(unittest.TestCase):
+    """Reasoning models need an explicit effort before tools can be bound."""
+
+    def test_gpt_5_and_every_later_major_version_reasons(self):
+        for model in ("gpt-5", "gpt-5.1-mini", "gpt-6", "gpt-6-luna", "gpt-7.2"):
+            self.assertTrue(is_reasoning_model(model), model)
+
+    def test_the_o_series_reasons(self):
+        for model in ("o1", "o3", "o4-mini"):
+            self.assertTrue(is_reasoning_model(model), model)
+
+    def test_older_gpts_and_chat_variants_do_not(self):
+        for model in ("gpt-4o-mini", "gpt-4.1", "gpt-3.5-turbo", "gpt-5-chat-latest"):
+            self.assertFalse(is_reasoning_model(model), model)
 
 
 class ReasoningEffortFloorTests(unittest.TestCase):
@@ -13,6 +33,7 @@ class ReasoningEffortFloorTests(unittest.TestCase):
         self.assertEqual(reasoning_effort_floor("gpt-5.1"), "none")
         self.assertEqual(reasoning_effort_floor("gpt-5.1-mini"), "none")
         self.assertEqual(reasoning_effort_floor("gpt-5.6"), "none")
+        self.assertEqual(reasoning_effort_floor("gpt-6-luna"), "none")
 
     def test_the_original_gpt_5_line_stops_at_minimal(self):
         self.assertEqual(reasoning_effort_floor("gpt-5"), "minimal")

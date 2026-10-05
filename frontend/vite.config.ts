@@ -1,4 +1,3 @@
-import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import tailwindcss from '@tailwindcss/vite'
 import { devtools } from '@tanstack/devtools-vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
@@ -51,10 +50,6 @@ const config = defineConfig(({ mode }) => {
       'import.meta.env.VITE_BACKEND_URL': JSON.stringify(backendUrl),
     },
     plugins: [
-      paraglideVitePlugin({
-        project: './project.inlang',
-        outdir: './src/paraglide',
-      }),
       devtools(),
       tailwindcss(),
       tanstackRouter({ target: 'react', autoCodeSplitting: true }),

@@ -33,19 +33,28 @@ vi.mock('@/components/ui/textarea', () => ({
   ),
 }))
 
+vi.mock('@/components/ui/kbd', () => ({
+  Kbd: ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>,
+}))
+
 vi.mock('lucide-react', () => ({
+  ArrowDown: () => null,
   ArrowUp: () => null,
   Bot: () => null,
   Check: () => null,
+  Copy: () => null,
   Download: () => null,
   ExternalLink: () => null,
   FileText: () => null,
   Loader2: () => null,
+  Square: () => null,
   User2: () => null,
 }))
 
 const defaultLabels = {
   assistant: 'Assistant',
+  copiedMessage: 'Copied',
+  copyMessage: 'Copy message',
   document: 'Generated document',
   downloadDocument: 'Download',
   downloadingDocument: 'Downloading',
@@ -55,6 +64,13 @@ const defaultLabels = {
   sending: 'Sending',
   sources: 'Sources',
   user: 'User',
+}
+
+const defaultShellLabels = {
+  jumpToLatest: 'Jump to latest',
+  newLineHint: 'for a new line',
+  sendHint: 'to send',
+  stopGenerating: 'Stop generating',
 }
 
 const defaultProgress = {
@@ -92,22 +108,13 @@ function createChat(messages: ChatMessage[]): ChatDetail {
   }
 }
 
-type ConversationOverrides = Partial<
-  Pick<
-    ComponentProps<typeof ConversationView>,
-    | 'documentDownloadErrors'
-    | 'downloadingDocumentMessageIds'
-    | 'isSending'
-    | 'onDownloadDocument'
-    | 'progress'
-  >
->
+type ConversationOverrides = Partial<ComponentProps<typeof ConversationView>>
 
-function renderConversation(
+function conversationElement(
   messages: ChatMessage[],
   overrides: ConversationOverrides = {},
 ) {
-  return render(
+  return (
     <ConversationView
       chat={createChat(messages)}
       composerPlaceholder="Ask a question"
@@ -122,9 +129,17 @@ function renderConversation(
       onComposerChange={() => undefined}
       onSendMessage={() => undefined}
       progress={defaultProgress}
+      shellLabels={defaultShellLabels}
       {...overrides}
-    />,
+    />
   )
+}
+
+function renderConversation(
+  messages: ChatMessage[],
+  overrides: ConversationOverrides = {},
+) {
+  return render(conversationElement(messages, overrides))
 }
 
 describe('ConversationView markdown rendering', () => {
@@ -550,5 +565,143 @@ describe('ConversationView progress', () => {
     ])
 
     expect(screen.queryByRole('status')).toBeNull()
+  })
+})
+
+describe('ConversationView composer', () => {
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('offers to stop a turn only while one is running', () => {
+    const onStopGeneration = vi.fn()
+
+    const { rerender } = renderConversation(
+      [createMessage({ content: 'My question.', role: 'user' })],
+      { isSending: false, onStopGeneration },
+    )
+
+    expect(screen.queryByLabelText('Stop generating')).toBeNull()
+
+    rerender(
+      conversationElement(
+        [createMessage({ content: 'My question.', role: 'user' })],
+        { isSending: true, onStopGeneration },
+      ),
+    )
+
+    const stop = screen.getByLabelText('Stop generating')
+    fireEvent.click(stop)
+
+    expect(onStopGeneration).toHaveBeenCalledOnce()
+  })
+
+  it('refuses to send an empty draft, and sends a filled one', () => {
+    const onSendMessage = vi.fn()
+
+    const { rerender } = renderConversation(
+      [createMessage({ content: 'My question.', role: 'user' })],
+      { onSendMessage, composerValue: '   ' },
+    )
+
+    const send = screen
+      .getAllByRole('button')
+      .find((button) => button.hasAttribute('disabled'))
+
+    expect(send).toBeDefined()
+
+    rerender(
+      conversationElement(
+        [createMessage({ content: 'My question.', role: 'user' })],
+        { composerValue: 'Ready to go', onSendMessage },
+      ),
+    )
+
+    fireEvent.keyDown(screen.getByPlaceholderText('Ask a question'), {
+      key: 'Enter',
+    })
+
+    expect(onSendMessage).toHaveBeenCalledOnce()
+  })
+
+  it('leaves Shift+Enter to the textarea, for a new line', () => {
+    const onSendMessage = vi.fn()
+
+    renderConversation(
+      [createMessage({ content: 'My question.', role: 'user' })],
+      {
+        composerValue: 'Half a thought',
+        onSendMessage,
+      },
+    )
+
+    fireEvent.keyDown(screen.getByPlaceholderText('Ask a question'), {
+      key: 'Enter',
+      shiftKey: true,
+    })
+
+    expect(onSendMessage).not.toHaveBeenCalled()
+  })
+
+  it('will not send the same conversation twice at once', () => {
+    const onSendMessage = vi.fn()
+
+    renderConversation(
+      [createMessage({ content: 'My question.', role: 'user' })],
+      {
+        composerValue: 'A second question',
+        isSending: true,
+        onSendMessage,
+      },
+    )
+
+    fireEvent.keyDown(screen.getByPlaceholderText('Ask a question'), {
+      key: 'Enter',
+    })
+
+    expect(onSendMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('ConversationView copying', () => {
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('copies a message, and says so', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+
+    renderConversation([
+      createMessage({ content: 'The answer is 42.', role: 'assistant' }),
+    ])
+
+    const copy = screen.getAllByLabelText('Copy message')[0]
+    fireEvent.click(copy)
+
+    expect(writeText).toHaveBeenCalledWith('The answer is 42.')
+    await screen.findByLabelText('Copied')
+  })
+
+  it('claims nothing when the clipboard refuses', async () => {
+    const writeText = vi.fn(() => Promise.reject(new Error('denied')))
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+
+    renderConversation([
+      createMessage({ content: 'The answer is 42.', role: 'assistant' }),
+    ])
+
+    fireEvent.click(screen.getAllByLabelText('Copy message')[0])
+
+    await Promise.resolve()
+    expect(screen.queryByLabelText('Copied')).toBeNull()
   })
 })

@@ -1,3 +1,4 @@
+import { ApiError } from '@/lib/api-error'
 import { API_RESOURCE, BACKEND_URL } from '@/lib/api'
 import { useLogto } from '@logto/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -49,7 +50,7 @@ function useAuthorizedChatFetch() {
   return async function authorizedChatFetch(path: string, init?: RequestInit) {
     const token = await getAccessToken(API_RESOURCE)
     if (!token) {
-      throw new Error('Missing access token')
+      throw new ApiError(401, 'Missing access token')
     }
 
     const headers = new Headers(init?.headers)
@@ -62,7 +63,10 @@ function useAuthorizedChatFetch() {
 
     if (!response.ok) {
       const detail = await readErrorDetail(response)
-      throw new Error(detail ?? `Request failed (${response.status})`)
+      throw new ApiError(
+        response.status,
+        detail ?? `Request failed (${response.status})`,
+      )
     }
 
     return response
@@ -109,8 +113,10 @@ export function useChatsQuery(archived = false) {
 
   return useQuery({
     queryKey: chatQueryKeys.listFor(archived),
-    queryFn: () =>
-      request<ChatSummary[]>(`/chats?archived=${archived ? 'true' : 'false'}`),
+    queryFn: ({ signal }) =>
+      request<ChatSummary[]>(`/chats?archived=${archived ? 'true' : 'false'}`, {
+        signal,
+      }),
   })
 }
 
@@ -162,7 +168,8 @@ export function useChatQuery(chatId?: string) {
     queryKey: chatId
       ? chatQueryKeys.detail(chatId)
       : ['chat', 'detail', 'empty'],
-    queryFn: () => request<ChatDetail>(`/chats/${chatId}`),
+    queryFn: ({ signal }) =>
+      request<ChatDetail>(`/chats/${chatId}`, { signal }),
   })
 }
 
@@ -277,7 +284,12 @@ export function useSendMessageMutation() {
   const request = useAuthorizedChatFetch()
 
   return useMutation({
-    mutationFn: async ({ chatId, content, onProgress }: SendMessageInput) => {
+    mutationFn: async ({
+      chatId,
+      content,
+      onProgress,
+      signal,
+    }: SendMessageInput) => {
       const response = await request(`/chats/${chatId}/messages/stream`, {
         body: JSON.stringify({ content }),
         headers: {
@@ -285,10 +297,27 @@ export function useSendMessageMutation() {
           'Content-Type': 'application/json',
         },
         method: 'POST',
+        signal,
       })
 
       return readChatTurn(response, onProgress)
     },
+  })
+}
+
+/**
+ * Asks the backend to stop the turn running in a conversation.
+ *
+ * Separate from aborting the stream: a dropped connection deliberately leaves
+ * the turn running so its answer is still written, and only this says the
+ * work itself should end.
+ */
+export function useCancelTurnMutation() {
+  const request = useAuthorizedChatRequest()
+
+  return useMutation({
+    mutationFn: (chatId: string) =>
+      request<void>(`/chats/${chatId}/turn/cancel`, { method: 'POST' }),
   })
 }
 

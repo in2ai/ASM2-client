@@ -51,7 +51,6 @@
     "IMGS",
     "indexación",
     "inicialización",
-    "inlang",
     "IRAG",
     "isready",
     "kiro",
@@ -91,7 +90,6 @@
     "Oxfmt",
     "oxlint",
     "Oxlint",
-    "paraglide",
     "pgwire",
     "popleft",
     "prerendering",
@@ -149,5 +147,6 @@
     "WORKOS",
     "workoscdn",
     "zstd"
-  ]
+  ],
+  "python-envs.defaultEnvManager": "ms-python.python:system"
 }

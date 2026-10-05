@@ -1,3 +1,4 @@
+import type { MessageKey } from '@/i18n/dictionary'
 import type { ChatProgressEvent, ChatProgressPhase } from './types'
 
 const PHASES: ReadonlySet<ChatProgressPhase> = new Set([
@@ -13,8 +14,8 @@ const PHASES: ReadonlySet<ChatProgressPhase> = new Set([
 ])
 
 export interface ProgressDescription {
-  /** A key under the `ChatPage` namespace. */
-  key: string
+  /** A key under the `ChatPage` namespace, checked against the catalogue. */
+  key: MessageKey<'ChatPage'>
   values?: Record<string, string | number>
 }
 

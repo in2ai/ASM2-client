@@ -1,3 +1,4 @@
+import type { MessageKey } from '@/i18n/dictionary'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -246,7 +247,7 @@ export function IndexingProgressIndicator({
 function formatTimestamp(
   timestamp: string | null,
   formatter: Intl.DateTimeFormat,
-  t: (key: string) => string,
+  t: (key: MessageKey<'IndexingProgress'>) => string,
 ): string {
   if (!timestamp) {
     return t('never')

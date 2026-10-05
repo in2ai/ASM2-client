@@ -9,10 +9,13 @@ minimumReleaseAgeExclude:
   - '@tanstack/react-query@5.101.0'
   - '@tanstack/router-generator@1.167.13'
   - '@tanstack/router-plugin@1.168.14'
+# Pinned, not `latest`: resolving the toolchain at install time meant any
+# install could silently move every developer and CI onto a different compiler,
+# formatter and test runner -- in one case backwards, onto a prerelease.
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@0.1.24
+  vitest: npm:@voidzero-dev/vite-plus-test@0.1.24
+  vite-plus: 0.1.24
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'

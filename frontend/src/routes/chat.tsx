@@ -1,3 +1,4 @@
+import { RouteError } from '@/components/route-error'
 import { LoadingState } from '@/app/_components/metrics/loading-state'
 import {
   hasGoogleDriveOAuthResponseParams,
@@ -27,6 +28,7 @@ const chatSearchSchema = z.object({
 export const Route = createFileRoute('/chat')({
   validateSearch: chatSearchSchema,
   component: ChatRoute,
+  errorComponent: RouteError,
 })
 
 function ChatRoute() {
@@ -68,7 +70,7 @@ function ChatRoute() {
 
   if ((isLoading && !user) || (isAuthenticated && !user)) {
     return (
-      <div className="h-screen p-4 sm:p-6 lg:p-8">
+      <div className="h-dvh p-4 sm:p-6 lg:p-8">
         <LoadingState />
       </div>
     )
@@ -81,7 +83,7 @@ function ChatRoute() {
   return (
     <Suspense
       fallback={
-        <div className="h-screen p-4 sm:p-6 lg:p-8">
+        <div className="h-dvh p-4 sm:p-6 lg:p-8">
           <LoadingState />
         </div>
       }

@@ -3,11 +3,13 @@ import { AreaSwitcher } from '@/app/_components/area-switcher'
 import { Button } from '@/components/ui/button'
 import { IndexingAlertCenter } from '@/features/indexing-alerts/indexing-alert-center'
 import { IndexingProgressIndicator } from '@/features/indexing-progress/indexing-progress-indicator'
+import { useHotkeys } from '@/hooks/use-hotkeys'
+import { useIsDesktop } from '@/hooks/use-media-query'
 import type { LogtoUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { Menu, MessageSquareText, X } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface ChatShellProps {
   closeSidebarLabel: string
@@ -29,9 +31,23 @@ export function ChatShell({
   user,
 }: Readonly<ChatShellProps>) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isDesktop = useIsDesktop()
+
+  // Past the breakpoint the sidebar is a column, not a drawer, and the scrim
+  // the drawer leaves behind would sit over the whole conversation.
+  useEffect(() => {
+    if (isDesktop) {
+      setSidebarOpen(false)
+    }
+  }, [isDesktop])
+
+  useHotkeys([
+    { key: 'b', mod: true, onPress: () => setSidebarOpen((open) => !open) },
+    { key: 'Escape', onPress: () => setSidebarOpen(false) },
+  ])
 
   return (
-    <div className="bg-background flex h-screen overflow-hidden">
+    <div className="bg-background flex h-dvh overflow-hidden">
       {sidebarOpen ? (
         <button
           type="button"
@@ -43,7 +59,7 @@ export function ChatShell({
 
       <aside
         className={cn(
-          'bg-card/40 fixed inset-y-0 left-0 z-50 flex w-80 flex-col border-r shadow-xl backdrop-blur-xl transition-transform duration-300 lg:static lg:translate-x-0 lg:shadow-none',
+          'bg-card fixed inset-y-0 left-0 z-50 flex w-80 flex-col border-r shadow-xl transition-transform duration-300 lg:static lg:translate-x-0 lg:shadow-none',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -69,23 +85,25 @@ export function ChatShell({
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="bg-background/60 flex h-16 items-center justify-between gap-3 border-b px-4 backdrop-blur-md sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="bg-muted/50 hover:bg-muted h-10 w-10 shrink-0 rounded-xl transition-colors lg:hidden"
-              onClick={() => setSidebarOpen((current) => !current)}
-              aria-label={openSidebarLabel}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-            <h1 className="min-w-0 truncate text-base font-semibold tracking-tight">
-              {title}
-            </h1>
-          </div>
+        {/* Flat on purpose: wrapped in a shrinking group with the title, the
+            menu button was squeezed to nothing on a phone and the actions
+            drew over it. As its own item it keeps its width, and the title,
+            which has no room there anyway (as in the dashboard), steps out. */}
+        <header className="bg-background/60 flex h-16 items-center gap-3 border-b px-4 backdrop-blur-md sm:px-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="bg-muted/50 hover:bg-muted h-10 w-10 shrink-0 rounded-xl transition-colors lg:hidden"
+            onClick={() => setSidebarOpen((current) => !current)}
+            aria-label={openSidebarLabel}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <h1 className="hidden min-w-0 flex-1 truncate text-base font-semibold tracking-tight sm:block">
+            {title}
+          </h1>
 
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
             {headerActions}
             <IndexingProgressIndicator user={user} />
             <IndexingAlertCenter user={user} />

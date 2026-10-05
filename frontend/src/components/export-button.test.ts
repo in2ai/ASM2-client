@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
 
-import type { RouterOutputs } from '@/trpc/react'
+import type { RouterOutputs } from '@/lib/metrics-api'
 import { generateCSV, generateFilename } from './export-button'
 
 type ExportMetricsOutput = RouterOutputs['metrics']['exportMetrics']

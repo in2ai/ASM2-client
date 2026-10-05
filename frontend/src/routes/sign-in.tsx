@@ -1,3 +1,4 @@
+import { RouteError } from '@/components/route-error'
 import { useEffect } from 'react'
 
 import { useLogto } from '@logto/react'
@@ -23,6 +24,7 @@ const signInSearchSchema = z.object({
 export const Route = createFileRoute('/sign-in')({
   validateSearch: signInSearchSchema,
   component: SignInPage,
+  errorComponent: RouteError,
 })
 
 function SignInPage() {
@@ -59,12 +61,12 @@ function SignInPage() {
   }
 
   return (
-    <div className="bg-background relative flex min-h-screen items-center justify-center p-4">
+    <div className="bg-background relative flex min-h-dvh items-center justify-center p-4">
       <div className="absolute top-4 right-4">
         <LanguageSwitcher />
       </div>
 
-      <Card className="border-border/50 bg-card/80 w-full max-w-md backdrop-blur-sm">
+      <Card className="border-border/50 bg-card w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="bg-primary shadow-primary/25 mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg">
             <BarChart3 className="text-primary-foreground h-7 w-7" />

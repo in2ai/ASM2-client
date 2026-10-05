@@ -56,7 +56,7 @@ export function OverviewHighlights({
       <StatsRow metrics={metrics} />
 
       <div className="grid grid-cols-1 gap-6">
-        <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 rounded-2xl border shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+        <Card className="bg-card border-border/50 hover:shadow-primary/5 rounded-2xl border shadow-sm transition-shadow duration-300 hover:shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <div className="space-y-1">
               <CardTitle className="flex items-center text-lg font-bold">
@@ -71,7 +71,7 @@ export function OverviewHighlights({
               <Activity size={18} />
             </div>
           </CardHeader>
-          <CardContent className="h-[300px] p-0 pt-4">
+          <CardContent className="h-[240px] p-0 pt-4 sm:h-[270px] lg:h-[300px]">
             <ChartContainer
               config={overviewActivityChartConfig}
               className="h-full w-full"

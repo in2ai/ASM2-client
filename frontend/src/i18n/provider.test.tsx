@@ -1,20 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act } from 'react'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 
-import { I18nProvider, useI18nContext } from './provider'
+import { LOCALE_STORAGE_KEY } from './config'
 import { useLocale, useTranslations } from './next-intl'
-
-const mocks = vi.hoisted(() => ({
-  getLocale: vi.fn(() => 'es'),
-  setLocale: vi.fn(),
-}))
-
-vi.mock('@/paraglide/runtime', () => ({
-  getLocale: mocks.getLocale,
-  setLocale: mocks.setLocale,
-}))
+import { I18nProvider, useI18nContext } from './provider'
 
 function TranslationHarness() {
   const locale = useLocale()
@@ -25,19 +17,27 @@ function TranslationHarness() {
     <div>
       <output aria-label="locale">{locale}</output>
       <output aria-label="label">{t('lastDays', { count: 7 })}</output>
-      <output aria-label="fallback">{t('missing.key')}</output>
       <button onClick={() => setLocale('en')}>English</button>
     </div>
   )
 }
 
+function setNavigatorLanguages(languages: readonly string[]) {
+  Object.defineProperty(globalThis.navigator, 'languages', {
+    configurable: true,
+    value: languages,
+  })
+}
+
 describe('I18nProvider', () => {
-  afterEach(() => {
-    cleanup()
-    vi.restoreAllMocks()
+  beforeEach(() => {
+    globalThis.localStorage.clear()
+    setNavigatorLanguages(['es-ES'])
   })
 
-  it('translates messages, interpolates values, and falls back to the key path', () => {
+  afterEach(cleanup)
+
+  it('translates messages and interpolates values', () => {
     render(
       <I18nProvider>
         <TranslationHarness />
@@ -46,14 +46,62 @@ describe('I18nProvider', () => {
 
     expect(screen.getByLabelText('locale').textContent).toBe('es')
     expect(screen.getByLabelText('label').textContent).toBe('Últimos 7 días')
-    expect(screen.getByLabelText('fallback').textContent).toBe(
-      'DateRangeSelector.missing.key',
+  })
+
+  it('opens in the language the browser asks for', () => {
+    setNavigatorLanguages(['gl-ES', 'es-ES'])
+
+    render(
+      <I18nProvider>
+        <TranslationHarness />
+      </I18nProvider>,
     )
 
-    fireEvent.click(screen.getByText('English'))
+    expect(screen.getByLabelText('locale').textContent).toBe('gl')
+  })
+
+  it('prefers a language the user chose on an earlier visit', () => {
+    globalThis.localStorage.setItem(LOCALE_STORAGE_KEY, 'en')
+    setNavigatorLanguages(['es-ES'])
+
+    render(
+      <I18nProvider>
+        <TranslationHarness />
+      </I18nProvider>,
+    )
 
     expect(screen.getByLabelText('locale').textContent).toBe('en')
-    expect(screen.getByLabelText('label').textContent).toBe('Last 7 days')
-    expect(mocks.setLocale).toHaveBeenCalledWith('en', { reload: false })
+  })
+
+  it('ignores a language it does not carry', () => {
+    setNavigatorLanguages(['de-DE', 'fr-FR'])
+
+    render(
+      <I18nProvider>
+        <TranslationHarness />
+      </I18nProvider>,
+    )
+
+    expect(screen.getByLabelText('locale').textContent).toBe('es')
+  })
+
+  it('loads the chosen catalogue, remembers it, and tells the document', async () => {
+    render(
+      <I18nProvider>
+        <TranslationHarness />
+      </I18nProvider>,
+    )
+
+    await act(async () => {
+      screen.getByText('English').click()
+    })
+
+    expect(screen.getByLabelText('locale').textContent).toBe('en')
+    await waitFor(() => {
+      expect(screen.getByLabelText('label').textContent).toBe('Last 7 days')
+    })
+
+    expect(globalThis.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en')
+    expect(document.documentElement.lang).toBe('en-US')
   })
 })

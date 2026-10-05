@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { useChartVisibility } from '@/contexts/chart-visibility-context'
 import { type AppLocale } from '@/i18n/config'
-import { api } from '@/trpc/react'
+import { api } from '@/lib/metrics-api'
 import {
   BarChart3,
   Languages,
@@ -151,7 +151,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
       </div>
 
       {hasNoData ? (
-        <div className="bg-card/20 flex h-50 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-8 text-center backdrop-blur-sm">
+        <div className="bg-card/20 flex h-50 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-8 text-center">
           <div className="bg-muted text-muted-foreground rounded-full p-3">
             <BarChart3 size={24} />
           </div>
@@ -162,7 +162,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {visibility.topWordsBarChart && (
-            <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <Card className="bg-card border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border transition-shadow duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
@@ -267,7 +267,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
           )}
 
           {visibility.topicsBarChart && (
-            <Card className="bg-card/60 border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:shadow-lg">
+            <Card className="bg-card border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border transition-shadow duration-300 hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">

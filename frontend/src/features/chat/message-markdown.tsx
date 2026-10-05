@@ -1,10 +1,14 @@
+import { CopyButton } from '@/components/copy-button'
 import { cn } from '@/lib/utils'
+import { isValidElement, memo, useMemo, type ReactNode } from 'react'
 import type { Components, UrlTransform } from 'react-markdown'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 interface MessageMarkdownProps {
   content: string
+  copiedLabel: string
+  copyLabel: string
 }
 
 const markdownUrlTransform: UrlTransform = (url) => {
@@ -47,6 +51,28 @@ function isExternalHttpUrl(href: string | undefined) {
   } catch {
     return false
   }
+}
+
+/**
+ * The text of a fenced block, for the clipboard.
+ *
+ * react-markdown hands `pre` its rendered `code` child rather than the source,
+ * so the string has to be gathered back out of the element tree.
+ */
+function readCodeText(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node)
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(readCodeText).join('')
+  }
+
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    return readCodeText(node.props.children)
+  }
+
+  return ''
 }
 
 const markdownComponents: Components = {
@@ -174,17 +200,6 @@ const markdownComponents: Components = {
       {...props}
     />
   ),
-  pre: ({ className, node: _node, ...props }) => (
-    <pre
-      className={cn(
-        'bg-muted/70 my-3 overflow-x-auto rounded-lg border p-3 text-xs leading-5',
-        '[&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-inherit',
-        '[&_code]:whitespace-pre',
-        className,
-      )}
-      {...props}
-    />
-  ),
   table: ({ className, node: _node, ...props }) => (
     <div className="my-3 overflow-x-auto">
       <table
@@ -222,18 +237,72 @@ const markdownComponents: Components = {
   ),
 }
 
-export function MessageMarkdown({ content }: Readonly<MessageMarkdownProps>) {
+/** The base map plus a `pre` that carries a copy button for its block. */
+function buildMarkdownComponents(
+  copyLabel: string,
+  copiedLabel: string,
+): Components {
+  return {
+    ...markdownComponents,
+    pre: ({ children, className, node: _node, ...props }) => {
+      const code = readCodeText(children)
+
+      return (
+        <div className="group/code relative my-3">
+          {code.trim() ? (
+            <CopyButton
+              className="bg-card/80 absolute top-2 right-2 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
+              copiedLabel={copiedLabel}
+              copyLabel={copyLabel}
+              value={code}
+            />
+          ) : null}
+          <pre
+            className={cn(
+              'bg-muted/70 overflow-x-auto rounded-lg border p-3 text-xs leading-5',
+              '[&_code]:border-0 [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-inherit',
+              '[&_code]:whitespace-pre',
+              className,
+            )}
+            {...props}
+          >
+            {children}
+          </pre>
+        </div>
+      )
+    },
+  }
+}
+
+const remarkPlugins = [remarkGfm]
+
+/**
+ * Memoised because parsing is not free and the content of a message that has
+ * already been answered never changes; only its surroundings re-render.
+ */
+export const MessageMarkdown = memo(function MessageMarkdown({
+  content,
+  copiedLabel,
+  copyLabel,
+}: Readonly<MessageMarkdownProps>) {
+  // A fresh object each render would give react-markdown a new component map
+  // every time and undo the memo above it.
+  const components = useMemo(
+    () => buildMarkdownComponents(copyLabel, copiedLabel),
+    [copiedLabel, copyLabel],
+  )
+
   return (
     <div className="min-w-0 wrap-break-word">
       <Markdown
         disallowedElements={['img']}
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={remarkPlugins}
         skipHtml
         urlTransform={markdownUrlTransform}
-        components={markdownComponents}
+        components={components}
       >
         {content}
       </Markdown>
     </div>
   )
-}
+})

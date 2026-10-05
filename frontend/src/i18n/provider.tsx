@@ -2,28 +2,24 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
 
 import type { AppLocale } from '@/i18n/config'
-import { defaultLocale, isAppLocale } from '@/i18n/config'
-import en from '@/i18n/messages/en.json'
-import es from '@/i18n/messages/es.json'
-import gl from '@/i18n/messages/gl.json'
 import {
-  getLocale as getParaglideLocale,
-  setLocale as setParaglideLocale,
-} from '@/paraglide/runtime'
-
-type TranslationDictionary = Record<string, unknown>
-
-const dictionaries: Record<AppLocale, TranslationDictionary> = {
-  es,
-  en,
-  gl,
-}
+  LOCALE_STORAGE_KEY,
+  resolveInitialLocale,
+  toIntlLocale,
+} from '@/i18n/config'
+import type { Dictionary } from '@/i18n/dictionary'
+import {
+  fallbackDictionary,
+  getLoadedDictionary,
+  loadDictionary,
+} from '@/i18n/dictionary'
 
 interface I18nContextValue {
   locale: AppLocale
@@ -70,21 +66,52 @@ function interpolate(
   })
 }
 
-function resolveInitialLocale(): AppLocale {
-  const locale = getParaglideLocale()
-  if (isAppLocale(locale)) {
-    return locale
+/** Said once per key, so a missing message is noticed without flooding the log. */
+const warned = new Set<string>()
+
+function warnMissing(locale: AppLocale, path: string) {
+  if (!import.meta.env.DEV || warned.has(`${locale}:${path}`)) {
+    return
   }
 
-  return defaultLocale
+  warned.add(`${locale}:${path}`)
+  console.warn(`[i18n] missing message "${path}" for locale "${locale}"`)
 }
 
 export function I18nProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [locale, setLocaleState] = useState<AppLocale>(resolveInitialLocale)
+  const [dictionary, setDictionary] = useState<Dictionary>(
+    () => getLoadedDictionary(resolveInitialLocale()) ?? fallbackDictionary,
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadDictionary(locale).then((loaded) => {
+      if (!cancelled) {
+        setDictionary(loaded)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [locale])
+
+  // Assistive technology reads the page in whatever `lang` says, and the
+  // document shipped with a hardcoded one that outlived the user's choice.
+  useEffect(() => {
+    document.documentElement.lang = toIntlLocale(locale)
+  }, [locale])
 
   const setLocale = useCallback((nextLocale: AppLocale) => {
-    void setParaglideLocale(nextLocale, { reload: false })
     setLocaleState(nextLocale)
+
+    try {
+      globalThis.localStorage?.setItem(LOCALE_STORAGE_KEY, nextLocale)
+    } catch {
+      // The choice still holds for this session.
+    }
   }, [])
 
   const t = useCallback(
@@ -93,16 +120,22 @@ export function I18nProvider({ children }: Readonly<{ children: ReactNode }>) {
       key: string,
       values?: Record<string, string | number>,
     ) => {
-      const dictionary = dictionaries[locale]
       const fullPath = key.length > 0 ? `${namespace}.${key}` : namespace
       const message = getNestedValue(dictionary, fullPath)
-      if (!message) {
-        return fullPath
+
+      if (message !== undefined) {
+        return interpolate(message, values)
       }
 
-      return interpolate(message, values)
+      warnMissing(locale, fullPath)
+
+      // An untranslated key is shown in the source language rather than as its
+      // own path: a reader of a half-translated locale gets a real sentence
+      // instead of "ChatPage.errors.sendFailed".
+      const fallback = getNestedValue(fallbackDictionary, fullPath)
+      return fallback === undefined ? fullPath : interpolate(fallback, values)
     },
-    [locale],
+    [dictionary, locale],
   )
 
   const value = useMemo(

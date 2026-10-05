@@ -6,7 +6,18 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type DashboardView = 'overview' | 'usage' | 'rag-quality' | 'insights'
+export const DASHBOARD_VIEW_KEYS = [
+  'overview',
+  'usage',
+  'rag-quality',
+  'insights',
+] as const
+
+export type DashboardView = (typeof DASHBOARD_VIEW_KEYS)[number]
+
+export function isDashboardView(value: unknown): value is DashboardView {
+  return (DASHBOARD_VIEW_KEYS as readonly unknown[]).includes(value)
+}
 
 export interface DashboardViewConfig {
   readonly key: DashboardView

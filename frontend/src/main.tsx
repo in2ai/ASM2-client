@@ -1,3 +1,4 @@
+import { shouldRetryQuery } from '@/lib/api-error'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
@@ -17,7 +18,24 @@ const router = createRouter({
   scrollRestoration: true,
 })
 
-const queryClient = new QueryClient()
+/**
+ * Defaults, rather than nothing at all: without a `staleTime` every mount
+ * refetches, so moving between chat and dashboard re-asked the backend for
+ * data it had just been given. A minute of reuse is well inside how often
+ * any of this actually changes, and the polling queries set their own.
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: 10 * 60_000,
+      // A lost token or a 404 is not worth three more round trips; a flaky
+      // connection is. Retry the second kind only.
+      retry: shouldRetryQuery,
+      refetchOnWindowFocus: false,
+      staleTime: 60_000,
+    },
+  },
+})
 
 declare module '@tanstack/react-router' {
   interface Register {

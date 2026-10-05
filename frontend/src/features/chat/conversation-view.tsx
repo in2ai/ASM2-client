@@ -1,17 +1,22 @@
+import { CopyButton } from '@/components/copy-button'
 import { Button } from '@/components/ui/button'
+import { Kbd } from '@/components/ui/kbd'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
+import { useStickToBottom } from '@/hooks/use-stick-to-bottom'
 import type { AppLocale } from '@/i18n/config'
 import { cn } from '@/lib/utils'
 import {
+  ArrowDown,
   ArrowUp,
   Bot,
   Download,
   ExternalLink,
   FileText,
   Loader2,
+  Square,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { ChatActivity } from './chat-activity'
 import { BubbleAvatar } from './chat-avatar'
 import { ChatConversationLoadingState } from './chat-loading-state'
@@ -47,6 +52,8 @@ interface ConversationViewProps {
   locale: AppLocale
   messageLabels: {
     assistant: string
+    copyMessage: string
+    copiedMessage: string
     document: string
     downloadDocument: string
     downloadingDocument: string
@@ -61,6 +68,14 @@ interface ConversationViewProps {
   onEmptyPrimaryAction?: () => void
   onComposerChange: (value: string) => void
   onSendMessage: () => void
+  /** Abandons the running turn. Absent when there is nothing to stop. */
+  onStopGeneration?: () => void
+  shellLabels: {
+    jumpToLatest: string
+    newLineHint: string
+    sendHint: string
+    stopGenerating: string
+  }
   pendingMessage?: ChatMessage | null
   /** What the backend is doing right now, while an answer is on its way. */
   progress: {
@@ -93,10 +108,14 @@ export function ConversationView({
   onEmptyPrimaryAction,
   onComposerChange,
   onSendMessage,
+  onStopGeneration,
   pendingMessage,
   progress,
+  shellLabels,
 }: Readonly<ConversationViewProps>) {
-  const bottomRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
+  const { followIfPinned, isPinned, scrollToBottom, viewportRef } =
+    useStickToBottom()
   const messages = useMemo(
     () => [
       ...(chat?.messages ?? []),
@@ -105,9 +124,48 @@ export function ConversationView({
     [chat?.messages, pendingMessage],
   )
 
+  const lastMessageId = messages.at(-1)?.id
+  const isOwnMessageLast = messages.at(-1)?.role === 'user'
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isSending])
+    // Following the conversation is the default, but only for a reader who
+    // has not gone looking through it -- which is the condition
+    // `followIfPinned` checks for itself. The one exception is the reader's
+    // own message: sending is an explicit act, and its answer belongs on
+    // screen whether or not they had scrolled away.
+    if (isOwnMessageLast) {
+      scrollToBottom()
+      return
+    }
+
+    followIfPinned()
+  }, [
+    followIfPinned,
+    isOwnMessageLast,
+    isSending,
+    lastMessageId,
+    scrollToBottom,
+  ])
+
+  // A conversation opens at its newest message, with no scroll animation
+  // across a history the reader never saw.
+  useLayoutEffect(() => {
+    if (chat?.id) {
+      scrollToBottom('auto')
+    }
+  }, [chat?.id, scrollToBottom])
+
+  // The composer grows with the draft up to its cap, instead of hiding the
+  // top of a long question behind a scrollbar in a four-line box.
+  useLayoutEffect(() => {
+    const textarea = composerRef.current
+    if (!textarea) {
+      return
+    }
+
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 192)}px`
+  }, [composerValue])
 
   return (
     <div className="bg-muted/5 flex h-full flex-col overflow-hidden">
@@ -137,43 +195,59 @@ export function ConversationView({
         ) : null}
 
         {!isLoading && messages.length > 0 ? (
-          <ScrollArea className="h-full px-4 py-8 sm:px-6">
-            <div className="mx-auto w-full max-w-3xl space-y-6">
-              {messages.map((message) => (
-                <MessageBubble
-                  key={message.id}
-                  documentDownloadError={documentDownloadErrors?.[message.id]}
-                  isDownloadingDocument={
-                    downloadingDocumentMessageIds?.has(message.id) ?? false
-                  }
-                  locale={locale}
-                  message={message}
-                  labels={messageLabels}
-                  onDownloadDocument={onDownloadDocument}
-                />
-              ))}
+          <div className="relative h-full">
+            <ScrollArea
+              className="h-full px-4 py-8 sm:px-6"
+              viewportRef={viewportRef}
+            >
+              <div className="mx-auto w-full max-w-3xl space-y-6">
+                {messages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    documentDownloadError={documentDownloadErrors?.[message.id]}
+                    isDownloadingDocument={
+                      downloadingDocumentMessageIds?.has(message.id) ?? false
+                    }
+                    locale={locale}
+                    message={message}
+                    labels={messageLabels}
+                    onDownloadDocument={onDownloadDocument}
+                  />
+                ))}
 
-              {isSending ? (
-                <ChatActivity
-                  events={progress.events}
-                  fallbackLabel={messageLabels.sending}
-                  formatElapsed={progress.formatElapsed}
-                  formatEvent={progress.formatStep}
-                  startedAt={progress.startedAt}
-                  title={progress.title}
-                />
-              ) : null}
+                {isSending ? (
+                  <ChatActivity
+                    events={progress.events}
+                    fallbackLabel={messageLabels.sending}
+                    formatElapsed={progress.formatElapsed}
+                    formatEvent={progress.formatStep}
+                    startedAt={progress.startedAt}
+                    title={progress.title}
+                  />
+                ) : null}
+              </div>
+            </ScrollArea>
 
-              <div ref={bottomRef} />
-            </div>
-          </ScrollArea>
+            {!isPinned ? (
+              <Button
+                aria-label={shellLabels.jumpToLatest}
+                className="bg-card absolute bottom-4 left-1/2 h-9 -translate-x-1/2 rounded-full border shadow-lg"
+                onClick={() => scrollToBottom()}
+                size="sm"
+                variant="outline"
+              >
+                <ArrowDown className="mr-1.5 h-4 w-4" />
+                {shellLabels.jumpToLatest}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
       <div className="px-4 pt-2 pb-6 sm:px-6">
         <div className="mx-auto w-full max-w-3xl">
           {errorMessage ? (
-            <div className="mb-3 rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-300">
+            <div className="mb-3 rounded-2xl border-destructive/25 bg-destructive/5 text-destructive border px-4 py-3 text-sm">
               {errorMessage}
             </div>
           ) : null}
@@ -185,6 +259,7 @@ export function ConversationView({
 
           <div className="bg-card focus-within:ring-primary/30 focus-within:border-primary/40 rounded-3xl border p-3 shadow-lg transition-shadow focus-within:ring-2">
             <Textarea
+              ref={composerRef}
               disabled={composerDisabled}
               value={composerValue}
               onChange={(event) => onComposerChange(event.target.value)}
@@ -201,23 +276,41 @@ export function ConversationView({
                 }
               }}
               placeholder={composerPlaceholder}
-              className="max-h-48 min-h-20 resize-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
+              className="max-h-48 min-h-20 resize-none overflow-y-auto border-0 bg-transparent px-2 shadow-none focus-visible:ring-0"
             />
-            <div className="mt-2 flex items-center justify-end px-1">
-              <Button
-                size="icon"
-                className="h-10 w-10 rounded-full"
-                disabled={
-                  composerDisabled || !composerValue.trim() || isSending
-                }
-                onClick={onSendMessage}
-              >
-                {isSending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-4 w-4" />
-                )}
-              </Button>
+            <div className="mt-2 flex items-center justify-between gap-3 px-1">
+              <p className="text-muted-foreground hidden text-xs sm:block">
+                <Kbd>Enter</Kbd> {shellLabels.sendHint}
+                <span className="mx-1.5 opacity-50">·</span>
+                <Kbd>Shift</Kbd> <Kbd>Enter</Kbd> {shellLabels.newLineHint}
+              </p>
+              {isSending && onStopGeneration ? (
+                <Button
+                  aria-label={shellLabels.stopGenerating}
+                  className="h-10 w-10 shrink-0 rounded-full"
+                  onClick={onStopGeneration}
+                  size="icon"
+                  title={shellLabels.stopGenerating}
+                  variant="secondary"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  size="icon"
+                  className="ml-auto h-10 w-10 shrink-0 rounded-full"
+                  disabled={
+                    composerDisabled || !composerValue.trim() || isSending
+                  }
+                  onClick={onSendMessage}
+                >
+                  {isSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -226,7 +319,13 @@ export function ConversationView({
   )
 }
 
-function MessageBubble({
+/**
+ * Memoised on purpose: a turn reports its progress several times a second,
+ * and every one of those re-rendered the whole conversation -- re-parsing the
+ * markdown of every message already on screen. Nothing here depends on the
+ * turn, so nothing here needs to run again while it is in flight.
+ */
+const MessageBubble = memo(function MessageBubble({
   documentDownloadError,
   isDownloadingDocument,
   locale,
@@ -249,15 +348,20 @@ function MessageBubble({
   return (
     <div
       className={cn(
-        'flex gap-3 sm:gap-4',
+        'group/message flex gap-3 sm:gap-4',
         isUser ? 'justify-end' : 'justify-start',
       )}
     >
       {!isUser ? <BubbleAvatar isUser={false} /> : null}
       <div
         className={cn(
-          'min-w-0 max-w-[85%] rounded-3xl px-5 py-4 shadow-sm',
-          isUser ? 'bg-primary text-primary-foreground' : 'bg-card border',
+          'min-w-0 rounded-3xl px-5 py-4 shadow-sm',
+          // An answer carries tables, code and citations; boxing it at 85%
+          // of the column squeezed all three for no reason. A question is a
+          // line or two, and reads better as a bubble against the edge.
+          isUser
+            ? 'bg-primary text-primary-foreground max-w-[85%]'
+            : 'bg-card w-full border',
         )}
       >
         <div className="mb-2 flex items-center gap-2">
@@ -267,13 +371,23 @@ function MessageBubble({
           <span className="text-[11px] opacity-60">
             {formatMessageTimestamp(message.created_at, locale)}
           </span>
+          <CopyButton
+            className="-my-1 ml-auto opacity-0 transition-opacity group-hover/message:opacity-100 focus-visible:opacity-100"
+            copiedLabel={labels.copiedMessage}
+            copyLabel={labels.copyMessage}
+            value={message.content}
+          />
         </div>
         {isUser ? (
           <p className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed">
             {message.content}
           </p>
         ) : (
-          <MessageMarkdown content={message.content} />
+          <MessageMarkdown
+            content={message.content}
+            copiedLabel={labels.copiedMessage}
+            copyLabel={labels.copyMessage}
+          />
         )}
         {generatedDocument ? (
           <GeneratedDocumentCard
@@ -308,7 +422,7 @@ function MessageBubble({
       {isUser ? <BubbleAvatar isUser={true} /> : null}
     </div>
   )
-}
+})
 
 function GeneratedDocumentCard({
   document: generatedDocument,
@@ -328,28 +442,38 @@ function GeneratedDocumentCard({
   locale: AppLocale
   onDownload?: () => void
 }>) {
+  const name = generatedDocument.title?.trim() || generatedDocument.filename
+
   return (
     <div className="mt-4 border-t pt-3">
       <p className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
         {labels.document}
       </p>
-      <div className="bg-muted/40 flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3">
-        <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-          <FileText className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">
-            {generatedDocument.title?.trim() || generatedDocument.filename}
-          </p>
-          <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
-            <span>{getDocumentFormatLabel(generatedDocument)}</span>
-            <span>
-              {formatDocumentSize(generatedDocument.size_bytes, locale)}
-            </span>
-          </p>
+      {/* On a phone the button sits under the name rather than beside it:
+          side by side, the name was left a few letters before the ellipsis.
+          It wraps to two lines for the same reason, as file names are long. */}
+      <div className="bg-muted/40 flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+            <FileText className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className="line-clamp-2 text-sm font-medium wrap-anywhere"
+              title={name}
+            >
+              {name}
+            </p>
+            <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
+              <span>{getDocumentFormatLabel(generatedDocument)}</span>
+              <span>
+                {formatDocumentSize(generatedDocument.size_bytes, locale)}
+              </span>
+            </p>
+          </div>
         </div>
         <Button
-          className="rounded-2xl"
+          className="w-full shrink-0 rounded-2xl sm:w-auto"
           disabled={isDownloading || !onDownload}
           onClick={onDownload}
           size="sm"
@@ -364,9 +488,7 @@ function GeneratedDocumentCard({
         </Button>
       </div>
       {downloadError ? (
-        <p className="mt-2 text-xs text-red-600 dark:text-red-300">
-          {downloadError}
-        </p>
+        <p className="text-destructive mt-2 text-xs">{downloadError}</p>
       ) : null}
     </div>
   )
