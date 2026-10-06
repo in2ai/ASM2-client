@@ -215,7 +215,7 @@ def generate_document(
 
     # Generate document
     try:
-        document = generate_document_from_context(llm, query, messages)
+        document = generate_document_from_context(llm, query, messages, format)
 
     except InsufficientContextError as e:
         searches = "\n".join(f"- {q}" for q in e.suggested_searches)
