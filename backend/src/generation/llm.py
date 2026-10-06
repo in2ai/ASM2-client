@@ -10,7 +10,7 @@ from langchain_core.messages import (
     BaseMessage,
 )
 
-from src.generation.model import Document, Section
+from src.generation.model import Document, Section, Table
 
 
 def serialize_messages(messages: list[BaseMessage]) -> str:
@@ -155,7 +155,38 @@ If sufficient, plan the document:
 - Organize by topic, not by the chronological order of the conversation.
  
 Output only a valid `DocumentOutline` object."""
+
+_OUTLINE_CSV_SUFFIX = """
  
+This document will be delivered as a CSV, so it is one table and nothing else. Plan exactly one section, whose heading names what the table lists. Judge sufficiency on records rather than prose: the context has to contain the rows themselves, not just discussion of the subject. A conversation describing three services supports a three-row table; an essay about service ownership in general supports none."""
+ 
+_TABLE_SYSTEM = """You are a data analyst producing a single table. It will be delivered as a CSV, so the table is the whole deliverable: no prose, no second table, nothing outside the rows and columns.
+ 
+Columns:
+- Decide first what exactly one row represents -- one service, one incident, one invoice line -- and hold every row to that one kind of thing.
+- Put the column that identifies the row first, then its key attributes, then supporting detail.
+- One fact per column. Split anything compound: an "Owner" holding both a team and an email address is two columns.
+- Put the unit, currency or scale in the column heading -- "Latency (ms)", "Budget (USD)" -- so the cells can hold bare values.
+- Only include a column the context can fill for most rows. A column that is empty for all but one row is worse than no column.
+- Don't add a free-text "Notes" or "Comments" column unless the query asks for commentary. It becomes the dumping ground for the prose a table exists to avoid.
+- Keep headings short and plain, with no Markdown.
+ 
+Rows:
+- One record per row, one row per record. If the context describes the same thing twice, that is still one row.
+- Every row holds exactly one cell per column, in heading order.
+- No total, subtotal, average or summary rows. No blank separator rows. No category headers standing in for a row. Never repeat the headings as a row.
+- Order the rows the way the query implies; if it implies nothing, order by the first column.
+ 
+Cells:
+- Plain text, a single value, short. No Markdown (no `**`, no backticks, no links), no bullet characters, no line breaks, no multi-sentence prose. If a cell wants a sentence, cut it to the phrase carrying the fact.
+- The unit lives in the heading, so write bare values: `41`, not `41 ms` or `about 41ms`.
+- Keep the format identical down a column: dates as YYYY-MM-DD, booleans as yes/no, numbers at the same precision, no thousands separators.
+- Name the same entity the same way in every row -- one spelling, one casing, one level of abbreviation.
+- Leave a cell empty when the context doesn't give the value. Never write "N/A", "unknown", "TBD" or "-".
+- Never invent a value, and never carry one over from a neighbouring row to fill a gap. Only what the context supports.
+ 
+Output only a valid `Table` object."""
+
  
 _SECTION_SYSTEM = """You are an expert technical writer drafting one section of a larger document. You'll be given the document's title, the full outline, and which section is yours -- produce a `Section` for it: a heading and its content.
  
@@ -270,27 +301,32 @@ _REVISION_SYSTEM = """You are an expert technical editor. You'll be given one or
 Output only a valid `RevisedSections` object."""
  
  
-def _format_outline(outline: DocumentOutline) -> str:
-    return "\n".join(f"- {s.heading}: {s.description}" for s in outline.sections)
+def _format_outline(sections: list[SectionPlan]) -> str:
+    return "\n".join(f"- {s.heading}: {s.description}" for s in sections)
  
- 
-def generate_document_from_context(llm, query: str, messages: list) -> Document:
+
+def generate_document_from_context(llm, query: str, messages: list, format: str) -> Document:
     context = serialize_messages(messages)
+    is_csv = (format or "").strip().lower() == "csv"
  
     # Stage 1: judge sufficiency, then plan a title and a writing brief per section.
     outline = llm.with_structured_output(DocumentOutline).invoke([
-        SystemMessage(content=_OUTLINE_SYSTEM),
+        SystemMessage(content=_OUTLINE_SYSTEM + (_OUTLINE_CSV_SUFFIX if is_csv else "")),
         HumanMessage(content=f"Query: {query}\n\nContext:\n\n{context}"),
     ])
  
     if not outline.sufficient:
         raise InsufficientContextError(outline.missing_info, outline.suggested_searches)
  
+    # Belt and braces for the one-section instruction above: a second table would
+    # be dropped silently by the renderer, so drop it here where it is visible.
+    plans = outline.sections[:1] if is_csv else outline.sections
+ 
     # Stage 2: draft every section in parallel, each aware of the full outline.
-    outline_text = _format_outline(outline)
+    outline_text = _format_outline(plans)
     section_inputs = [
         [
-            SystemMessage(content=_SECTION_SYSTEM),
+            SystemMessage(content=_TABLE_SYSTEM if is_csv else _SECTION_SYSTEM),
             HumanMessage(
                 content=(
                     f"Query: {query}\n\n"
@@ -302,12 +338,21 @@ def generate_document_from_context(llm, query: str, messages: list) -> Document:
                 )
             ),
         ]
-        for plan in outline.sections
+        for plan in plans
     ]
+ 
+    if is_csv:
+        tables = llm.with_structured_output(Table).batch(section_inputs)
+        sections = [Section(heading=plan.heading, content=[table])
+                    for plan, table in zip(plans, tables)]
+
+        # Since the structure is fixed, no critique is needed
+        return Document(title=outline.title, sections=sections)
+ 
     sections = llm.with_structured_output(Section).batch(section_inputs)
  
     # Force each heading to match the plan exactly
-    for section, plan in zip(sections, outline.sections):
+    for section, plan in zip(sections, plans):
         section.heading = plan.heading
  
     document = Document(title=outline.title, sections=sections)
@@ -324,7 +369,7 @@ def generate_document_from_context(llm, query: str, messages: list) -> Document:
  
     flagged_headings = {h for issue in critique.issues for h in issue.sections}
     flagged_indices = [i for i, s in enumerate(document.sections) if s.heading in flagged_headings]
-    
+ 
     if not flagged_indices:
         return Document(title=title, sections=document.sections)
  
@@ -349,11 +394,11 @@ def generate_document_from_context(llm, query: str, messages: list) -> Document:
     flagged_set = set(flagged_indices)
     first_flagged = min(flagged_indices)
     final_sections: list[Section] = []
-    
+ 
     for i, section in enumerate(document.sections):
         if i not in flagged_set:
             final_sections.append(section)
-
+ 
         elif i == first_flagged:
             final_sections.extend(revision.sections)
  
