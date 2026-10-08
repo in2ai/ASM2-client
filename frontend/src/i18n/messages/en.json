@@ -203,6 +203,8 @@
     "ariaLabel": "Chart information"
   },
   "MetricsErrors": {
+    "refreshFailedTitle": "Could not refresh metrics",
+    "refreshFailedMessage": "Showing the last successfully loaded results. They may be out of date.",
     "titles": {
       "unauthorized": "Unauthorized access",
       "forbidden": "Access denied",

@@ -203,6 +203,8 @@
     "ariaLabel": "Información del gráfico"
   },
   "MetricsErrors": {
+    "refreshFailedTitle": "No se han podido actualizar las métricas",
+    "refreshFailedMessage": "Se muestran los últimos resultados cargados correctamente. Pueden estar desactualizados.",
     "titles": {
       "unauthorized": "Acceso no autorizado",
       "forbidden": "Acceso denegado",

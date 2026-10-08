@@ -11,8 +11,10 @@ import {
 } from '@/app/_components/metrics/utils'
 import { NoMetricsEmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
+import { Button } from '@/components/ui/button'
 import { type LogtoUser } from '@/lib/auth'
 import { api } from '@/lib/metrics-api'
+import { RefreshCw, TriangleAlert } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { Suspense, lazy, useCallback, useMemo } from 'react'
 import { type DateRange } from 'react-day-picker'
@@ -81,7 +83,6 @@ function renderDashboardContent({
   errorMessages,
   errorTitles,
   handleRefresh,
-  handleRetry,
   isError,
   isPending,
   isRefetching,
@@ -93,7 +94,6 @@ function renderDashboardContent({
   errorMessages: Record<keyof typeof errorTitles, string>
   errorTitles: Record<string, string>
   handleRefresh: () => Promise<void>
-  handleRetry: () => Promise<void>
   isError: boolean
   isPending: boolean
   isRefetching: boolean
@@ -108,7 +108,7 @@ function renderDashboardContent({
       <ErrorState
         title={errorTitles[errorCode]}
         message={errorMessages[errorCode]}
-        onRetry={handleRetry}
+        onRetry={handleRefresh}
         isRetrying={isRefetching}
         showHomeButton={true}
       />
@@ -143,6 +143,7 @@ export function MetricsDashboard({
 }: MetricsDashboardProps) {
   const locale = useLocale()
   const t = useTranslations('MetricsErrors')
+  const errorT = useTranslations('ErrorState')
   const viewT = useTranslations('AppLayout.views')
   const viewTitle = {
     overview: viewT('overview'),
@@ -172,17 +173,17 @@ export function MetricsDashboard({
   const metricsQuery = api.metrics.get.useQuery(metricsInput, QUERY_OPTIONS)
   const statsQuery = api.metrics.getStats.useQuery(metricsInput, QUERY_OPTIONS)
 
-  const { data, error, isError, isPending, isFetching, isRefetching } =
-    metricsQuery
+  const { data, error, isError, isPending } = metricsQuery
   const { data: stats } = statsQuery
+  const isFetching = metricsQuery.isFetching || statsQuery.isFetching
+  // A refetch error retains data for this query key. Placeholder data from a
+  // different date range is discarded by React Query when that request fails.
+  const showRefreshError =
+    metricsQuery.isRefetchError && isRecoverableError(error)
 
   const handleRefresh = useCallback(async () => {
-    await metricsQuery.refetch()
-  }, [metricsQuery])
-
-  const handleRetry = useCallback(async () => {
-    await metricsQuery.refetch()
-  }, [metricsQuery])
+    await Promise.all([metricsQuery.refetch(), statsQuery.refetch()])
+  }, [metricsQuery, statsQuery])
 
   const lastUpdated = useMemo(() => {
     if (!data) {
@@ -227,6 +228,37 @@ export function MetricsDashboard({
           />
         )}
 
+        {showRefreshError ? (
+          <div
+            role="alert"
+            className="border-warning/40 bg-warning/10 mb-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center"
+          >
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <TriangleAlert
+                aria-hidden="true"
+                className="text-warning mt-0.5 h-5 w-5 shrink-0"
+              />
+              <div className="space-y-1 text-sm">
+                <p className="font-semibold">{t('refreshFailedTitle')}</p>
+                <p className="text-muted-foreground">
+                  {t('refreshFailedMessage')}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="min-h-11 shrink-0 gap-2 sm:w-auto"
+              disabled={isFetching}
+              onClick={handleRefresh}
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'}
+              />
+              {isFetching ? errorT('retrying') : errorT('retry')}
+            </Button>
+          </div>
+        ) : null}
         {renderDashboardContent({
           data,
           dateRange,
@@ -234,10 +266,9 @@ export function MetricsDashboard({
           errorMessages,
           errorTitles,
           handleRefresh,
-          handleRetry: isRecoverableError(error) ? handleRetry : handleRefresh,
-          isError,
+          isError: isError && !showRefreshError,
           isPending,
-          isRefetching,
+          isRefetching: isFetching,
           currentView,
         })}
       </div>
