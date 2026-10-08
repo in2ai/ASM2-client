@@ -163,15 +163,15 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {visibility.topWordsBarChart && (
             <Card className="bg-card border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border transition-shadow duration-300 hover:shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="space-y-1">
+              <CardHeader className="flex flex-col items-start gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
                     {t('topWords.title')}
                     <ChartHint hint={t('topWords.hint')} />
                   </CardTitle>
                   <CardDescription>{t('topWords.description')}</CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
                   <Select
                     value={topWordsLanguage}
                     onValueChange={(value) =>
@@ -179,10 +179,10 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                     }
                   >
                     <SelectTrigger
-                      className="bg-background/60 border-border/60 h-10 min-w-44 rounded-xl"
+                      className="bg-background/60 border-border/60 h-10 min-w-0 flex-1 rounded-xl sm:min-w-44"
                       aria-label={t('topWords.filters.ariaLabel')}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
                         <Languages className="text-muted-foreground h-4 w-4" />
                         <SelectValue
                           placeholder={t('topWords.filters.placeholder')}
@@ -196,7 +196,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                       <SelectItem value="gl">{languageLabels.gl}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                  <div className="bg-primary/10 text-primary shrink-0 rounded-xl p-2.5">
                     {isTopWordsPending || isTopWordsUpdating ? (
                       <Loader2 size={18} className="animate-spin" />
                     ) : (
@@ -268,8 +268,8 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
 
           {visibility.topicsBarChart && (
             <Card className="bg-card border-border/50 hover:shadow-primary/5 overflow-hidden rounded-2xl border transition-shadow duration-300 hover:shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="space-y-1">
+              <CardHeader className="flex flex-col items-start gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1">
                   <CardTitle className="flex items-center text-lg font-bold">
                     {t('topTopics.title')}
                     <ChartHint hint={t('topTopics.hint')} />
@@ -278,7 +278,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                     {t('topTopics.description')}
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
                   <Select
                     value={topicLabelLanguage}
                     onValueChange={(value) =>
@@ -286,10 +286,10 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                     }
                   >
                     <SelectTrigger
-                      className="bg-background/60 border-border/60 h-10 min-w-44 rounded-xl"
+                      className="bg-background/60 border-border/60 h-10 min-w-0 flex-1 rounded-xl sm:min-w-44"
                       aria-label={t('topTopics.filters.ariaLabel')}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
                         <Languages className="text-muted-foreground h-4 w-4" />
                         <SelectValue
                           placeholder={t('topTopics.filters.placeholder')}
@@ -302,7 +302,7 @@ export function InsightsView({ dateRange }: Readonly<InsightsViewProps>) {
                       <SelectItem value="gl">{languageLabels.gl}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="bg-primary/10 text-primary rounded-xl p-2.5">
+                  <div className="bg-primary/10 text-primary shrink-0 rounded-xl p-2.5">
                     {isTopTopicsPending || isTopTopicsUpdating ? (
                       <Loader2 size={18} className="animate-spin" />
                     ) : (

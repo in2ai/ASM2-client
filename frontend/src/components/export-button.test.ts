@@ -89,6 +89,15 @@ describe('export helpers', () => {
     expect(csv).toContain('Full turn (ms)')
   })
 
+  it('escapes the response-time heading in both export languages', () => {
+    expect(generateCSV(exportPayload, 'en')).toContain(
+      'Date,Full turn (ms),"Retrieval, part of the turn (ms)"',
+    )
+    expect(generateCSV(exportPayload, 'es')).toMatch(
+      /Fecha,[^\n]+,"[^\n]+,[^\n]+"/,
+    )
+  })
+
   it('reports an unsampled resource instead of printing 0.0', () => {
     const csv = generateCSV(
       {

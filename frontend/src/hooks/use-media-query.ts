@@ -13,13 +13,20 @@ export function useMediaQuery(query: string): boolean {
   )
 
   useEffect(() => {
-    const list = globalThis.matchMedia(query)
+    const list = globalThis.matchMedia?.(query)
+    if (!list) {
+      return
+    }
     const update = () => setMatches(list.matches)
 
     update()
     list.addEventListener('change', update)
+    globalThis.addEventListener('resize', update)
 
-    return () => list.removeEventListener('change', update)
+    return () => {
+      list.removeEventListener('change', update)
+      globalThis.removeEventListener('resize', update)
+    }
   }, [query])
 
   return matches

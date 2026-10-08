@@ -39,6 +39,7 @@ const labels = {
   pages: 'Pages',
   sending: 'Sending',
   sources: 'Sources',
+  stopped: 'Stopped',
   user: 'User',
 }
 
@@ -46,6 +47,7 @@ const shellLabels = {
   jumpToLatest: 'Jump to latest',
   newLineHint: 'for a new line',
   sendHint: 'to send',
+  sendMessage: 'Send message',
   stopGenerating: 'Stop generating',
 }
 

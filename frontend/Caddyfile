@@ -26,10 +26,10 @@
     # The entry document is the one unhashed file, and it is what points at
     # the current bundle. Held in cache it would keep serving a deployed-over
     # build, so it is revalidated every time.
-    @entry path / /index.html
-    header @entry Cache-Control "no-cache"
-
-    try_files {path} /index.html
-    file_server
+    route {
+      try_files {path} /index.html
+      header /index.html Cache-Control "no-cache"
+      file_server
+    }
   }
 }

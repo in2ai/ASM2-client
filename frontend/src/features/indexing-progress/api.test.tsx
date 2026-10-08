@@ -189,7 +189,7 @@ describe('indexing progress API', () => {
     })
 
     const unavailableButton = await screen.findByRole('button', {
-      name: 'unavailable',
+      name: /unavailable/,
     })
     expect(screen.queryByText('25%')).toBeNull()
     expect(container.querySelector('.animate-spin')).toBeNull()

@@ -4,6 +4,7 @@ import { isValidElement, memo, useMemo, type ReactNode } from 'react'
 import type { Components, UrlTransform } from 'react-markdown'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { normalizeMessageLinks } from './message-text'
 
 interface MessageMarkdownProps {
   content: string
@@ -79,6 +80,10 @@ const markdownComponents: Components = {
   a: ({ className, href, node: _node, ...props }) => {
     const safeHref = href || undefined
     const external = isExternalHttpUrl(safeHref)
+
+    if (!safeHref) {
+      return <span>{props.children}</span>
+    }
 
     return (
       <a
@@ -301,7 +306,7 @@ export const MessageMarkdown = memo(function MessageMarkdown({
         urlTransform={markdownUrlTransform}
         components={components}
       >
-        {content}
+        {normalizeMessageLinks(content)}
       </Markdown>
     </div>
   )

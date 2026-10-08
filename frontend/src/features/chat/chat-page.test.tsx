@@ -285,6 +285,7 @@ const sourcesStatusAwaitingFirstBuild = {
 describe('ChatPage', () => {
   beforeEach(() => {
     conversationRenderStates = []
+    globalThis.localStorage.clear()
   })
 
   afterEach(() => {

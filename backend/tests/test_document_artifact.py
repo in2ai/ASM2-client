@@ -1,9 +1,11 @@
 import base64
 import io
+import csv
 import re
 import unittest
 
 from PyPDF2 import PdfReader
+from docx import Document as WordDocument
 
 from src.generation.artifact import (
     UnsupportedDocumentFormatError,
@@ -11,7 +13,7 @@ from src.generation.artifact import (
     slugify_filename_stem,
     to_stored_document,
 )
-from src.generation.model import Document, Paragraph, Section
+from src.generation.model import Document, Paragraph, Section, Table
 
 
 # The download endpoint interpolates the filename straight into a
@@ -62,11 +64,14 @@ class BuildDocumentArtifactTests(unittest.TestCase):
         )
 
     def test_renders_every_supported_format(self):
-        extensions = {"pdf": "pdf", "markdown": "md", "txt": "txt"}
+        extensions = {"pdf": "pdf", "markdown": "md", "txt": "txt", "docx": "docx", "csv": "csv"}
 
         for format, extension in extensions.items():
             with self.subTest(format=format):
-                artifact = build_document_artifact(build_document(), format)
+                document = build_document()
+                if format == 'csv':
+                    document.sections[0].content.append(Table(headings=['Status'], rows=[['Fine']]))
+                artifact = build_document_artifact(document, format)
 
                 self.assertTrue(artifact["filename"].endswith(f".{extension}"))
                 self.assertGreater(artifact["size_bytes"], 0)
@@ -91,7 +96,24 @@ class BuildDocumentArtifactTests(unittest.TestCase):
         document = build_document()
 
         with self.assertRaises(UnsupportedDocumentFormatError):
-            build_document_artifact(document, "docx")
+            build_document_artifact(document, "xlsx")
+
+    def test_docx_is_a_readable_word_document(self):
+        artifact = build_document_artifact(build_document(), "docx")
+        document = WordDocument(io.BytesIO(base64.b64decode(artifact['content'])))
+        text = '\n'.join(paragraph.text for paragraph in document.paragraphs)
+        self.assertIn('Quality report 2026', text)
+        self.assertIn('Everything is fine.', text)
+        self.assertTrue(artifact['mime_type'].startswith('application/vnd.openxmlformats-officedocument.wordprocessingml.document'))
+
+    def test_csv_preserves_column_count_and_special_characters(self):
+        document = Document(title='Services', sections=[Section(heading='Services', content=[Table(
+            headings=['Name', 'Description'], rows=[['A, B', 'Policy "A"'], ['España', 'Line one\nLine two']]
+        )])])
+        artifact = build_document_artifact(document, 'csv')
+        content = base64.b64decode(artifact['content']).decode('utf-8-sig')
+        rows = list(csv.reader(io.StringIO(content)))
+        self.assertEqual(rows, [['Name', 'Description'], ['A, B', 'Policy "A"'], ['España', 'Line one\nLine two']])
 
 
 class PdfMetadataTests(unittest.TestCase):

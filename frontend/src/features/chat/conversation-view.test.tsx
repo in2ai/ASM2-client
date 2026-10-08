@@ -63,6 +63,7 @@ const defaultLabels = {
   pages: 'Pages',
   sending: 'Sending',
   sources: 'Sources',
+  stopped: 'Stopped',
   user: 'User',
 }
 
@@ -70,6 +71,7 @@ const defaultShellLabels = {
   jumpToLatest: 'Jump to latest',
   newLineHint: 'for a new line',
   sendHint: 'to send',
+  sendMessage: 'Send message',
   stopGenerating: 'Stop generating',
 }
 
@@ -221,8 +223,7 @@ describe('ConversationView markdown rendering', () => {
     const safeLink = screen.getByRole('link', { name: 'ok' })
 
     expect(screen.queryByText(/alert/)).toBeNull()
-    expect(unsafeLink).toBeTruthy()
-    expect(unsafeLink?.getAttribute('href')).toBeNull()
+    expect(unsafeLink).toBeNull()
     expect(screen.queryByRole('img')).toBeNull()
     expect(safeLink).toHaveProperty('target', '_blank')
     expect(safeLink.getAttribute('rel')).toBe('noreferrer noopener')

@@ -1,4 +1,5 @@
 import { type AppLocale, toIntlLocale } from '@/i18n/config'
+import { toMessagePreview } from './message-text'
 
 export const DEFAULT_CHAT_TITLE = 'New conversation'
 const PREVIEW_LIMIT = 88
@@ -12,7 +13,9 @@ export function getChatTitle(
 }
 
 export function getChatPreview(preview: string | null | undefined) {
-  const normalized = preview?.replace(/\s+/g, ' ').trim()
+  const normalized = preview
+    ? toMessagePreview(preview).replace(/\s+/g, ' ').trim()
+    : ''
   if (!normalized) {
     return ''
   }

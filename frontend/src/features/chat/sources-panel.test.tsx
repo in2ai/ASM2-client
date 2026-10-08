@@ -11,7 +11,12 @@ const useUpdateSourcesSelectionMutationMock = vi.fn()
 const useVdbUpdateStatusQueryMock = vi.fn()
 
 vi.mock('next-intl', () => ({
+  useLocale: () => 'en',
   useTranslations: () => (key: string) => key,
+}))
+
+vi.mock('@/features/indexing-progress/api', () => ({
+  useIndexingProgressQuery: () => ({ data: undefined, isError: false }),
 }))
 
 vi.mock('lucide-react', () => ({

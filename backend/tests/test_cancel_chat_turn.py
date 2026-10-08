@@ -22,6 +22,10 @@ STREAM_ROUTE = "/chats/{chat_id}/messages/stream"
 class FakeChatStore:
     def __init__(self):
         self.appended = []
+        self.status_updates = []
+
+    def set_message_status(self, user_id, chat_id, message_id, status):
+        self.status_updates.append((user_id, chat_id, message_id, status))
 
     def get_chat(self, user_id, chat_id):
         if user_id != "user-1" or chat_id != "chat-1":
@@ -128,6 +132,9 @@ class CancelChatTurnTests(unittest.TestCase):
         # Nothing was answered, so nothing must claim to have been.
         self.assertNotIn("result", names)
         self.assertNotIn("error", names)
+        self.assertEqual(server.app.state.tsdb_chat_store.status_updates, [
+            ('user-1', 'chat-1', 'chat-1-1', 'cancelled')
+        ])
 
     def test_cancelling_with_nothing_running_is_not_an_error(self):
         async def scenario():

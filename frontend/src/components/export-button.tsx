@@ -1,6 +1,7 @@
 import { Download, Loader2 } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { type DateRange } from 'react-day-picker'
+import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { toIntlLocale } from '@/i18n/config'
@@ -15,6 +16,7 @@ type ExportMetricsOutput = RouterOutputs['metrics']['exportMetrics']
 export function ExportButton({ dateRange }: ExportButtonProps) {
   const t = useTranslations('ExportButton')
   const locale = useLocale()
+  const [exportError, setExportError] = useState<string>()
 
   const exportQuery = api.metrics.exportMetrics.useQuery(
     {
@@ -28,43 +30,50 @@ export function ExportButton({ dateRange }: ExportButtonProps) {
   )
 
   const handleExport = async () => {
+    setExportError(undefined)
     try {
       const result = await exportQuery.refetch()
 
-      if (!result.data) {
+      if (!result.isSuccess || !result.data) {
         throw new Error(t('errors.noData'))
       }
 
       const csv = generateCSV(result.data, locale)
       const filename = generateFilename(result.data.metadata)
       downloadCSV(csv, filename)
-    } catch (error) {
-      alert(
-        error instanceof Error
-          ? t('errors.failed', { message: error.message })
-          : t('errors.generic'),
-      )
+    } catch {
+      setExportError(t('errors.generic'))
     }
   }
 
   return (
-    <Button
-      onClick={handleExport}
-      disabled={exportQuery.isFetching}
-      size="sm"
-      variant="outline"
-      className="min-h-11 gap-2"
-    >
-      {exportQuery.isFetching ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <Download className="h-4 w-4" />
-      )}
-      <span className="hidden sm:inline">
-        {exportQuery.isFetching ? t('exporting') : t('exportCsv')}
-      </span>
-      <span className="sm:hidden">{exportQuery.isFetching ? '…' : 'CSV'}</span>
-    </Button>
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        onClick={handleExport}
+        disabled={exportQuery.isFetching}
+        size="sm"
+        variant="outline"
+        className="min-h-11 gap-2"
+        title={exportQuery.isFetching ? t('exporting') : t('exportCsv')}
+      >
+        {exportQuery.isFetching ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+        <span className="hidden sm:inline">
+          {exportQuery.isFetching ? t('exporting') : t('exportCsv')}
+        </span>
+        <span className="sm:hidden">
+          {exportQuery.isFetching ? '…' : 'CSV'}
+        </span>
+      </Button>
+      {exportError ? (
+        <p role="alert" className="max-w-64 text-xs text-destructive">
+          {exportError}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -94,7 +103,7 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
 
   const summarySection = [
     `=== ${copy.sections.summary} ===`,
-    `${copy.columns.metric},${copy.columns.value},${copy.columns.unit}`,
+    `${escapeCSVCell(copy.columns.metric)},${escapeCSVCell(copy.columns.value)},${escapeCSVCell(copy.columns.unit)}`,
     `${copy.metrics.uniqueUsers},${metricsData.summary.unique_users},${copy.units.users}`,
     `${copy.metrics.totalEvents},${metricsData.summary.total_events},${copy.units.events}`,
     `${copy.metrics.avgSession},${metricsData.summary.avg_session_length_seconds.toFixed(1)},${copy.units.seconds}`,
@@ -105,16 +114,16 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
 
   const tokenSection = [
     `=== ${copy.sections.tokens} ===`,
-    `${copy.columns.type},${copy.columns.input},${copy.columns.output},${copy.columns.total}`,
+    `${escapeCSVCell(copy.columns.type)},${escapeCSVCell(copy.columns.input)},${escapeCSVCell(copy.columns.output)},${escapeCSVCell(copy.columns.total)}`,
     `LLM,${metricsData.token_usage.llm_tokens_in},${metricsData.token_usage.llm_tokens_out},${metricsData.token_usage.llm_tokens_in + metricsData.token_usage.llm_tokens_out}`,
     `RAG,${metricsData.token_usage.rag_tokens_in},${metricsData.token_usage.rag_tokens_out},${metricsData.token_usage.rag_tokens_in + metricsData.token_usage.rag_tokens_out}`,
-    `${copy.columns.total},,,${metricsData.token_usage.total_tokens}`,
+    `${escapeCSVCell(copy.columns.total)},,,${metricsData.token_usage.total_tokens}`,
     '',
   ]
 
   const healthSection = [
     `=== ${copy.sections.systemHealth} ===`,
-    `${copy.columns.resource},${copy.columns.averagePercent},${copy.columns.maxPercent}`,
+    `${escapeCSVCell(copy.columns.resource)},${escapeCSVCell(copy.columns.averagePercent)},${escapeCSVCell(copy.columns.maxPercent)}`,
     `CPU,${formatPercent(metricsData.system_health.avg_cpu_percent, copy)},${formatPercent(metricsData.system_health.max_cpu_percent, copy)}`,
     `RAM,${formatPercent(metricsData.system_health.avg_ram_percent, copy)},${formatPercent(metricsData.system_health.max_ram_percent, copy)}`,
     `GPU,${formatPercent(metricsData.system_health.avg_gpu_percent, copy)},${formatPercent(metricsData.system_health.max_gpu_percent, copy)}`,
@@ -124,7 +133,7 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
   const roles = Object.entries(metricsData.role_distribution)
   const roleSection = [
     `=== ${copy.sections.roleDistribution} ===`,
-    `${copy.columns.role},${copy.columns.users}`,
+    `${escapeCSVCell(copy.columns.role)},${escapeCSVCell(copy.columns.users)}`,
     ...(roles.length > 0
       ? roles.map(([role, count]) => `${escapeCSVCell(role)},${count}`)
       : [`${copy.noData},0`]),
@@ -133,7 +142,7 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
 
   const activitySection = [
     `=== ${copy.sections.dailyActivity} ===`,
-    `${copy.columns.date},${copy.columns.events},${copy.columns.uniqueUsers}`,
+    `${escapeCSVCell(copy.columns.date)},${escapeCSVCell(copy.columns.events)},${escapeCSVCell(copy.columns.uniqueUsers)}`,
     ...metricsData.activity_by_day.map(
       (day) => `${day.date},${day.event_count},${day.unique_users}`,
     ),
@@ -142,7 +151,7 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
 
   const hourlySection = [
     `=== ${copy.sections.hourlyPattern} ===`,
-    `${copy.columns.hour},${copy.columns.events}`,
+    `${escapeCSVCell(copy.columns.hour)},${escapeCSVCell(copy.columns.events)}`,
     ...metricsData.hourly_pattern.map(
       (hour) =>
         `${hour.hour.toString().padStart(2, '0')}:00,${hour.event_count}`,
@@ -154,7 +163,7 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
     metricsData.response_time_trend.length > 0
       ? [
           `=== ${copy.sections.responseTimeTrend} ===`,
-          `${copy.columns.date},${copy.columns.turnMs},${copy.columns.retrievalMs}`,
+          `${escapeCSVCell(copy.columns.date)},${escapeCSVCell(copy.columns.turnMs)},${escapeCSVCell(copy.columns.retrievalMs)}`,
           ...metricsData.response_time_trend.map(
             (trend) =>
               `${trend.date},${(trend.turn_response_time * 1000).toFixed(2)},${(trend.doc_response_time * 1000).toFixed(2)}`,
@@ -165,7 +174,7 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
 
   const searchTermsSection = [
     `=== ${copy.sections.topWords} ===`,
-    `${copy.columns.word},${copy.columns.frequency}`,
+    `${escapeCSVCell(copy.columns.word)},${escapeCSVCell(copy.columns.frequency)}`,
     ...metricsData.search_terms.map(
       (term) => `${escapeCSVCell(term.word)},${term.count}`,
     ),
@@ -174,7 +183,7 @@ export function generateCSV(data: ExportMetricsOutput, locale: string): string {
 
   const topicsSection = [
     `=== ${copy.sections.topTopics} ===`,
-    `${copy.columns.topic},${copy.columns.frequency}`,
+    `${escapeCSVCell(copy.columns.topic)},${escapeCSVCell(copy.columns.frequency)}`,
     ...metricsData.topics.map(
       (topic) => `${escapeCSVCell(topic.topic)},${topic.count}`,
     ),

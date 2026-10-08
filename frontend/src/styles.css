@@ -83,7 +83,7 @@ code {
   --card-foreground: oklch(0.16 0.02 260);
   --popover: oklch(0.995 0.001 90);
   --popover-foreground: oklch(0.16 0.02 260);
-  --primary: oklch(0.55 0.15 200);
+  --primary: oklch(0.48 0.12 200);
   --primary-foreground: oklch(0.985 0.002 90);
   --secondary: oklch(0.955 0.008 240);
   --secondary-foreground: oklch(0.25 0.02 260);
@@ -95,7 +95,7 @@ code {
   --destructive-foreground: oklch(0.985 0.002 90);
   /* Status hues carry meaning, so they are tokens like everything else:
      each side of the theme can tune them for contrast on its own background. */
-  --success: oklch(0.58 0.14 160);
+  --success: oklch(0.46 0.11 160);
   --success-foreground: oklch(0.985 0.002 90);
   --warning: oklch(0.62 0.15 70);
   --warning-foreground: oklch(0.16 0.02 260);
@@ -109,7 +109,7 @@ code {
   --chart-5: oklch(0.6 0.2 30);
   --sidebar: oklch(0.975 0.003 240);
   --sidebar-foreground: oklch(0.16 0.02 260);
-  --sidebar-primary: oklch(0.55 0.15 200);
+  --sidebar-primary: oklch(0.48 0.12 200);
   --sidebar-primary-foreground: oklch(0.985 0.002 90);
   --sidebar-accent: oklch(0.94 0.015 200);
   --sidebar-accent-foreground: oklch(0.25 0.02 260);
@@ -130,7 +130,7 @@ code {
   --secondary: oklch(0.22 0.02 260);
   --secondary-foreground: oklch(0.93 0.008 240);
   --muted: oklch(0.22 0.02 260);
-  --muted-foreground: oklch(0.62 0.02 260);
+  --muted-foreground: oklch(0.65 0.02 260);
   --accent: oklch(0.22 0.03 200);
   --accent-foreground: oklch(0.93 0.008 240);
   --destructive: oklch(0.704 0.191 22.216);

@@ -133,11 +133,12 @@ export function useSourcesStatusQuery() {
   })
 }
 
-export function useSourceLoginInfoQuery(source: string) {
+export function useSourceLoginInfoQuery(source: string, enabled = true) {
   const request = useAuthorizedChatRequest()
 
   return useQuery({
     queryKey: [...chatQueryKeys.sources, 'login-info', source],
+    enabled,
     queryFn: () =>
       request<SourceLoginInfo>(
         `/sources/login-info?source=${encodeURIComponent(source)}`,

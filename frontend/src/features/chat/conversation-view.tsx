@@ -26,6 +26,7 @@ import {
   getMessageDocument,
 } from './chat-document'
 import { MessageMarkdown } from './message-markdown'
+import { normalizeMessageLinks } from './message-text'
 import type {
   ChatDetail,
   ChatDocument,
@@ -61,6 +62,7 @@ interface ConversationViewProps {
     page: string
     pages: string
     sources: string
+    stopped: string
     sending: string
     user: string
   }
@@ -74,6 +76,7 @@ interface ConversationViewProps {
     jumpToLatest: string
     newLineHint: string
     sendHint: string
+    sendMessage: string
     stopGenerating: string
   }
   pendingMessage?: ChatMessage | null
@@ -298,6 +301,7 @@ export function ConversationView({
               ) : (
                 <Button
                   size="icon"
+                  aria-label={shellLabels.sendMessage}
                   className="ml-auto h-10 w-10 shrink-0 rounded-full"
                   disabled={
                     composerDisabled || !composerValue.trim() || isSending
@@ -365,17 +369,19 @@ const MessageBubble = memo(function MessageBubble({
         )}
       >
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
             {authorLabel}
           </span>
-          <span className="text-[11px] opacity-60">
+          <span className="text-[11px]">
             {formatMessageTimestamp(message.created_at, locale)}
           </span>
           <CopyButton
             className="-my-1 ml-auto opacity-0 transition-opacity group-hover/message:opacity-100 focus-visible:opacity-100"
             copiedLabel={labels.copiedMessage}
             copyLabel={labels.copyMessage}
-            value={message.content}
+            value={
+              isUser ? message.content : normalizeMessageLinks(message.content)
+            }
           />
         </div>
         {isUser ? (
@@ -389,6 +395,11 @@ const MessageBubble = memo(function MessageBubble({
             copyLabel={labels.copyMessage}
           />
         )}
+        {isUser && message.status === 'cancelled' ? (
+          <p role="status" className="mt-2 text-xs font-medium">
+            {labels.stopped}
+          </p>
+        ) : null}
         {generatedDocument ? (
           <GeneratedDocumentCard
             document={generatedDocument}
@@ -504,10 +515,16 @@ function SourceCitation({
   source: ChatSource
 }>) {
   const pagesLabel = formatSourcePages(source.pages, labels)
+  const sourcePath = getSourcePath(source)
 
   return (
     <div className="bg-muted/40 hover:bg-muted/60 rounded-2xl border px-4 py-3 transition-colors">
-      <p className="text-sm font-medium">{source.title}</p>
+      <p className="text-sm font-medium wrap-anywhere">{source.title}</p>
+      {sourcePath ? (
+        <p className="text-muted-foreground mt-1 text-xs wrap-anywhere">
+          {sourcePath}
+        </p>
+      ) : null}
       <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-2 text-xs">
         <span>{source.source_type}</span>
         {pagesLabel ? <span>{pagesLabel}</span> : null}
@@ -527,6 +544,22 @@ function SourceCitation({
   )
 }
 
+function getSourcePath(source: ChatSource): string | null {
+  if (!source.link) return source.path ?? null
+  try {
+    const url = new URL(source.link)
+    if (
+      url.hostname === 'www.dropbox.com' &&
+      url.pathname.startsWith('/home/')
+    ) {
+      return `${decodeURIComponent(url.pathname.slice('/home/'.length))}/${url.searchParams.get('preview') ?? source.title}`
+    }
+  } catch {
+    return source.path ?? null
+  }
+  return source.path ?? null
+}
+
 function getMessageSources(message: ChatMessage): ChatSource[] {
   if (!message.metadata?.sources || !Array.isArray(message.metadata.sources)) {
     return []
@@ -544,6 +577,7 @@ function getMessageSources(message: ChatMessage): ChatSource[] {
         typeof candidate.title === 'string' &&
         typeof candidate.source_type === 'string' &&
         (typeof candidate.link === 'string' || candidate.link === null) &&
+        (candidate.path === undefined || typeof candidate.path === 'string') &&
         isValidSourcePages(candidate.pages)
       )
     },

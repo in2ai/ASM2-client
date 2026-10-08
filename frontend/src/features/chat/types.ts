@@ -5,6 +5,7 @@ export interface ChatSource {
   source_type: string
   link: string | null
   pages?: number[]
+  path?: string
 }
 
 export interface ChatDocument {

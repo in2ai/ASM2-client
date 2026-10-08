@@ -43,8 +43,6 @@ export function EmptyState({
   const t = useTranslations('EmptyState')
   const resolvedTitle = title ?? t('defaultTitle')
   const resolvedTips = tips ?? [
-    t('defaultTips.connection'),
-    t('defaultTips.seed'),
     t('defaultTips.filters'),
     t('defaultTips.dateRange'),
   ]
@@ -126,12 +124,7 @@ export function NoMetricsEmptyState({
       onAction={onRefresh}
       isActionLoading={isRefreshing}
       showTips={true}
-      tips={[
-        t('tips.adjustDateRange'),
-        t('tips.widerRange'),
-        t('tips.selectDifferentNode'),
-        t('tips.seedData'),
-      ]}
+      tips={[t('tips.adjustDateRange'), t('tips.widerRange')]}
     />
   )
 }

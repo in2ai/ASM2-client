@@ -332,6 +332,15 @@ class PostgresChatStore:
             if cur.rowcount == 0:
                 raise ChatNotFoundError(chat_id=chat_id)
 
+    def set_message_status(self, user_id: str, chat_id: str, message_id: str, status: str) -> None:
+        with self._cursor() as cur:
+            cur.execute(
+                """UPDATE messages SET status = %s
+                   FROM chats WHERE messages.chat_id = chats.id
+                   AND chats.user_id = %s AND chats.id = %s AND messages.id = %s""",
+                (status, user_id, chat_id, message_id),
+            )
+
     def append_message(
         self,
         user_id: str,

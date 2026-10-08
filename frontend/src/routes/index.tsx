@@ -1,15 +1,12 @@
 import { RouteError } from '@/components/route-error'
-import {
-  isDashboardView,
-  type DashboardView,
-} from '@/app/_components/dashboard-views'
+import { type DashboardView } from '@/app/_components/dashboard-views'
 import { LoadingState } from '@/app/_components/metrics/loading-state'
 import { useAuthenticatedUser } from '@/hooks/use-authenticated-user'
 import { hasDashboardAccess } from '@/lib/auth'
 import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Suspense, lazy, useCallback } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { z } from 'zod'
+import { dashboardSearchSchema } from '@/lib/dashboard-search'
 
 const MetricsDashboard = lazy(() =>
   import('@/app/_components/metrics-dashboard').then((module) => ({
@@ -24,15 +21,6 @@ const MetricsDashboard = lazy(() =>
  * state they survived neither a reload nor the back button, and there was no
  * way to send a colleague the thing you were looking at.
  */
-const dashboardSearchSchema = z.object({
-  from: z.iso.date().optional(),
-  to: z.iso.date().optional(),
-  view: z
-    .string()
-    .optional()
-    .transform((value) => (isDashboardView(value) ? value : undefined)),
-})
-
 export const Route = createFileRoute('/')({
   validateSearch: dashboardSearchSchema,
   component: DashboardRoute,

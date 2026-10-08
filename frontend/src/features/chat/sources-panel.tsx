@@ -16,7 +16,9 @@ import {
 } from '@/components/ui/sheet'
 import type { LucideIcon } from 'lucide-react'
 import { CheckCircle2, Cloud, CloudCog, Database, Loader2 } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
+import { useIndexingProgressQuery } from '@/features/indexing-progress/api'
+import { statusLabelKey } from '@/features/indexing-progress/logic'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   useSourceLoginInfoQuery,
@@ -97,6 +99,8 @@ function getProviderMessage({
   if (inlineError) {
     return { text: inlineError, tone: 'error' }
   }
+
+  if (connected) return null
 
   if (!connected && connectionLocked && prerequisiteLabel) {
     return { text: prerequisiteLabel, tone: 'muted' }
@@ -422,7 +426,7 @@ function ProviderSourceCard({
 }>) {
   const t = useTranslations('ChatPage')
   const [connectError, setConnectError] = useState<string>()
-  const loginInfoQuery = useSourceLoginInfoQuery(config.providerKey)
+  const loginInfoQuery = useSourceLoginInfoQuery(config.providerKey, !connected)
   const oauthClientId = loginInfoQuery.data?.oauth_client_id ?? null
   const configured = Boolean(oauthClientId)
   const connectionLocked = isAdmin && vdbActive
@@ -536,6 +540,9 @@ function VdbUpdateCard({
   enabled,
 }: Readonly<{ canStartIndexing: boolean; enabled: boolean }>) {
   const t = useTranslations('ChatPage')
+  const locale = useLocale()
+  const progressT = useTranslations('IndexingProgress')
+  const progressQuery = useIndexingProgressQuery(enabled)
   const vdbStatusQuery = useVdbUpdateStatusQuery(enabled)
   const startVdbUpdateMutation = useStartVdbUpdateMutation()
   const stopVdbUpdateMutation = useStopVdbUpdateMutation()
@@ -546,7 +553,7 @@ function VdbUpdateCard({
   })
   const vdbUpdateActive = vdbStatusQuery.data?.active ?? false
   const vdbRunInProgress = vdbStatusQuery.data?.running ?? false
-  const vdbStatusPending = vdbStatusQuery.isFetching
+  const vdbStatusPending = vdbStatusQuery.isPending
   const vdbActionPending =
     startVdbUpdateMutation.isPending || stopVdbUpdateMutation.isPending
   const statusLabel = getVdbStatusLabel({
@@ -556,11 +563,15 @@ function VdbUpdateCard({
     activeLabel: t('sources.vdb.active'),
     inactiveLabel: t('sources.vdb.inactive'),
   })
+  const lastIndexed =
+    !progressQuery.isError && progressQuery.data?.status === 'completed'
+      ? progressQuery.data.finished_at
+      : null
 
   return (
     <Card className="gap-4 rounded-3xl border-primary/10 bg-linear-to-br from-primary/5 to-transparent">
       <CardHeader className="gap-3">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-4 w-4" />
@@ -576,10 +587,23 @@ function VdbUpdateCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {progressQuery.data ? (
+          <p className="text-sm font-medium">
+            {progressQuery.isError
+              ? progressT('unavailable')
+              : progressT(
+                  statusLabelKey(
+                    vdbRunInProgress ? 'running' : progressQuery.data.status,
+                  ),
+                )}
+          </p>
+        ) : null}
         <p className="text-muted-foreground text-sm">
-          {vdbUpdateActive
-            ? t('sources.vdb.activeDescription')
-            : t('sources.vdb.inactiveDescription')}
+          {vdbRunInProgress
+            ? t('sources.vdb.runInProgress')
+            : vdbUpdateActive
+              ? t('sources.vdb.activeDescription')
+              : t('sources.vdb.inactiveDescription')}
         </p>
 
         {!vdbUpdateActive && !canStartIndexing ? (
@@ -588,9 +612,14 @@ function VdbUpdateCard({
           </p>
         ) : null}
 
-        {vdbRunInProgress ? (
+        {lastIndexed ? (
           <p className="text-muted-foreground text-sm">
-            {t('sources.vdb.runInProgress')}
+            {t('sources.vdb.lastIndexed', {
+              value: new Intl.DateTimeFormat(locale, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              }).format(new Date(lastIndexed)),
+            })}
           </p>
         ) : null}
 
@@ -645,9 +674,6 @@ export function SourcesPanel({
   const panelDescription = isAdmin
     ? t('sources.descriptionAdmin')
     : t('sources.descriptionUser')
-  const stepsDescription = isAdmin
-    ? t('sources.stepsDescriptionAdmin')
-    : t('sources.stepsDescriptionUser')
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -658,38 +684,6 @@ export function SourcesPanel({
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6">
-          <Card className="gap-4 rounded-3xl border-primary/10 bg-linear-to-br from-primary/5 to-transparent">
-            <CardHeader className="gap-3">
-              <CardTitle>{t('sources.stepsTitle')}</CardTitle>
-              <CardDescription>{stepsDescription}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ol className="text-muted-foreground space-y-2 text-sm">
-                <li>
-                  1.{' '}
-                  {isAdmin
-                    ? t('sources.steps.startAdmin')
-                    : t('sources.steps.startUser')}
-                </li>
-                <li>2. {t('sources.steps.connect')}</li>
-                <li>3. {t('sources.steps.authorize')}</li>
-                <li>
-                  4.{' '}
-                  {isAdmin
-                    ? t('sources.steps.finishAdmin')
-                    : t('sources.steps.finishUser')}
-                </li>
-              </ol>
-            </CardContent>
-          </Card>
-
-          {isAdmin ? (
-            <VdbUpdateCard
-              canStartIndexing={hasSelectedSources}
-              enabled={open}
-            />
-          ) : null}
-
           <ProviderSourceCard
             config={DRIVE_PROVIDER_CONFIG}
             connected={driveConnected}
@@ -705,6 +699,13 @@ export function SourcesPanel({
             selection={selection}
             vdbActive={vdbActive}
           />
+
+          {isAdmin ? (
+            <VdbUpdateCard
+              canStartIndexing={hasSelectedSources}
+              enabled={open}
+            />
+          ) : null}
 
           {isAdmin && hasConnectedSources && !vdbActive ? (
             <Card className="gap-4 rounded-3xl border-amber-500/20 bg-amber-500/5">

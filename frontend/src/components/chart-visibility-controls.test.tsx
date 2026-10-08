@@ -100,22 +100,26 @@ describe('ChartVisibilityControls', () => {
     renderControls()
 
     expect(
-      screen.getByLabelText('Configure chart visibility').textContent,
+      screen.getByRole('button', { name: /Configure chart visibility/ })
+        .textContent,
     ).toContain('3/3')
 
     fireEvent.click(screen.getByRole('button', { name: /Activity trend/ }))
     expect(
-      screen.getByLabelText('Configure chart visibility').textContent,
+      screen.getByRole('button', { name: /Configure chart visibility/ })
+        .textContent,
     ).toContain('2/3')
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide all' }))
     expect(
-      screen.getByLabelText('Configure chart visibility').textContent,
+      screen.getByRole('button', { name: /Configure chart visibility/ })
+        .textContent,
     ).toContain('0/3')
 
     fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
     expect(
-      screen.getByLabelText('Configure chart visibility').textContent,
+      screen.getByRole('button', { name: /Configure chart visibility/ })
+        .textContent,
     ).toContain('3/3')
   })
 })

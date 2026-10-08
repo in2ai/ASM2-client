@@ -2,6 +2,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import threading
+from urllib.parse import urlsplit, parse_qs, unquote
 
 from pydantic import BaseModel, Field
 from typing import Dict, Optional
@@ -97,7 +98,31 @@ def rerank_documents(reranker, query: str, documents: list, top_k: int = None) -
 PERMISSIONS_LOCK = threading.Lock()
 
 
-def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataSource], k: int = 6) -> tuple:
+class RequestPermissions:
+    """Reuse live access decisions only within one caller's chat turn."""
+
+    def __init__(self, sources: Dict[str, DataSource]):
+        self.sources = sources
+        self._allowed = {}
+
+    def has_access(self, metadata: dict) -> bool:
+        source_key, file_id = metadata["source"], metadata["id"]
+        source = self.sources.get(source_key)
+        if source is None:
+            return False
+
+        # Dropbox can fall back to an indexed shared link. Different grants
+        # for the same file must not inherit each other's allow or deny result.
+        permissions = metadata.get("permissions") or {}
+        key = (source_key, file_id, permissions.get("link"), permissions.get("link_path"))
+        with PERMISSIONS_LOCK:
+            if key not in self._allowed:
+                self._allowed[key] = source.has_access(file_id, metadata)
+            return self._allowed[key]
+
+
+def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataSource], k: int = 6,
+                       permission_checks: RequestPermissions | None = None) -> tuple:
     """Retrieval-only function: hybrid search + permission filtering + reranking.
 
     Returns:
@@ -113,17 +138,11 @@ def retrieve_and_rerank(query: str, vectordb, reranker, sources: Dict[str, DataS
 
     # Filter by permissions
     allowed_chunks = []
+    permission_checks = permission_checks or RequestPermissions(sources)
     for f in search_results:
-        file_id = f.metadata["id"]
-        source = f.metadata["source"]
-
         if not get_bool_env('BENCHMARK'): # Benchmark mode does not check live permissions
-            if source not in sources:
+            if not permission_checks.has_access(f.metadata):
                 continue
-
-            with PERMISSIONS_LOCK:
-                if not sources[source].has_access(file_id, f.metadata):
-                    continue
 
         allowed_chunks.append(f)
 
@@ -151,6 +170,21 @@ def get_chunk_sources(chunks, sources):
             link = permissions.get("link") or d.metadata.get("webViewLink")
 
             available_sources[doc_id] = {"id": doc_id, "title": title, "source_type": tag, "link": link}
+            path = d.metadata.get("path")
+            # Dropbox paths are relative to each configured root. The original
+            # web URL includes the root even when the selected link is shared.
+            if d.metadata.get("source") == "dropbox":
+                original_link = d.metadata.get("webViewLink")
+                if isinstance(original_link, str):
+                    try:
+                        url = urlsplit(original_link)
+                        if url.hostname == "www.dropbox.com" and url.path.startswith("/home/"):
+                            filename = parse_qs(url.query).get("preview", [title])[0]
+                            path = unquote(url.path[len("/home/"):]).rstrip("/") + "/" + filename
+                    except ValueError:
+                        pass
+            if isinstance(path, str) and path:
+                available_sources[doc_id]["path"] = path
 
         page = d.metadata.get('page')
 
@@ -174,6 +208,7 @@ Language:
 
 Using retrieved context:
 - Answer only with information supported by retrieved context; do not improvise.
+- Verify the user's premises and requested item counts against the sources. If the sources establish fewer items or a different fact, explain that and report what they support. Do not pad a list or change the type of item to reach a requested count.
 - In your response, do not use the word "CONTEXT" -- call it "the sources" instead.
 - Do not add any references or links to online resources; answer using only the sources.
 - Write in natural, clear, and direct language.
@@ -182,12 +217,18 @@ Conversational messages:
 - If the message is a greeting, thanks, or casual conversation that does not require document retrieval, reply naturally without mentioning sources or calling tools.
 - Use the conversation history to follow the thread.
 
+Creating files:
+- Call generate_document only when the current user asks you to create or export a downloadable file.
+- A request to read, summarize, cite, or answer questions about an existing file is a search request. Use vectordb_search and answer in chat; do not create a document.
+- For a requested file, use information already retrieved in the conversation. Search first only when necessary to support the requested content, then generate the file.
+
 Formulating search queries:
 - Always formulate the query argument as a fully self-contained search query. Resolve any pronouns, demonstratives, or conversational references (e.g. 'it', 'that', 'those', 'the same thing', 'more about that') by replacing them with the specific terms from the conversation, so the query is understandable without prior conversation.
 - If the user's request covers more than one distinct topic, entity, or type of information, split it into separate, focused queries -- one per aspect -- and run them as separate search calls. Do not combine multiple topics into a single query; a query mixing unrelated concepts retrieves worse results than several narrow ones. For example, for a request about "the company's employees, its goals, and its past projects," search "employees at <company>", "<company> goals", and "<company> past projects" separately, not all three combined.
 - If a tool's response suggests one or more follow-up search queries (for example, after it reports insufficient context), run each suggested query as its own separate search call.
 
 Adapting to search results:
+- vectordb_search already checks relevance and refines incomplete retrieval internally. After a successful search, answer from its results. Search again only for a concrete unresolved fact, not to repeat the same search or force an unsupported item count.
 - If a search returns no results or nothing relevant, don't conclude the information doesn't exist after a single attempt -- rewrite the query (broader, narrower, or differently phrased) and try again.
 - If, after a couple of reformulations, you still can't find what's needed, ask the user a specific clarifying question about what they need rather than guessing, fabricating an answer, or repeating the same search indefinitely."""
 
@@ -306,6 +347,12 @@ def is_context_enough(llm, query, context):
     Mark is_enough = true if every part of the question can be answered from the context.
     An answer stating that the sources do not cover something also counts as complete, as
     long as the context is what makes that clear.
+
+    Verify premises rather than assuming them. If the retrieved source explicitly
+    establishes fewer items than the user requested, or contradicts a premise, mark
+    is_enough = true: the answer should explain the limitation. A requested list length
+    alone is not a retrieval gap. Do not treat a partial excerpt as proof that no other
+    items exist; look for an explicit enumeration or other evidence of coverage.
  
     Mark is_enough = false if:
     - part of the question is left unanswered

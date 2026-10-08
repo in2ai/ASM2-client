@@ -214,6 +214,7 @@ class ChatSourceModel(BaseModel):
     title: str
     source_type: str
     link: str | None = None
+    path: str | None = None
 
 
 class SourcesStatusModel(BaseModel):

@@ -99,7 +99,7 @@ from src.chat.store import ChatNotFoundError, PostgresChatStore
 from src.tracing import get_langfuse_handler
 from src.utils.messages import message_text
 from src.utils.nlp import init_nlp
-from src.utils.rag import get_reranker
+from src.utils.rag import RequestPermissions, get_reranker
 from src.connectors.llms import get_configured_judge_llm, get_configured_llm
 
 from graph.agent import build_graph
@@ -908,6 +908,7 @@ async def _run_chat_turn(
             "reranker": app.state.reranker,
             "pg_pool": pg_pool,
             "sources": sources,
+            "permission_checks": RequestPermissions(sources),
             "metrics_actor": metrics_actor,
         }
     }
@@ -1033,7 +1034,11 @@ async def send_chat_message(
     user_message = _append_user_message(chat_store, auth.sub, chat_id, content)
     turn_task = asyncio.create_task(_run_chat_turn(auth, chat_id, content, sources))
     _track_chat_turn(auth.sub, chat_id, turn_task)
-    result = await turn_task
+    try:
+        result = await turn_task
+    except asyncio.CancelledError:
+        chat_store.set_message_status(auth.sub, chat_id, user_message['id'], 'cancelled')
+        raise
 
     return _store_chat_turn(chat_store, auth.sub, chat_id, user_message, result)
 
@@ -1083,6 +1088,7 @@ async def stream_chat_message(
 
         except asyncio.CancelledError:
             # The reader asked for this one; see POST /chats/{id}/turn/cancel.
+            chat_store.set_message_status(auth.sub, chat_id, user_message['id'], 'cancelled')
             events.put_nowait(("cancelled", {}))
             raise
 

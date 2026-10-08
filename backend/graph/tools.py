@@ -27,7 +27,7 @@ from src.metrics.metrics import (
 )
 from src.metrics.token_usage import TokenUsageCounter, track_token_usage
 from src.utils.nlp import extract_search_terms
-from src.utils.rag import retrieve_and_rerank, is_relevant_source, get_chunk_sources, generate_subqueries, is_context_enough
+from src.utils.rag import RequestPermissions, retrieve_and_rerank, is_relevant_source, get_chunk_sources, generate_subqueries, is_context_enough
 from src.utils.topic import resolve_topic_names
 from . import progress
  
@@ -36,11 +36,12 @@ MAX_SEARCH_ROUNDS = 3
 MAX_TOTAL_CHUNKS = 40
  
  
-def retrieve_safely(query, vectorstore, reranker, sources):
+def retrieve_safely(query, vectorstore, reranker, sources, permission_checks=None):
     logging.info(f'Searching: {query}')
  
     try:
-        return retrieve_and_rerank(query, vectorstore, reranker, sources, k=get_int_env('HYBRID_SEARCH_K', 6))
+        return retrieve_and_rerank(query, vectorstore, reranker, sources,
+                                  k=get_int_env('HYBRID_SEARCH_K', 6), permission_checks=permission_checks)
  
     except Exception:
         logging.exception(f"Retrieval failed for: {query}")
@@ -118,6 +119,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
     llm = configurable["llm"]
     vectorstore = configurable["vectorstore"]
     sources = configurable["sources"]
+    permission_checks = configurable.get("permission_checks") or RequestPermissions(sources)
     reranker = configurable["reranker"]
     pool = configurable.get("pg_pool")
     metrics_actor = configurable.get("metrics_actor")
@@ -130,13 +132,15 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
     # run across a thread pool and so escape any context-local callback.
     rag_tokens = TokenUsageCounter()
     rag_llm = track_token_usage(llm, rag_tokens)
+    rag_judge = track_token_usage(configurable.get("judge_llm") or llm, rag_tokens)
     lc_llm = get_configured_long_context_llm(rag_llm) if USE_LONG_CONTEXT else None
  
     progress.emit(progress.SEARCHING)
  
     # The original query is always searched, so a bad decomposition can't lose the baseline
-    pending = [query] + generate_subqueries(rag_llm, query, [query]).queries
+    pending = list(dict.fromkeys([query] + generate_subqueries(rag_llm, query, [query]).queries))
     executed, chunks, seen = [], [], set()
+    relevance_by_text = {}
     long_context, long_context_used = [], []
     context, lang_code = "", None
  
@@ -155,7 +159,7 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
  
             with ThreadPoolExecutor() as executor:
                 results = list(executor.map(
-                    lambda q: retrieve_safely(q, vectorstore, reranker, sources), batch
+                    lambda q: retrieve_safely(q, vectorstore, reranker, sources, permission_checks), batch
                 ))
 
             results = [r for r in results if r]
@@ -170,18 +174,29 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
  
             lang_code = lang_code or results[0][1]
  
-            # Only chunks unseen in previous rounds go through the LLM filter
-            new = [c for r, _ in results for c in r if c.page_content not in seen]
-            seen.update(c.page_content for c in new)
+            # Deduplicate within this batch as well as across rounds. Keep
+            # distinct source anchors even when their text is identical.
+            new = []
+            for candidates, _ in results:
+                for candidate in candidates:
+                    meta = candidate.metadata
+                    key = (meta.get("source"), meta.get("id"), meta.get("chunk_idx"), candidate.page_content)
+                    if key not in seen:
+                        seen.add(key)
+                        new.append(candidate)
  
             progress.emit(progress.READING)
  
+            # The classifier receives only the query and text, so identical
+            # text needs one verdict while each source keeps its citation.
+            unchecked = list(dict.fromkeys(c.page_content for c in new if c.page_content not in relevance_by_text))
             with ThreadPoolExecutor() as executor:
                 relevance = list(executor.map(
-                    lambda c: is_relevant_source(rag_llm, query, c.page_content).is_relevant, new
+                    lambda text: is_relevant_source(rag_judge, query, text).is_relevant, unchecked
                 ))
+            relevance_by_text.update(zip(unchecked, relevance))
  
-            relevant = [c for c, ok in zip(new, relevance) if ok]
+            relevant = [c for c in new if relevance_by_text[c.page_content]]
             chunks += relevant
  
             logging.info(f'Found {len(relevant)} new relevant chunks ({len(chunks)} total)')
@@ -205,13 +220,13 @@ def vectordb_search(query: str, config: RunnableConfig) -> tuple[str, dict]:
                     long_context_used.append(source)
  
             context = format_context(vectorstore, chunks, long_context)
-            verdict = is_context_enough(rag_llm, query, context)
+            verdict = is_context_enough(rag_judge, query, context)
  
-            if verdict.is_enough or len(chunks) >= MAX_TOTAL_CHUNKS:
+            if verdict.is_enough or len(chunks) >= MAX_TOTAL_CHUNKS or round_index == MAX_SEARCH_ROUNDS - 1:
                 break
  
             subqueries = generate_subqueries(rag_llm, query, executed, verdict.reason).queries
-            pending = [q for q in subqueries if q not in executed]
+            pending = list(dict.fromkeys(q for q in subqueries if q not in executed))
  
             logging.info(f'Context is not enough, retrying with: {pending}')
  
@@ -270,9 +285,12 @@ def generate_document(
         messages: Annotated[list, InjectedState("messages")]
     ) -> tuple[str, dict | None]:
     """
-    Generates a document following user instructions.
-    Should be done before any vectordb_search call, this tool will suggest search terms if needed.
-    Unless stated otherwise, generate a PDF by default.
+    Creates a downloadable file ONLY when the current user asks to create or
+    export one. Reading, summarizing, or citing an existing file in a chat
+    answer is not a file-creation request; use vectordb_search for those.
+    Use already retrieved information when sufficient. Otherwise search for
+    the required facts first, then call this tool. Default to PDF when the
+    user requests a file without specifying a format.
     """
 
     logging.info("Generating document...")
@@ -314,7 +332,7 @@ def generate_document(
     except UnsupportedDocumentFormatError:
         logging.warning("Unsupported document format requested: %s", format)
         return (
-            f"The '{format}' format is not supported. Supported formats: pdf, markdown, txt.",
+            f"The '{format}' format is not supported. Supported formats: pdf, markdown, txt, docx, csv.",
             None,
         )
 

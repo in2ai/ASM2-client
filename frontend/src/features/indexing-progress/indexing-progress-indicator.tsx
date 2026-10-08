@@ -73,6 +73,11 @@ export function IndexingProgressIndicator({
     durationFormatters,
   )
   const attention = needsAttention(progress)
+  const label = unavailable
+    ? t('unavailable')
+    : running
+      ? t('openRunning', { status: t(phaseLabelKey(progress?.phase)) })
+      : t('open')
 
   return (
     <Dialog>
@@ -80,26 +85,23 @@ export function IndexingProgressIndicator({
         <Button
           variant={running ? 'default' : 'ghost'}
           size={running || unavailable ? 'default' : 'icon'}
-          className="relative min-h-11 gap-2 rounded-xl"
-          aria-label={
-            unavailable
-              ? t('unavailable')
-              : running
-                ? t('openRunning', {
-                    status: t(phaseLabelKey(progress?.phase)),
-                  })
-                : t('open')
-          }
+          className="relative min-h-11 gap-2 rounded-xl max-sm:w-9 max-sm:px-0 max-sm:has-[>svg]:px-0"
+          title={label}
         >
+          <span className={unavailable ? 'sr-only sm:hidden' : 'sr-only'}>
+            {label}
+          </span>
           {unavailable ? (
             <>
               <TriangleAlert className="text-destructive h-4 w-4" />
-              <span className="text-xs font-semibold">{t('unavailable')}</span>
+              <span className="hidden text-xs font-semibold sm:inline">
+                {t('unavailable')}
+              </span>
             </>
           ) : running ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-xs font-semibold tabular-nums">
+              <span className="hidden text-xs font-semibold tabular-nums sm:inline">
                 {percentage === null ? t('inProgress') : `${percentage}%`}
               </span>
             </>

@@ -143,6 +143,13 @@ export function MetricsDashboard({
 }: MetricsDashboardProps) {
   const locale = useLocale()
   const t = useTranslations('MetricsErrors')
+  const viewT = useTranslations('AppLayout.views')
+  const viewTitle = {
+    overview: viewT('overview'),
+    usage: viewT('usage'),
+    'rag-quality': viewT('ragQuality'),
+    insights: viewT('insights'),
+  }[currentView]
 
   const handleDateRangeChange = useCallback(
     (range: DateRange | undefined) => {
@@ -210,6 +217,7 @@ export function MetricsDashboard({
       <div className="mx-auto max-w-screen-2xl p-4 sm:p-6 lg:p-8">
         {!isPending && (
           <PersistentHeader
+            title={viewTitle}
             dateRange={dateRange}
             onDateRangeChange={handleDateRangeChange}
             lastUpdated={lastUpdated}

@@ -16,6 +16,7 @@ interface PersistentHeaderProps {
   stats: StatsResponse | undefined
   isFetching: boolean
   onRefresh: () => void
+  title: string
 }
 
 export function PersistentHeader({
@@ -25,6 +26,7 @@ export function PersistentHeader({
   stats,
   isFetching,
   onRefresh,
+  title,
 }: Readonly<PersistentHeaderProps>) {
   const t = useTranslations('PersistentHeader')
   const locale = useLocale()
@@ -39,7 +41,7 @@ export function PersistentHeader({
         ) : null}
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight">{t('title')}</h2>
+            <h2 className="text-xl font-bold tracking-tight">{title}</h2>
             {isFetching && (
               <Badge
                 variant="secondary"

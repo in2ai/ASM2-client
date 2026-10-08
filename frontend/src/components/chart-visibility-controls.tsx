@@ -52,8 +52,9 @@ export function ChartVisibilityControls({
           variant="outline"
           size="sm"
           className="min-h-11 gap-2"
-          aria-label={t('ariaLabel')}
+          title={t('ariaLabel')}
         >
+          <span className="sr-only">{t('ariaLabel')}</span>
           <Settings className="h-4 w-4" />
           <span className="hidden sm:inline">
             {t('buttonLabel', { visibleCount, totalCount: charts.length })}

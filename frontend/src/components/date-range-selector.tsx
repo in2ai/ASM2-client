@@ -19,6 +19,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { useLocale, useTranslations } from 'next-intl'
 
 interface DateRangeSelectorProps {
@@ -31,6 +32,7 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
   const locale = useLocale()
   const dateLocale = locale === 'en' ? enUS : es
   const presets = [7, 30, 90]
+  const showTwoMonths = useMediaQuery('(min-width: 640px)')
 
   const [draftRange, setDraftRange] = useState<DateRange | undefined>(value)
   const [isOpen, setIsOpen] = useState(false)
@@ -137,37 +139,40 @@ export function DateRangeSelector({ value, onChange }: DateRangeSelectorProps) {
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <div className="flex flex-col">
+        <PopoverContent
+          className="flex max-h-[min(32rem,var(--radix-popover-content-available-height))] w-auto max-w-[calc(100vw-1rem)] flex-col overflow-hidden p-0"
+          align="start"
+        >
+          <div className="min-h-0 overflow-y-auto">
             <Calendar
               mode="range"
               defaultMonth={draftRange?.from ?? value?.from}
               selected={draftRange}
               onSelect={setDraftRange}
-              numberOfMonths={2}
+              numberOfMonths={showTwoMonths ? 2 : 1}
               className="rounded-t-lg border-b-0 shadow-sm"
               locale={dateLocale}
             />
-            <div className="bg-muted/50 flex items-center justify-end gap-2 border-t p-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancel}
-                className="h-8"
-              >
-                <X className="mr-1 h-4 w-4" />
-                {t('cancel')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleApply}
-                disabled={!isDraftValid}
-                className="h-8"
-              >
-                <Check className="mr-1 h-4 w-4" />
-                {t('apply')}
-              </Button>
-            </div>
+          </div>
+          <div className="bg-popover flex shrink-0 items-center justify-end gap-2 border-t p-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCancel}
+              className="h-8"
+            >
+              <X className="mr-1 h-4 w-4" />
+              {t('cancel')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleApply}
+              disabled={!isDraftValid}
+              className="h-8"
+            >
+              <Check className="mr-1 h-4 w-4" />
+              {t('apply')}
+            </Button>
           </div>
         </PopoverContent>
       </Popover>

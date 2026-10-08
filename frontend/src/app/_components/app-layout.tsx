@@ -19,6 +19,7 @@ import { IndexingAlertCenter } from '@/features/indexing-alerts/indexing-alert-c
 import { IndexingProgressIndicator } from '@/features/indexing-progress/indexing-progress-indicator'
 import { useHotkeys } from '@/hooks/use-hotkeys'
 import { useIsDesktop } from '@/hooks/use-media-query'
+import { useDrawerFocus } from '@/hooks/use-drawer-focus'
 import { usePersistentState } from '@/hooks/use-persistent-state'
 import type { LogtoUser } from '@/lib/auth'
 import { cn } from '@/lib/utils'
@@ -59,6 +60,8 @@ export function AppLayout({
   )
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const isDesktop = useIsDesktop()
+  const drawerOpen = !isDesktop && mobileMenuOpen
+  const drawerRef = useDrawerFocus(drawerOpen)
 
   // Widening the window past the breakpoint turns the drawer into the static
   // column, and the scrim it left behind would have covered the whole page.
@@ -100,6 +103,11 @@ export function AppLayout({
         )}
 
         <aside
+          ref={drawerRef}
+          inert={!isDesktop && !mobileMenuOpen}
+          role={drawerOpen ? 'dialog' : undefined}
+          aria-modal={drawerOpen ? true : undefined}
+          aria-label={t('openNavigationMenu')}
           className={cn(
             'bg-card fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-xl transition-[transform,width] duration-300 lg:static lg:translate-x-0 lg:shadow-none',
             mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
@@ -143,8 +151,11 @@ export function AppLayout({
           </div>
         </aside>
 
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <header className="bg-background/60 flex h-16 items-center justify-between gap-3 border-b px-4 backdrop-blur-md sm:px-6">
+        <div
+          inert={drawerOpen}
+          className="flex min-w-0 flex-1 flex-col overflow-hidden"
+        >
+          <header className="bg-background/60 flex h-16 shrink-0 items-center justify-between gap-1 border-b px-2 backdrop-blur-md sm:gap-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <Button
                 variant="ghost"
@@ -166,7 +177,7 @@ export function AppLayout({
               </Button>
               <div className="hidden min-w-0 sm:block">
                 <h1 className="truncate text-sm font-bold tracking-tight md:text-base">
-                  {t('title')}
+                  {viewLabels[view]}
                 </h1>
                 <div className="flex items-center gap-2">
                   <Badge
@@ -182,7 +193,7 @@ export function AppLayout({
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-3">
               {view !== 'overview' ? (
                 <ChartVisibilityControls view={view} />
               ) : null}
@@ -287,7 +298,7 @@ export function UserMenu({
         <Button
           variant="ghost"
           className="relative h-10 min-h-11 w-10 min-w-11 rounded-full"
-          aria-label={t('openUserMenu')}
+          aria-label={`${initials}: ${t('openUserMenu')}`}
         >
           <Avatar className="h-10 w-10">
             <AvatarFallback className="bg-primary text-primary-foreground">

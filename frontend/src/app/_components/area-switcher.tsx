@@ -66,6 +66,7 @@ function AreaSwitcherItem({
         active
           ? 'bg-primary text-primary-foreground shadow-primary/20 shadow-lg'
           : 'text-muted-foreground hover:text-foreground',
+        active && 'hidden sm:inline-flex',
       )}
     >
       <Link to={to} aria-label={label}>

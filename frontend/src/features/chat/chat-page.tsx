@@ -21,6 +21,7 @@ import {
   useSourcesStatusQuery,
 } from './api'
 import { getMessageDocument } from './chat-document'
+import { usePersistentState } from '@/hooks/use-persistent-state'
 import { appendProgress, describeProgress } from './chat-progress'
 import { CancelledTurnError, UnfinishedTurnError } from './chat-stream'
 import { ChatShell } from './chat-shell'
@@ -97,7 +98,14 @@ export function ChatPage({
   const queryClient = useQueryClient()
   const chatsQuery = useChatsQuery(showArchived)
   const sourcesQuery = useSourcesStatusQuery()
-  const effectiveChatId = selectedChatId ?? chatsQuery.data?.[0]?.id
+  const [lastChatId, setLastChatId] = usePersistentState(
+    `asm2.last-chat.${user.sub}`,
+    '',
+  )
+  const fallbackChatId =
+    chatsQuery.data?.find((chat) => chat.id === lastChatId)?.id ??
+    chatsQuery.data?.[0]?.id
+  const effectiveChatId = selectedChatId ?? fallbackChatId
   const chatQuery = useChatQuery(effectiveChatId)
   const createChatMutation = useCreateChatMutation()
   const deleteChatMutation = useDeleteChatMutation()
@@ -110,10 +118,10 @@ export function ChatPage({
 
   useEffect(() => {
     // The archived list is a place to tidy up, not a conversation to fall into.
-    if (!selectedChatId && !showArchived && chatsQuery.data?.[0]?.id) {
-      onSelectChat(chatsQuery.data[0].id, { replace: true })
+    if (!selectedChatId && !showArchived && fallbackChatId) {
+      onSelectChat(fallbackChatId, { replace: true })
     }
-  }, [chatsQuery.data, onSelectChat, selectedChatId, showArchived])
+  }, [fallbackChatId, onSelectChat, selectedChatId, showArchived])
 
   const activeChat = useMemo(() => {
     if (chatQuery.data) {
@@ -129,6 +137,9 @@ export function ChatPage({
 
   const visibleConversationId =
     activeChat?.id ?? effectiveChatId ?? createChatMutation.data?.id
+  useEffect(() => {
+    if (activeChat?.id && !activeChat.archived) setLastChatId(activeChat.id)
+  }, [activeChat?.id, activeChat?.archived, setLastChatId])
   const lastPersistedMessage = activeChat?.messages.at(-1)
   const pendingMessage = visibleConversationId
     ? (pendingMessages[visibleConversationId] ?? null)
@@ -534,6 +545,7 @@ export function ChatPage({
       page: t('messages.page'),
       pages: t('messages.pages'),
       sources: t('messages.sources'),
+      stopped: t('messages.stopped'),
       sending: t('messages.sending'),
       user: t('messages.user'),
     }),
@@ -674,6 +686,7 @@ export function ChatPage({
             jumpToLatest: t('conversation.jumpToLatest'),
             newLineHint: t('composer.newLineHint'),
             sendHint: t('composer.sendHint'),
+            sendMessage: t('composer.sendMessage'),
             stopGenerating: t('composer.stopGenerating'),
           }}
           pendingMessage={visiblePendingMessage}
