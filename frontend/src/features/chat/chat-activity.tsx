@@ -40,7 +40,7 @@ export function ChatActivity({
   const steps = events.length > 0 ? events.map(formatEvent) : [fallbackLabel]
 
   return (
-    <div className="flex gap-3 sm:gap-4" role="status" aria-live="polite">
+    <div className="flex gap-3 sm:gap-4">
       <BubbleAvatar isUser={false} />
       <div className="bg-card min-w-0 max-w-[85%] rounded-3xl border px-5 py-4 shadow-sm">
         <div className="mb-3 flex items-center gap-2">
@@ -52,28 +52,34 @@ export function ChatActivity({
           </span>
         </div>
 
-        <ol className="space-y-2">
-          {steps.map((step, index) => {
-            const isCurrent = index === steps.length - 1
+        {/* Only the steps are announced. With the clock inside the region,
+            a screen reader read the count out every second -- and, a status
+            being read whole by default, the title and every step with it.
+            Here each new step is read once, on its own. */}
+        <div role="status" aria-atomic="false">
+          <ol className="space-y-2">
+            {steps.map((step, index) => {
+              const isCurrent = index === steps.length - 1
 
-            return (
-              <li
-                key={`${index}-${step}`}
-                className={cn(
-                  'animate-in fade-in slide-in-from-bottom-1 flex items-center gap-2.5 text-sm duration-300',
-                  isCurrent ? 'text-foreground' : 'text-muted-foreground',
-                )}
-              >
-                {isCurrent ? (
-                  <Loader2 className="text-primary h-3.5 w-3.5 shrink-0 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5 shrink-0 opacity-60" />
-                )}
-                <span className="min-w-0 wrap-break-word">{step}</span>
-              </li>
-            )
-          })}
-        </ol>
+              return (
+                <li
+                  key={`${index}-${step}`}
+                  className={cn(
+                    'animate-in fade-in slide-in-from-bottom-1 flex items-center gap-2.5 text-sm duration-300',
+                    isCurrent ? 'text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  {isCurrent ? (
+                    <Loader2 className="text-primary h-3.5 w-3.5 shrink-0 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  )}
+                  <span className="min-w-0 wrap-break-word">{step}</span>
+                </li>
+              )
+            })}
+          </ol>
+        </div>
       </div>
     </div>
   )

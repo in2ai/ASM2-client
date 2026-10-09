@@ -27,25 +27,66 @@ export function getChatPreview(preview: string | null | undefined) {
   return `${normalized.slice(0, PREVIEW_LIMIT - 1).trimEnd()}…`
 }
 
-export function formatChatTimestamp(timestamp: string, locale: AppLocale) {
-  const date = new Date(timestamp)
-  const intlLocale = toIntlLocale(locale)
-  const now = new Date()
-  const isSameDay = date.toDateString() === now.toDateString()
+/** How much of its date a timestamp has to give to be read right. */
+type TimestampPrecision = 'time' | 'day' | 'year'
 
-  return new Intl.DateTimeFormat(intlLocale, {
-    day: isSameDay ? undefined : '2-digit',
+const TIMESTAMP_OPTIONS: Record<
+  TimestampPrecision,
+  Intl.DateTimeFormatOptions
+> = {
+  time: { hour: '2-digit', minute: '2-digit' },
+  day: { day: '2-digit', hour: '2-digit', minute: '2-digit', month: 'short' },
+  year: {
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    month: isSameDay ? undefined : 'short',
-  }).format(date)
+    month: 'short',
+    year: 'numeric',
+  },
 }
 
-export function formatMessageTimestamp(timestamp: string, locale: AppLocale) {
-  return new Intl.DateTimeFormat(toIntlLocale(locale), {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(timestamp))
+/**
+ * One formatter per locale and precision, made the first time it is asked
+ * for. Building one costs tens of microseconds, and the sidebar formats a
+ * timestamp for every conversation each time it renders.
+ */
+const timestampFormats = new Map<string, Intl.DateTimeFormat>()
+
+function getTimestampFormat(locale: AppLocale, precision: TimestampPrecision) {
+  const key = `${locale}:${precision}`
+  let format = timestampFormats.get(key)
+
+  if (!format) {
+    format = new Intl.DateTimeFormat(
+      toIntlLocale(locale),
+      TIMESTAMP_OPTIONS[precision],
+    )
+    timestampFormats.set(key, format)
+  }
+
+  return format
+}
+
+/**
+ * When something happened, in as much detail as it takes: the time alone for
+ * today, the day as well before that, and the year too once it is not this
+ * one. A message showed its time only, so last week's read as this morning's.
+ */
+export function formatTimestamp(
+  timestamp: string,
+  locale: AppLocale,
+  now = new Date(),
+) {
+  const date = new Date(timestamp)
+  let precision: TimestampPrecision = 'year'
+
+  if (date.toDateString() === now.toDateString()) {
+    precision = 'time'
+  } else if (date.getFullYear() === now.getFullYear()) {
+    precision = 'day'
+  }
+
+  return getTimestampFormat(locale, precision).format(date)
 }
 
 export function toErrorMessage(error: unknown, fallback: string) {

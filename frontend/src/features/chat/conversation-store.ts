@@ -109,10 +109,23 @@ export function useConversationState<K extends Slice>(
     store.subscribe,
     () => store.getSnapshot()[slice],
   )
-  const setValue = useCallback(
+  const setValue = useSetConversationState(slice)
+
+  return [value, setValue]
+}
+
+/**
+ * The setter of `useConversationState` without the value, for a component
+ * that writes a part it does not show -- and so has no reason to re-render
+ * every time that part changes.
+ */
+export function useSetConversationState<K extends Slice>(
+  slice: K,
+): (recipe: SliceUpdate<K>) => void {
+  const store = useConversationStore()
+
+  return useCallback(
     (recipe: SliceUpdate<K>) => store.update(slice, recipe),
     [store, slice],
   )
-
-  return [value, setValue]
 }

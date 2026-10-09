@@ -28,6 +28,9 @@ type ConversationRenderState = {
 
 let conversationRenderStates: ConversationRenderState[] = []
 
+/** How often the sidebar has rendered, to see what typing reaches. */
+let sidebarRenderCount = 0
+
 /** The sidebar listing, whichever archive side it asks for. */
 function isChatsListRequest(requestUrl: string, method: string) {
   return method === 'GET' && /\/chats\?archived=(true|false)$/.test(requestUrl)
@@ -93,33 +96,39 @@ vi.mock('./chat-sidebar', () => ({
     onSetChatPinned: (chatId: string, pinned: boolean) => void
     onShowArchivedChange: (showArchived: boolean) => void
     showArchived: boolean
-  }) => (
-    <div>
-      <span>{`showArchived-${props.showArchived}`}</span>
-      <button onClick={() => props.onShowArchivedChange(!props.showArchived)}>
-        toggle-archived-view
-      </button>
-      {props.chats.map((chat) => (
-        <div key={chat.id}>
-          <button onClick={() => props.onDeleteChat(chat.id)}>
-            {`delete-${chat.id}`}
-          </button>
-          <button onClick={() => props.onRenameChat(chat.id, 'Vacaciones')}>
-            {`rename-${chat.id}`}
-          </button>
-          <button onClick={() => props.onSetChatPinned(chat.id, !chat.pinned)}>
-            {`pin-${chat.id}`}
-          </button>
-          <button
-            onClick={() => props.onSetChatArchived(chat.id, !chat.archived)}
-          >
-            {`archive-${chat.id}`}
-          </button>
-          <span>{`title-${chat.id}-${chat.title}`}</span>
-        </div>
-      ))}
-    </div>
-  ),
+  }) => {
+    sidebarRenderCount += 1
+
+    return (
+      <div>
+        <span>{`showArchived-${props.showArchived}`}</span>
+        <button onClick={() => props.onShowArchivedChange(!props.showArchived)}>
+          toggle-archived-view
+        </button>
+        {props.chats.map((chat) => (
+          <div key={chat.id}>
+            <button onClick={() => props.onDeleteChat(chat.id)}>
+              {`delete-${chat.id}`}
+            </button>
+            <button onClick={() => props.onRenameChat(chat.id, 'Vacaciones')}>
+              {`rename-${chat.id}`}
+            </button>
+            <button
+              onClick={() => props.onSetChatPinned(chat.id, !chat.pinned)}
+            >
+              {`pin-${chat.id}`}
+            </button>
+            <button
+              onClick={() => props.onSetChatArchived(chat.id, !chat.archived)}
+            >
+              {`archive-${chat.id}`}
+            </button>
+            <span>{`title-${chat.id}-${chat.title}`}</span>
+          </div>
+        ))}
+      </div>
+    )
+  },
 }))
 
 vi.mock('./sources-panel', () => ({
@@ -194,6 +203,25 @@ vi.mock('./conversation-view', () => ({
     )
   },
 }))
+
+/**
+ * The composer once chat is open for sending.
+ *
+ * The page does not re-render as a draft is typed, so a test that types and
+ * sends before the page has heard the sources are ready would send from a
+ * page that still thinks chat is closed -- as no person could, but a test can.
+ */
+async function findEnabledComposer() {
+  const composer = (await screen.findByLabelText(
+    'composer',
+  )) as HTMLInputElement
+
+  await waitFor(() => {
+    expect(composer.disabled).toBe(false)
+  })
+
+  return composer
+}
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -285,6 +313,7 @@ const sourcesStatusAwaitingFirstBuild = {
 describe('ChatPage', () => {
   beforeEach(() => {
     conversationRenderStates = []
+    sidebarRenderCount = 0
     globalThis.localStorage.clear()
   })
 
@@ -356,7 +385,7 @@ describe('ChatPage', () => {
       </QueryClientProvider>,
     )
 
-    await screen.findByLabelText('composer')
+    await findEnabledComposer()
 
     fireEvent.change(screen.getByLabelText('composer'), {
       target: { value: 'dime como pedir vacaciones' },
@@ -507,7 +536,7 @@ describe('ChatPage', () => {
       </QueryClientProvider>,
     )
 
-    await screen.findByLabelText('composer')
+    await findEnabledComposer()
 
     fireEvent.change(screen.getByLabelText('composer'), {
       target: { value: 'Dime de que va ASM2' },
@@ -662,7 +691,7 @@ describe('ChatPage', () => {
 
     const view = render(chatPage)
 
-    await screen.findByLabelText('composer')
+    await findEnabledComposer()
 
     fireEvent.change(screen.getByLabelText('composer'), {
       target: { value: 'what is asm2?' },
@@ -798,7 +827,7 @@ describe('ChatPage', () => {
 
     const view = render(show('chat-1'))
 
-    await screen.findByLabelText('composer')
+    await findEnabledComposer()
 
     fireEvent.change(screen.getByLabelText('composer'), {
       target: { value: 'Dime de que va ASM2' },
@@ -849,6 +878,99 @@ describe('ChatPage', () => {
     })
 
     expect(screen.getByTestId('composer-error').textContent).not.toBe('')
+  })
+
+  it('leaves the sidebar alone while a draft is typed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        const method = init?.method ?? 'GET'
+
+        if (requestUrl.endsWith('/sources/status')) {
+          return jsonResponse(sourcesStatusChatReady)
+        }
+
+        if (isChatsListRequest(requestUrl, method)) {
+          return jsonResponse([
+            {
+              created_at: '2026-04-14T18:30:00.000Z',
+              id: 'chat-1',
+              last_message_preview: null,
+              title: 'ASM2',
+              updated_at: '2026-04-14T18:30:00.000Z',
+            },
+          ])
+        }
+
+        if (requestUrl.endsWith('/chats/chat-1') && method === 'GET') {
+          return jsonResponse({
+            created_at: '2026-04-14T18:30:00.000Z',
+            id: 'chat-1',
+            last_message_preview: null,
+            messages: [
+              {
+                chat_id: 'chat-1',
+                content: 'Primera pregunta',
+                created_at: '2026-04-14T18:30:00.000Z',
+                id: 'message-1',
+                metadata: null,
+                role: 'user',
+                status: null,
+              },
+            ],
+            title: 'ASM2',
+            updated_at: '2026-04-14T18:30:00.000Z',
+          })
+        }
+
+        throw new Error(`Unexpected request: ${method} ${requestUrl}`)
+      }),
+    )
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPage
+          onSelectChat={() => undefined}
+          selectedChatId="chat-1"
+          user={{ role: 'user', sub: 'user-1' }}
+        />
+      </QueryClientProvider>,
+    )
+
+    // Everything loaded: the list, the conversation, and a composer to use.
+    await screen.findByText('title-chat-1-ASM2')
+    await screen.findByText('Primera pregunta')
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText('composer') as HTMLInputElement).disabled,
+      ).toBe(false)
+    })
+
+    const sidebarRendersBeforeTyping = sidebarRenderCount
+
+    for (const value of ['h', 'ho', 'hol', 'hola']) {
+      fireEvent.change(screen.getByLabelText('composer'), {
+        target: { value },
+      })
+    }
+
+    expect((screen.getByLabelText('composer') as HTMLInputElement).value).toBe(
+      'hola',
+    )
+    expect(sidebarRenderCount).toBe(sidebarRendersBeforeTyping)
   })
 
   it('keeps an unsent draft with the conversation it was typed in', async () => {
@@ -915,7 +1037,7 @@ describe('ChatPage', () => {
 
     const view = render(show('chat-1'))
 
-    await screen.findByLabelText('composer')
+    await findEnabledComposer()
 
     fireEvent.change(screen.getByLabelText('composer'), {
       target: { value: 'borrador de ASM2' },
@@ -1091,7 +1213,7 @@ describe('ChatPage', () => {
       </QueryClientProvider>,
     )
 
-    await screen.findByLabelText('composer')
+    await findEnabledComposer()
 
     fireEvent.change(screen.getByLabelText('composer'), {
       target: { value: 'primera' },
@@ -1206,7 +1328,7 @@ describe('ChatPage', () => {
       </QueryClientProvider>,
     )
 
-    await screen.findByLabelText('composer')
+    await findEnabledComposer()
 
     fireEvent.change(screen.getByLabelText('composer'), {
       target: { value: 'mensaje en curso' },
@@ -1351,7 +1473,7 @@ describe('ChatPage', () => {
       </QueryClientProvider>,
     )
 
-    await screen.findByLabelText('composer')
+    await findEnabledComposer()
 
     fireEvent.change(screen.getByLabelText('composer'), {
       target: { value: 'mensaje duplicado' },

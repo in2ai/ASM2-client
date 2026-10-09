@@ -560,6 +560,14 @@ describe('ConversationView progress', () => {
     expect(screen.getByRole('status').textContent).toContain('Sending')
   })
 
+  it('announces the steps but not the clock ticking beside them', () => {
+    renderSending([{ phase: 'searching' }])
+
+    // The clock is on screen, just outside what a screen reader reads out.
+    expect(screen.getByText('0s')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('step:searching')
+  })
+
   it('reports nothing while no answer is on its way', () => {
     renderConversation([
       createMessage({ content: 'My question.', role: 'user' }),

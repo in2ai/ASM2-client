@@ -5,7 +5,13 @@ import type { LogtoUser } from '@/lib/auth'
 import { useQueryClient } from '@tanstack/react-query'
 import { Settings2 } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+} from 'react'
 import {
   chatQueryKeys,
   useChatQuery,
@@ -29,6 +35,7 @@ import { ChatSidebar } from './chat-sidebar'
 import {
   useConversationState,
   useConversationStore,
+  useSetConversationState,
 } from './conversation-store'
 import { ConversationView } from './conversation-view'
 import { SourcesPanel } from './sources-panel'
@@ -75,8 +82,9 @@ export function ChatPage({
   const locale = useLocale() as AppLocale
   // Per conversation as well: a draft belongs to the conversation it was
   // typed in, and a failed send must report itself there rather than under
-  // whichever conversation the user has since moved to.
-  const [composerDrafts, setComposerDrafts] = useConversationState('drafts')
+  // whichever conversation the user has since moved to. The page only writes
+  // drafts; `ConversationWithDraft` is what reads them, see there for why.
+  const setComposerDrafts = useSetConversationState('drafts')
   const [composerErrors, setComposerErrors] = useConversationState('errors')
   // Keyed by conversation, because a turn keeps running when the user moves on
   // to another one: a second question must not blank out the first's progress.
@@ -157,7 +165,6 @@ export function ChatPage({
     : undefined
   const isSendingActiveConversation = activeTurn != null
   const composerKey = visibleConversationId ?? NEW_CONVERSATION_KEY
-  const composerValue = composerDrafts[composerKey] ?? ''
   const composerError = composerErrors[composerKey]
 
   const pageError =
@@ -388,7 +395,10 @@ export function ChatPage({
   )
 
   const handleSendMessage = async () => {
-    const content = composerValue.trim()
+    // From the store, as this page does not re-render as the draft is typed.
+    const content = (
+      conversationStore.getSnapshot().drafts[composerKey] ?? ''
+    ).trim()
     if (!content || !chatEnabled) {
       return
     }
@@ -661,14 +671,14 @@ export function ChatPage({
           />
         </div>
       ) : (
-        <ConversationView
+        <ConversationWithDraft
           chat={activeChat}
           composerDisabled={composerDisabled}
           composerHint={composerHint}
           composerPlaceholder={t('composer.placeholder')}
-          composerValue={composerValue}
           documentDownloadErrors={documentDownloadErrors}
           downloadingDocumentMessageIds={downloadingDocumentIds}
+          draftKey={composerKey}
           emptyTitle={emptyTitle}
           emptyDescription={emptyDescription}
           emptyPrimaryActionLabel={emptyPrimaryActionLabel}
@@ -679,7 +689,6 @@ export function ChatPage({
           messageLabels={messageLabels}
           onDownloadDocument={downloadDocument}
           onEmptyPrimaryAction={() => setSourcesOpen(true)}
-          onComposerChange={(value) => setComposerDraft(composerKey, value)}
           onSendMessage={() => void handleSendMessage()}
           onStopGeneration={() => void handleStopGeneration()}
           shellLabels={{
@@ -703,5 +712,38 @@ export function ChatPage({
         />
       )}
     </ChatShell>
+  )
+}
+
+/**
+ * The conversation, with its draft read here rather than in the page.
+ *
+ * The draft changes on every keystroke. Read by the page, each one re-rendered
+ * all of it -- the sidebar and every conversation listed there included. Read
+ * here, a keystroke reaches the conversation and goes no further.
+ */
+function ConversationWithDraft({
+  draftKey,
+  ...props
+}: Readonly<
+  Omit<
+    ComponentProps<typeof ConversationView>,
+    'composerValue' | 'onComposerChange'
+  > & { draftKey: string }
+>) {
+  const [drafts, setDrafts] = useConversationState('drafts')
+
+  const handleComposerChange = useCallback(
+    (value: string) =>
+      setDrafts((current) => ({ ...current, [draftKey]: value })),
+    [draftKey, setDrafts],
+  )
+
+  return (
+    <ConversationView
+      {...props}
+      composerValue={drafts[draftKey] ?? ''}
+      onComposerChange={handleComposerChange}
+    />
   )
 }

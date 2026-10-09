@@ -34,7 +34,7 @@ import type {
   ChatProgressEvent,
   ChatSource,
 } from './types'
-import { formatMessageTimestamp } from './utils'
+import { formatTimestamp } from './utils'
 
 interface ConversationViewProps {
   chat?: ChatDetail
@@ -373,7 +373,7 @@ const MessageBubble = memo(function MessageBubble({
             {authorLabel}
           </span>
           <span className="text-[11px]">
-            {formatMessageTimestamp(message.created_at, locale)}
+            {formatTimestamp(message.created_at, locale)}
           </span>
           <CopyButton
             className="-my-1 ml-auto opacity-0 transition-opacity group-hover/message:opacity-100 focus-visible:opacity-100"

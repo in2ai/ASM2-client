@@ -45,7 +45,7 @@ import {
 import { useMemo, useState } from 'react'
 import { ChatSidebarLoadingState } from './chat-loading-state'
 import type { ChatSummary } from './types'
-import { formatChatTimestamp, getChatPreview, getChatTitle } from './utils'
+import { formatTimestamp, getChatPreview, getChatTitle } from './utils'
 
 interface ChatSidebarRowProps {
   archiveChatLabel: string
@@ -110,7 +110,7 @@ function ChatSidebarRow({
             </span>
           </p>
           <span className="text-muted-foreground shrink-0 text-xs">
-            {formatChatTimestamp(chat.updated_at, locale)}
+            {formatTimestamp(chat.updated_at, locale)}
           </span>
         </div>
         <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
