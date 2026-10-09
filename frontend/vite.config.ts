@@ -3,7 +3,69 @@ import { devtools } from '@tanstack/devtools-vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
-import { defineConfig, loadEnv } from 'vite-plus'
+import {
+  defineConfig,
+  loadEnv,
+  type Plugin,
+  type ResolvedConfig,
+} from 'vite-plus'
+
+/**
+ * Starts the body font downloading with the page.
+ *
+ * A browser asks for a font only once some text needs it, and here there is no
+ * text until the app has loaded and rendered -- so the font came last, and the
+ * page was drawn in a fallback face first. Its file name carries a build hash,
+ * which is why the link cannot simply be written into `index.html`.
+ *
+ * Latin only: it covers Spanish, Galician and English, and preloading every
+ * subset would spend the head start on files most pages never use.
+ */
+function preloadBodyFont(): Plugin {
+  const fontFile = '/geist-latin-wght-normal.woff2'
+  let resolvedConfig: ResolvedConfig | undefined
+
+  return {
+    name: 'asm2:preload-body-font',
+    apply: 'build',
+    configResolved(config) {
+      resolvedConfig = config
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, { bundle }) {
+        const font = Object.values(bundle ?? {}).find(
+          (output) =>
+            output.type === 'asset' &&
+            output.originalFileNames.some((name) => name.endsWith(fontFile)),
+        )
+
+        if (!font) {
+          resolvedConfig?.logger.warn(
+            `[preload-body-font] ${fontFile.slice(1)} is not in the build, so nothing was preloaded`,
+          )
+          return
+        }
+
+        return [
+          {
+            tag: 'link',
+            attrs: {
+              rel: 'preload',
+              as: 'font',
+              type: 'font/woff2',
+              href: `${resolvedConfig?.base ?? '/'}${font.fileName}`,
+              // Fonts are always fetched in CORS mode; a preload without
+              // this is a different request, and gets downloaded twice.
+              crossorigin: true,
+            },
+            injectTo: 'head',
+          },
+        ]
+      },
+    },
+  }
+}
 
 const config = defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, '..', ''), ...process.env }
@@ -54,6 +116,7 @@ const config = defineConfig(({ mode }) => {
       tailwindcss(),
       tanstackRouter({ target: 'react', autoCodeSplitting: true }),
       viteReact(),
+      preloadBodyFont(),
     ],
   }
 })
